@@ -25,6 +25,8 @@ typedef struct
 	void (*queueParam)(uint32_t frame, uint16_t param, uint8_t value);
 	void (*queueSeparateOutputs)(uint32_t frame, bool on);
 	void (*setSeparateOutputs)(bool on);
+	void (*setSoloVoice)(int voice);
+	uint32_t (*outChannels)(void);
 	void (*process)(float* out, uint32_t frames);
 	void (*shutdown)(void);
 } TackEngine;

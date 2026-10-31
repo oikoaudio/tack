@@ -238,34 +238,39 @@ static void addPanned(const int16_t* data, float panL, float panR, int16_t* out)
 	}
 }
 
+static int soloVoice = -1;	// lxr_host_setSoloVoice()
+static uint32_t outChannels = LXR_HOST_OUT_CHANNELS;
+
 void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], int16_t* main)
 {
 	// mixer_calcNextSampleBlock() with each direct voice going to its own buffer instead of a DAC: same control-rate
 	// updates, same order, same pan. The FX bus is a group bus with an insert: the voices routed to it are summed
 	// and processed together, as on the device, and play on main.
+	// with a solo voice, only that voice is computed, and the FX bus not at all
+	#define ON(v) (soloVoice < 0 || soloVoice == (v))
 	modNode_resetTargets();
 	modNode_reassignVeloMod();
 
-	lfo_dispatchNextValue(&voiceArray[0].lfo);
-	lfo_dispatchNextValue(&voiceArray[1].lfo);
-	lfo_dispatchNextValue(&voiceArray[2].lfo);
-	lfo_dispatchNextValue(&snareVoice.lfo);
-	lfo_dispatchNextValue(&cymbalVoice.lfo);
-	lfo_dispatchNextValue(&hatVoice.lfo);
+	if(ON(0)) lfo_dispatchNextValue(&voiceArray[0].lfo);
+	if(ON(1)) lfo_dispatchNextValue(&voiceArray[1].lfo);
+	if(ON(2)) lfo_dispatchNextValue(&voiceArray[2].lfo);
+	if(ON(3)) lfo_dispatchNextValue(&snareVoice.lfo);
+	if(ON(4)) lfo_dispatchNextValue(&cymbalVoice.lfo);
+	if(ON(5)) lfo_dispatchNextValue(&hatVoice.lfo);
 
-	SVF_recalcFreq(&voiceArray[0].filter);
-	SVF_recalcFreq(&voiceArray[1].filter);
-	SVF_recalcFreq(&voiceArray[2].filter);
-	SVF_recalcFreq(&snareVoice.filter);
-	SVF_recalcFreq(&cymbalVoice.filter);
-	SVF_recalcFreq(&hatVoice.filter);
+	if(ON(0)) SVF_recalcFreq(&voiceArray[0].filter);
+	if(ON(1)) SVF_recalcFreq(&voiceArray[1].filter);
+	if(ON(2)) SVF_recalcFreq(&voiceArray[2].filter);
+	if(ON(3)) SVF_recalcFreq(&snareVoice.filter);
+	if(ON(4)) SVF_recalcFreq(&cymbalVoice.filter);
+	if(ON(5)) SVF_recalcFreq(&hatVoice.filter);
 
-	calcDrumVoiceAsync(0);
-	calcDrumVoiceAsync(1);
-	calcDrumVoiceAsync(2);
-	Snare_calcAsync();
-	Cymbal_calcAsync();
-	HiHat_calcAsync();
+	if(ON(0)) calcDrumVoiceAsync(0);
+	if(ON(1)) calcDrumVoiceAsync(1);
+	if(ON(2)) calcDrumVoiceAsync(2);
+	if(ON(3)) Snare_calcAsync();
+	if(ON(4)) Cymbal_calcAsync();
+	if(ON(5)) HiHat_calcAsync();
 
 	int16_t sampleData[OUTPUT_DMA_SIZE];
 	int16_t fxBusData[OUTPUT_DMA_SIZE * 2];
@@ -273,6 +278,10 @@ void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT
 
 	for(int v = 0; v < LXR_HOST_NUM_VOICE_OUTS; v++)
 	{
+		if(!ON(v)) {
+			memset(voices[v], 0, sizeof voices[v]);
+			continue;
+		}
 		float panL, panR;
 		switch(v)
 		{
@@ -308,7 +317,8 @@ void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT
 	// the bus writes to the DAC its routing names: DAC1, the second pair of pointers (adjustValue())
 	int16_t dac2[OUTPUT_DMA_SIZE * 2] = {0};
 	memset(main, 0, sizeof(int16_t) * OUTPUT_DMA_SIZE * 2);
-	FxBus_process(fxBusData, &dac2[0], &dac2[1], &main[0], &main[1], OUTPUT_DMA_SIZE);
+	if(soloVoice < 0) FxBus_process(fxBusData, &dac2[0], &dac2[1], &main[0], &main[1], OUTPUT_DMA_SIZE);
+	#undef ON
 }
 //-----------------------------------------------------------
 // Events are timed in engine blocks. An event at output frame t is applied before the engine block nearest to
@@ -333,7 +343,6 @@ typedef struct
 static Event queue[QUEUE_SIZE];
 static uint32_t queueRead, queueWrite;
 
-static SRC_STATE* resampler;
 static double resampleRatio;	// output rate / REAL_FS
 static int64_t outFrames;		// output frames produced since lxr_host_setOutputRate()
 static int64_t blocksRendered;
@@ -381,60 +390,137 @@ void lxr_host_queueSeparateOutputs(uint32_t frame, bool on)
 	schedule(frame, EVENT_SEPARATE_OUTPUTS, 0, on, 0);
 }
 
+void lxr_host_setSoloVoice(int voice)
+{
+	soloVoice = voice;
+	outChannels = voice >= 0 ? 2 : LXR_HOST_OUT_CHANNELS;
+}
+
+uint32_t lxr_host_outChannels(void)
+{
+	return outChannels;
+}
+
 void lxr_host_setSeparateOutputs(bool on)
 {
 	separateOutputs = on;
 }
 
-// copies an interleaved stereo engine buffer into two channels of the output frames
-static void putStereo(float* block, int channel, const int16_t* stereo)
+//-----------------------------------------------------------
+// Two resamplers: one for main (or the solo voice), always running, and one for the voices' own outputs, which only
+// runs while they have something: with separate outputs, or until the last block rendered with them has come out.
+// With everything on main that saves resampling twelve silent channels. Each pulls engine blocks through its
+// callback; a block is rendered when the first of them needs it and waits in a ring for the other, since they read
+// ahead independently.
+
+#define VOICE_CHANNELS	(LXR_HOST_OUT_CHANNELS - 2)
+#define RING_BLOCKS		16	// far more than either resampler reads ahead of the other
+#define CHUNK			256	// output frames resampled at a time
+
+static SRC_STATE* mainResampler;
+static SRC_STATE* voiceResampler;	// NULL with a solo voice
+static float mainRing[RING_BLOCKS][OUTPUT_DMA_SIZE * 2];
+static float voiceRing[RING_BLOCKS][OUTPUT_DMA_SIZE * VOICE_CHANNELS];
+static int64_t mainRead, voiceRead;	// the next block each resampler reads
+static int voiceOffset;				// where in its next block the voice resampler starts, after a restart
+static bool voicesRunning;
+static int64_t lastSeparateBlock;	// the last block rendered with separate outputs, -1 for none
+
+// copies an interleaved stereo engine buffer into two channels of frames with the given number of channels
+static void putStereo(float* frames, int channels, int channel, const int16_t* stereo)
 {
 	for(int i = 0; i < OUTPUT_DMA_SIZE; i++)
 	{
-		block[i*LXR_HOST_OUT_CHANNELS + channel + 0] = stereo[i*2 + 0] / 32768.f;
-		block[i*LXR_HOST_OUT_CHANNELS + channel + 1] = stereo[i*2 + 1] / 32768.f;
+		frames[i*channels + channel + 0] = stereo[i*2 + 0] / 32768.f;
+		frames[i*channels + channel + 1] = stereo[i*2 + 1] / 32768.f;
 	}
 }
 
-// libsamplerate pulls engine output through this, one block at a time
-static long resamplerCallback(void* data, float** frames)
+static void renderNextBlock(void)
 {
-	static float block[OUTPUT_DMA_SIZE * LXR_HOST_OUT_CHANNELS];
-	(void)data;
-
 	while(queueRead != queueWrite && queue[queueRead % QUEUE_SIZE].block <= blocksRendered)
 		applyEvent(&queue[queueRead++ % QUEUE_SIZE]);
 
-	memset(block, 0, sizeof block);
+	float* mainOut = mainRing[blocksRendered % RING_BLOCKS];
+	float* voicesOut = voiceRing[blocksRendered % RING_BLOCKS];
 	int16_t main[OUTPUT_DMA_SIZE * 2];
-	if(separateOutputs) {
+	if(soloVoice >= 0 || separateOutputs) {
 		int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2];
 		lxr_host_renderBlockSeparate(voices, main);
+		if(soloVoice >= 0) {
+			putStereo(mainOut, 2, 0, voices[soloVoice]);
+			blocksRendered++;
+			return;
+		}
 		for(int v = 0; v < LXR_HOST_NUM_VOICE_OUTS; v++)
-			putStereo(block, LXR_HOST_OUT_VOICE(v), voices[v]);
+			putStereo(voicesOut, VOICE_CHANNELS, 2*v, voices[v]);
+		lastSeparateBlock = blocksRendered;
 	} else {
 		// everything is routed to DAC1 (adjustValue()); DAC2 stays silent
 		int16_t dac2[OUTPUT_DMA_SIZE * 2];
 		lxr_host_renderBlock(main, dac2);
+		memset(voicesOut, 0, sizeof voiceRing[0]);
 	}
-	putStereo(block, LXR_HOST_OUT_MAIN, main);
+	putStereo(mainOut, 2, 0, main);
 	blocksRendered++;
-	*frames = block;
+}
+
+// libsamplerate pulls engine output through these, one block at a time
+static long mainCallback(void* data, float** frames)
+{
+	(void)data;
+	if(mainRead >= blocksRendered) renderNextBlock();
+	*frames = mainRing[mainRead++ % RING_BLOCKS];
 	return OUTPUT_DMA_SIZE;
+}
+
+static long voiceCallback(void* data, float** frames)
+{
+	(void)data;
+	while(voiceRead >= blocksRendered) renderNextBlock();
+	const int offset = voiceOffset;
+	voiceOffset = 0;
+	*frames = voiceRing[voiceRead++ % RING_BLOCKS] + offset * VOICE_CHANNELS;
+	return OUTPUT_DMA_SIZE - offset;
+}
+
+// resamples up to CHUNK frames of a resampler's channels into out, from the given channel on; out has stride
+// channels per frame
+static void readResampler(SRC_STATE* resampler, int channels, float* out, uint32_t stride, int channel, uint32_t frames)
+{
+	float buf[CHUNK * VOICE_CHANNELS];
+	uint32_t done = 0;
+	while(done < frames)
+	{
+		long n = src_callback_read(resampler, resampleRatio, frames - done, buf);
+		if(n <= 0) {
+			n = frames - done;
+			memset(buf, 0, sizeof(float) * channels * n);
+		}
+		for(long i = 0; i < n; i++)
+			memcpy(&out[(done + i)*stride + channel], &buf[i*channels], sizeof(float) * channels);
+		done += n;
+	}
 }
 //-----------------------------------------------------------
 int lxr_host_setOutputRate(double fs)
 {
 	int err = 0;
-	if(resampler) src_delete(resampler);
-	resampler = src_callback_new(resamplerCallback, SRC_SINC_MEDIUM_QUALITY, LXR_HOST_OUT_CHANNELS, &err, NULL);
+	if(mainResampler) src_delete(mainResampler);
+	if(voiceResampler) src_delete(voiceResampler);
+	mainResampler = src_callback_new(mainCallback, SRC_SINC_MEDIUM_QUALITY, 2, &err, NULL);
+	voiceResampler = soloVoice < 0 ? src_callback_new(voiceCallback, SRC_SINC_MEDIUM_QUALITY, VOICE_CHANNELS, &err, NULL) : NULL;
 	resampleRatio = fs / REAL_FS;
 	const double maxLead = 2 * OUTPUT_DMA_SIZE + OUTPUT_DMA_SIZE / fmin(resampleRatio, 1.0);
 	scheduleDelay = (int)ceil((maxLead + OUTPUT_DMA_SIZE / 2) / OUTPUT_DMA_SIZE);
 	outFrames = blocksRendered = 0;
+	mainRead = voiceRead = 0;
+	voiceOffset = 0;
+	voicesRunning = false;
+	lastSeparateBlock = -1;
 	queueRead = queueWrite = 0;
 	memset(&stats, 0, sizeof stats);
-	return resampler ? 0 : -1;
+	return mainResampler && (soloVoice >= 0 || voiceResampler) ? 0 : -1;
 }
 //-----------------------------------------------------------
 uint32_t lxr_host_latency(void)
@@ -451,13 +537,32 @@ void lxr_host_process(float* out, uint32_t frames)
 
 	while(frames > 0)
 	{
-		const long n = src_callback_read(resampler, resampleRatio, frames, out);
-		if(n <= 0) {
-			memset(out, 0, sizeof(float) * LXR_HOST_OUT_CHANNELS * frames);
-			outFrames += frames;
-			return;
+		const uint32_t n = frames < CHUNK ? frames : CHUNK;
+		readResampler(mainResampler, 2, out, outChannels, LXR_HOST_OUT_MAIN, n);
+
+		if(soloVoice < 0) {
+			// engine sample s comes out at output frame s*ratio, from either resampler
+			const double start = outFrames / resampleRatio;
+			if(!voicesRunning && separateOutputs) {
+				// the blocks before the first one with separate outputs hold silence for the voices, so starting here
+				// is in time for it: main has only just rendered it, reading ahead of this chunk
+				const int64_t s = llround(start);
+				src_reset(voiceResampler);
+				voiceRead = s / OUTPUT_DMA_SIZE;
+				voiceOffset = (int)(s % OUTPUT_DMA_SIZE);
+				voicesRunning = true;
+			} else if(voicesRunning && !separateOutputs
+				&& start > (lastSeparateBlock + 1 + scheduleDelay) * (double)OUTPUT_DMA_SIZE) {
+				// the last block with separate outputs is out, filter tail and all
+				voicesRunning = false;
+			}
+			if(voicesRunning)
+				readResampler(voiceResampler, VOICE_CHANNELS, out, outChannels, LXR_HOST_OUT_VOICE(0), n);
+			else
+				for(uint32_t i = 0; i < n; i++)
+					memset(&out[i*outChannels + LXR_HOST_OUT_VOICE(0)], 0, sizeof(float) * VOICE_CHANNELS);
 		}
-		out += n * LXR_HOST_OUT_CHANNELS;
+		out += n * outChannels;
 		frames -= n;
 		outFrames += n;
 	}
@@ -470,8 +575,9 @@ LxrHostStats lxr_host_stats(void)
 //-----------------------------------------------------------
 void lxr_host_shutdown(void)
 {
-	if(resampler) src_delete(resampler);
-	resampler = NULL;
+	if(mainResampler) src_delete(mainResampler);
+	if(voiceResampler) src_delete(voiceResampler);
+	mainResampler = voiceResampler = NULL;
 }
 //-----------------------------------------------------------
 int lxr_host_writeWav(const char* path, const int16_t* data, uint32_t frames, uint16_t channels, uint32_t fs)

@@ -3,15 +3,17 @@
  *
  * Minimal CLAP host for testing Tack: loads the plugin, plays notes, writes all outputs summed to a WAV.
  *
- *   clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id=value@seconds ...]
+ *   clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount [@seconds] ...]
  *
  * Notes are MIDI note numbers, played at velocity 1.0 every 0.75 s (default: the 7 voices, notes 60-66), on MIDI
  * channel 1 unless a channel (1-16) is given: 2:48 plays drum 1 an octave below its tuned pitch.
  * id=value sets a parameter (plugin value) through params.flush before playing; id=value@seconds sends it as an
- * event to process() at that time, as automation would.
+ * event to process() at that time, as automation would. id~amount and id~amount@seconds do the same with the
+ * host's modulation of the parameter (CLAP_EVENT_PARAM_MOD, in plugin values) instead of its value.
  * -s saves the state after setting parameters, destroys the instance, creates a new one and loads the state into it
  * before playing, so the output should match a render without -s.
  * -p loads a kit file through the preset-load extension, as a host's preset browser would, before anything else.
+ * $TACK_PLUGIN_ID picks one of the plugins in the file (e.g. com.oikoaudio.tack.snare); default the first.
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -36,7 +38,9 @@ static const clap_host_t host = {
 };
 
 // input event lists backed by an array of note or param events
-typedef union { clap_event_header_t header; clap_event_note_t note; clap_event_param_value_t param; } AnyEvent;
+typedef union {
+	clap_event_header_t header; clap_event_note_t note; clap_event_param_value_t param; clap_event_param_mod_t mod;
+} AnyEvent;
 typedef struct { AnyEvent ev[MAX_ITEMS]; uint32_t count; } EventList;
 
 static uint32_t evSize(const clap_input_events_t* l) { return ((const EventList*)l->ctx)->count; }
@@ -79,24 +83,36 @@ static const clap_plugin_t* createPlugin(const clap_plugin_factory_t* factory, c
 int main(int argc, char** argv)
 {
 	if(argc < 3) {
-		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value ...]\n", argv[0]);
+		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount ...]\n", argv[0]);
 		return 1;
 	}
 	const double fs = argc > 3 ? atof(argv[3]) : 48000;
 	int notes[MAX_ITEMS] = {60, 61, 62, 63, 64, 65, 66}, channels[MAX_ITEMS] = {0}, numNotes = 0;
 	EventList paramEvents = {0};
-	struct { clap_event_param_value_t ev; uint32_t at; } timed[MAX_ITEMS];
+	struct { AnyEvent ev; uint32_t at; } timed[MAX_ITEMS];
 	int numTimed = 0;
 	bool roundTrip = false;
 	const char* kitPath = NULL;
 	for(int i = 4; i < argc; i++) {
 		const char* eq = strchr(argv[i], '=');
+		const char* tilde = strchr(argv[i], '~');
+		// modulation: an event like a value change, but CLAP_EVENT_PARAM_MOD
+		const AnyEvent mod = { .mod = {
+			.header = { sizeof(clap_event_param_mod_t), 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_MOD, 0 },
+			.param_id = atoi(argv[i]), .note_id = -1, .port_index = -1, .channel = -1, .key = -1,
+			.amount = tilde ? atof(tilde + 1) : 0,
+		} };
 		if(!strcmp(argv[i], "-s")) {
 			roundTrip = true;
 		} else if(!strcmp(argv[i], "-p") && i + 1 < argc) {
 			kitPath = argv[++i];
+		} else if(tilde && strchr(tilde, '@') && numTimed < MAX_ITEMS) {
+			timed[numTimed].ev = mod;
+			timed[numTimed++].at = (uint32_t)(atof(strchr(tilde, '@') + 1) * fs);
+		} else if(tilde && paramEvents.count < MAX_ITEMS) {
+			paramEvents.ev[paramEvents.count++] = mod;
 		} else if(eq && strchr(eq, '@') && numTimed < MAX_ITEMS) {
-			timed[numTimed].ev = (clap_event_param_value_t){
+			timed[numTimed].ev.param = (clap_event_param_value_t){
 				.header = { sizeof(clap_event_param_value_t), 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE, 0 },
 				.param_id = atoi(argv[i]), .note_id = -1, .port_index = -1, .channel = -1, .key = -1, .value = atof(eq + 1),
 			};
@@ -119,7 +135,11 @@ int main(int argc, char** argv)
 	const clap_plugin_entry_t* entry = dlsym(lib, "clap_entry");
 	entry->init(argv[1]);
 	const clap_plugin_factory_t* factory = entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
+	// the first plugin in the file, or the one $TACK_PLUGIN_ID names
+	const char* wanted = getenv("TACK_PLUGIN_ID");
 	const clap_plugin_descriptor_t* desc = factory->get_plugin_descriptor(factory, 0);
+	for(uint32_t i = 0; wanted && i < factory->get_plugin_count(factory); i++)
+		if(!strcmp(factory->get_plugin_descriptor(factory, i)->id, wanted)) desc = factory->get_plugin_descriptor(factory, i);
 	const clap_plugin_t* plugin = createPlugin(factory, desc->id);
 	printf("%s: %s\n", desc->name, desc->description);
 
@@ -198,8 +218,8 @@ int main(int argc, char** argv)
 		// events in time order: parameter changes before a note at the same frame
 		for(int i = 0; i < numTimed; i++)
 			if(timed[i].at >= pos && timed[i].at < pos + n) {
-				noteEvents.ev[noteEvents.count].param = timed[i].ev;
-				noteEvents.ev[noteEvents.count++].param.header.time = timed[i].at - pos;
+				noteEvents.ev[noteEvents.count] = timed[i].ev;
+				noteEvents.ev[noteEvents.count++].header.time = timed[i].at - pos;
 			}
 		const uint32_t t = preroll + next * step;
 		if(next < numNotes && t >= pos && t < pos + n) {

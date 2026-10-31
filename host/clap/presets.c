@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include "lxr_host.h"
+#include "lxr_params.h"
 
 static const clap_universal_plugin_id_t pluginId = { "clap", TACK_PLUGIN_ID };
 
@@ -75,6 +76,45 @@ int tack_saveKit(const uint8_t* kit, const char* name, bool overwrite, char* pat
 	struct stat st;
 	if(!overwrite && !stat(path, &st)) return TACK_SAVE_EXISTS;
 	return lxr_host_writeKitFile(path, kit, name) ? TACK_SAVE_FAILED : TACK_SAVE_OK;
+}
+//-----------------------------------------------------------
+static const char* const voiceKeys[6] = { "drum1", "drum2", "drum3", "snare", "cymbal", "hihat" };
+
+const char* tack_voiceKey(int voice)
+{
+	return voice >= 0 && voice < 6 ? voiceKeys[voice] : TACK_KIT_KEY;
+}
+
+int tack_voiceOfKey(const char* key)
+{
+	for(int v = 0; key && v < 6; v++)
+		if(!strcmp(key, voiceKeys[v])) return v;
+	return -1;
+}
+
+const char* tack_voicePluginId(int voice)
+{
+	static const char* const ids[6] = {
+		TACK_PLUGIN_ID ".drum", TACK_PLUGIN_ID ".drum", TACK_PLUGIN_ID ".drum",
+		TACK_PLUGIN_ID ".snare", TACK_PLUGIN_ID ".cymbal", TACK_PLUGIN_ID ".hihat"
+	};
+	return voice >= 0 && voice < 6 ? ids[voice] : TACK_PLUGIN_ID;
+}
+
+void tack_voicePresetName(const char* kitName, int voice, uint8_t voices, char* name, size_t size)
+{
+	if(voice < 3 && voices != 1 << voice)
+		snprintf(name, size, "%s Drum %d", kitName, voice + 1);
+	else
+		snprintf(name, size, "%s", kitName);
+}
+
+uint8_t tack_soundingVoices(const uint8_t* kit)
+{
+	uint8_t voices = 0;
+	for(int v = 0; v < 6; v++)
+		if(!lxr_params_voiceIsInit(kit, v)) voices |= 1 << v;
+	return voices;
 }
 //-----------------------------------------------------------
 bool tack_isEmptySlot(const char* name)
@@ -172,6 +212,7 @@ void tack_scanKits(TackKitList* list)
 			list->folders[list->numFolders++] = strdup(folder);
 		k.folder = list->numFolders - 1;
 		k.path = strdup(path);
+		k.voices = tack_soundingVoices(kit);
 		list->kits[list->numKits++] = k;
 		free(files.paths[i]);
 	}
@@ -228,8 +269,13 @@ static bool providerGetMetadata(const clap_preset_discovery_provider_t* provider
 	const clap_preset_discovery_metadata_receiver_t* receiver)
 {
 	if(kind == CLAP_PRESET_DISCOVERY_LOCATION_PLUGIN) {
+		// the init kit, and its voices for the voice plugins
 		if(!receiver->begin_preset(receiver, "Init Kit", TACK_INIT_KIT_KEY)) return true;
 		receiver->add_plugin_id(receiver, &pluginId);
+		for(int v = 2; v < 6; v++) {
+			const clap_universal_plugin_id_t id = { "clap", tack_voicePluginId(v) };
+			receiver->add_plugin_id(receiver, &id);
+		}
 		receiver->set_flags(receiver, CLAP_PRESET_DISCOVERY_IS_FACTORY_CONTENT);
 		return true;
 	}
@@ -246,22 +292,25 @@ static bool providerGetMetadata(const clap_preset_discovery_provider_t* provider
 		const char* base = strrchr(location, '/');
 		snprintf(name, sizeof name, "%s", base ? base + 1 : location);
 	}
-	if(!receiver->begin_preset(receiver, name, NULL)) return true;
-	receiver->add_plugin_id(receiver, &pluginId);
-	receiver->set_flags(receiver, CLAP_PRESET_DISCOVERY_IS_USER_CONTENT);
 
 	// the first folder below the kit folder is the sound pack
+	char pack[256] = "";
 	const char* root = tack_kitFolder();
 	const size_t rootLen = strlen(root);
 	if(!strncmp(location, root, rootLen) && location[rootLen] == '/') {
-		char pack[256];
 		snprintf(pack, sizeof pack, "%s", location + rootLen + 1);
 		char* slash = strchr(pack, '/');
-		if(slash) {
-			*slash = 0;
-			receiver->set_soundpack_id(receiver, pack);
-		}
+		if(slash) *slash = 0;
+		else pack[0] = 0;
 	}
+
+	// one preset per file, the whole kit for Tack. Offering each voice as well, for the voice plugins, makes the
+	// file a container (every preset with a load_key), which hosts didn't handle: Bitwig 6.1.6 listed no Tack
+	// presets at all, and clap-validator 0.4.1 hung. The voice plugins offer kits' voices in their own browser.
+	if(!receiver->begin_preset(receiver, name, NULL)) return true;
+	receiver->add_plugin_id(receiver, &pluginId);
+	receiver->set_flags(receiver, CLAP_PRESET_DISCOVERY_IS_USER_CONTENT);
+	if(pack[0]) receiver->set_soundpack_id(receiver, pack);
 	return true;
 }
 

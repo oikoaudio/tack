@@ -11,8 +11,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <strings.h>
 #include <cstdlib>
 #include <algorithm>
+#include <vector>
 #include <pugl/pugl.h>
 #include <pugl/gl.h>
 #include "imgui.h"
@@ -31,6 +33,9 @@ static const float CELL_W = 64, CELL_H = 80, KNOB = 36, BOX_PAD = 8, TITLE_H = 2
 // rows are stretched to the window's width, so the box being drawn may have wider cells than CELL_W
 static float cellW = CELL_W;
 static const float BOX_H = TITLE_H + CELL_H + 2 * BOX_PAD, GAP = 6, MARGIN = 10, HEADER_H = 66;
+// a voice plugin's header has no row of tabs: the boxes start this much higher
+static const float TAB_ROW_H = 25;
+static float headerHeight(int voice) { return voice < 0 ? HEADER_H : HEADER_H - TAB_ROW_H; }
 
 // front panel sub-pages per row: oscillator, FM (mod osc on cymbal and hi-hat), transient; filter, amp EG, mix;
 // modulation (velocity on cymbal and hi-hat), LFO
@@ -77,6 +82,7 @@ struct TackGui
 
 	// the kit browser, read from the kit folder when it opens and when stepping through kits
 	TackKitList kits = {};
+	std::vector<struct Entry> entries;
 	int browseFolder = -1;	// shown in the browser; -1 the built-in Init Kit
 	bool browserOpen = false;
 	bool keepClosed = false;	// the click that closed the browser was on the kit button, which would reopen it
@@ -86,6 +92,11 @@ struct TackGui
 // parameter access in plugin values
 
 static double value(TackGui* g, uint32_t id) { return g->host.getValue(g->host.ctx, id); }
+
+static void valueText(TackGui* g, uint32_t id, uint16_t v, char* text, size_t size)
+{
+	g->host.valueText(g->host.ctx, id, v, text, size);
+}
 
 
 static void edit(TackGui* g, uint32_t id, double v)
@@ -127,7 +138,7 @@ static bool voiceUsesPwm(TackGui* g, int voice)
 		const LxrParamInfo* p = lxr_params_info(i);
 		if(p->voice != voice || !p->isEnum || !strstr(p->label, "Waveform")) continue;
 		char text[64];
-		lxr_params_valueText(p->param, (uint16_t)value(g, p->param), text, sizeof text);
+		valueText(g, p->param, (uint16_t)value(g, p->param), text, sizeof text);
 		if(!strcmp(text, "PWM")) return true;
 	}
 	return false;
@@ -186,10 +197,18 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	dl->PathArcTo(c, r - 2, a0, a, 32);
 	dl->PathStroke(accent, ImDrawFlags_None, 4.f);
 	dl->AddLine(c, ImVec2(c.x + std::cos(a) * (r - 6), c.y + std::sin(a) * (r - 6)), ImGui::GetColorU32(ImGuiCol_Text), 2);
+	// the host's modulation: a thin ring outside the track, from the value to where the modulation takes it
+	const double m = g->host.modulation(g->host.ctx, p->param);
+	if(m != 0 && range > 0) {
+		const float tm = (float)clampTo((v + m - p->min) / range, 0.0, 1.0);
+		const float am = a0 + (a1 - a0) * tm;
+		dl->PathArcTo(c, r + 1.5f, std::min(a, am), std::max(a, am), 32);
+		dl->PathStroke(ImGui::GetColorU32(ImGuiCol_PlotHistogram), ImDrawFlags_None, 2.f);
+	}
 
 	// label and value, centred and clipped to the cell
 	char text[64];
-	lxr_params_valueText(p->param, (uint16_t)v, text, sizeof text);
+	valueText(g, p->param, (uint16_t)v, text, sizeof text);
 	drawLabel(label, ImVec2(pos.x, pos.y + KNOB + 8), ImGui::GetColorU32(ImGuiCol_Text));
 	const ImVec4 clip(pos.x, pos.y, pos.x + cellW, pos.y + CELL_H);
 	const float vw = ImGui::CalcTextSize(text).x;
@@ -209,7 +228,7 @@ static void selector(TackGui* g, const LxrParamInfo* p, const char* label)
 	const ImVec2 pos = ImGui::GetCursorScreenPos();
 	const uint16_t v = (uint16_t)value(g, p->param);
 	char current[64];
-	lxr_params_valueText(p->param, v, current, sizeof current);
+	valueText(g, p->param, v, current, sizeof current);
 
 	ImGui::PushID(p->param);
 	ImGui::BeginGroup();
@@ -220,8 +239,9 @@ static void selector(TackGui* g, const LxrParamInfo* p, const char* label)
 	ImGui::SetNextWindowSizeConstraints(ImVec2(cellW, 0), ImVec2(320, 400));
 	if(ImGui::BeginCombo("##v", current, ImGuiComboFlags_HeightLarge)) {
 		for(uint16_t i = p->min; i <= p->max; i++) {
-			char text[64];
-			lxr_params_valueText(p->param, i, text, sizeof text);
+			if(!g->host.offersValue(g->host.ctx, p->param, i)) continue;
+			char text[96];
+			valueText(g, p->param, i, text, sizeof text);
 			// by value, not text: two options may read the same
 			ImGui::PushID(i);
 			if(ImGui::Selectable(text, i == v)) edit(g, p->param, i);
@@ -262,7 +282,8 @@ static void box(TackGui* g, const char* title, const LxrParamInfo* const* params
 
 struct Group { const char* title; const LxrParamInfo* params[8]; const char* labels[8]; int n; };
 
-static int collectGroups(int voice, uint8_t fxType, Group* groups)
+// g: the parameters the plugin has; nullptr for all of them, as for sizing the window
+static int collectGroups(const TackGui* g, int voice, uint8_t fxType, Group* groups)
 {
 	int numGroups = 0;
 	auto addGroup = [&](const char* title) -> Group& {
@@ -282,7 +303,7 @@ static int collectGroups(int voice, uint8_t fxType, Group* groups)
 			Group& gr = addGroup(title);
 			for(int i = 0; i < lxr_params_count(); i++) {
 				const LxrParamInfo* p = lxr_params_info(i);
-				if(p->voice == voice && p->group == grp) add(gr, p, p->label);
+				if(p->voice == voice && p->group == grp && (!g || g->host.hasParam(g->host.ctx, p->param))) add(gr, p, p->label);
 			}
 		}
 	} else {
@@ -372,10 +393,10 @@ static int fxTypeCells()
 }
 
 // the rows of a tab: three for every tab
-static int tabRows(int tab, uint8_t fxType, Group* groups, Slot rows[ROWS][SLOTS_PER_ROW], int counts[ROWS])
+static int tabRows(const TackGui* g, int tab, uint8_t fxType, Group* groups, Slot rows[ROWS][SLOTS_PER_ROW], int counts[ROWS])
 {
 	if(tab < LXR_PARAMS_FX_VOICE) {
-		const int n = collectGroups(tab, 0, groups);
+		const int n = collectGroups(g, tab, 0, groups);
 		for(int r = 0; r < ROWS; r++) {
 			counts[r] = 0;
 			for(int i = 0; i < SLOTS_PER_ROW && rowSlots[r][i] >= 0; i++) {
@@ -438,16 +459,16 @@ static uint32_t windowWidth()
 	Slot rows[ROWS][SLOTS_PER_ROW];
 	int counts[ROWS];
 	for(int tab = 0; tab <= LXR_PARAMS_FX_VOICE; tab++) {
-		tabRows(tab, 1, groups, rows, counts);
+		tabRows(nullptr, tab, 1, groups, rows, counts);
 		for(int r = 0; r < ROWS; r++) widest = std::max(widest, naturalWidth(rows[r], counts[r]));
 	}
 	width = (uint32_t)(widest + 2 * MARGIN);
 	return width;
 }
 
-static uint32_t windowHeight()
+static uint32_t windowHeight(int voice)
 {
-	return (uint32_t)(HEADER_H + ROWS * BOX_H + (ROWS - 1) * GAP + MARGIN);
+	return (uint32_t)(headerHeight(voice) + ROWS * BOX_H + (ROWS - 1) * GAP + MARGIN);
 }
 
 static void drawTab(TackGui* g)
@@ -455,7 +476,7 @@ static void drawTab(TackGui* g)
 	Group groups[FX_TAB_GROUPS > LXR_PARAMS_NUM_GROUPS + 1 ? FX_TAB_GROUPS : LXR_PARAMS_NUM_GROUPS + 1];
 	Slot rows[ROWS][SLOTS_PER_ROW];
 	int counts[ROWS];
-	tabRows(g->tab, (uint8_t)value(g, lxr_params_fxTypeParam()), groups, rows, counts);
+	tabRows(g, g->tab, (uint8_t)value(g, lxr_params_fxTypeParam()), groups, rows, counts);
 
 	const float inner = windowWidth() - 2 * MARGIN;
 	for(int r = 0; r < ROWS; r++) {
@@ -468,10 +489,10 @@ static void drawTab(TackGui* g)
 			const Slot& slot = rows[r][i];
 			const float w = boxWidth(slot.cells) + extra * slot.cells / cells;
 			if(slot.group) {
-				ImGui::SetCursorPos(ImVec2(x, HEADER_H + r * (BOX_H + GAP)));
+				ImGui::SetCursorPos(ImVec2(x, headerHeight(g->host.voice) + r * (BOX_H + GAP)));
 				box(g, slot.group->title, slot.group->params, slot.group->labels, slot.group->n, w, slot.cells);
 				if(slot.group->title == mixerTitles[MIX_OUTPUT - MIX_VOLUME])
-					outputsSwitch(g, ImVec2(x, HEADER_H + r * (BOX_H + GAP)), w);
+					outputsSwitch(g, ImVec2(x, headerHeight(g->host.voice) + r * (BOX_H + GAP)), w);
 			}
 			x += w + GAP;
 		}
@@ -479,49 +500,98 @@ static void drawTab(TackGui* g)
 	cellW = CELL_W;
 }
 
-// the current kit's index in g->kits, or -1 for the init kit or a kit that isn't in the kit folder
-static int currentKit(TackGui* g)
+// what the browser lists: whole kits in Tack, in a voice plugin the voices of kits it can play
+struct Entry { int kit; int voice; char name[24]; };
+
+static void buildEntries(TackGui* g)
+{
+	g->entries.clear();
+	const int voice = g->host.voice;
+	for(int i = 0; i < g->kits.numKits; i++) {
+		const TackKit& kit = g->kits.kits[i];
+		if(voice < 0) {
+			Entry e = { i, -1, "" };
+			snprintf(e.name, sizeof e.name, "%s", kit.name);
+			g->entries.push_back(e);
+			continue;
+		}
+		// Tack Drum plays any of drums 1-3; voices that are just the init kit's are left out
+		const int first = voice < 3 ? 0 : voice, last = voice < 3 ? 2 : voice;
+		for(int v = first; v <= last; v++) {
+			if(!(kit.voices & (1 << v))) continue;
+			Entry e = { i, v, "" };
+			tack_voicePresetName(kit.name, v, kit.voices, e.name, sizeof e.name);
+			g->entries.push_back(e);
+		}
+	}
+	// folder by folder, alphabetically
+	std::stable_sort(g->entries.begin(), g->entries.end(), [g](const Entry& a, const Entry& b) {
+		const int fa = g->kits.kits[a.kit].folder, fb = g->kits.kits[b.kit].folder;
+		return fa != fb ? fa < fb : strcasecmp(a.name, b.name) < 0;
+	});
+}
+
+static void scan(TackGui* g)
+{
+	tack_scanKits(&g->kits);
+	buildEntries(g);
+}
+
+static int entryFolder(const TackGui* g, int e) { return g->kits.kits[g->entries[e].kit].folder; }
+
+static bool isCurrent(TackGui* g, int e)
 {
 	const char* path = g->host.kitPath(g->host.ctx);
-	if(!path || !path[0]) return -1;
-	for(int i = 0; i < g->kits.numKits; i++)
-		if(!strcmp(g->kits.kits[i].path, path)) return i;
+	const Entry& entry = g->entries[e];
+	return path && !strcmp(g->kits.kits[entry.kit].path, path) && entry.voice == g->host.kitVoice(g->host.ctx);
+}
+
+// the current entry's index, or -1 for the init kit or a kit that isn't in the kit folder
+static int currentEntry(TackGui* g)
+{
+	for(int e = 0; e < (int)g->entries.size(); e++)
+		if(isCurrent(g, e)) return e;
 	return -1;
 }
 
-// loads the previous (dir -1) or next kit in the current kit's folder, wrapping around; from the init kit, the
-// first or last kit of all
+static void load(TackGui* g, int e)
+{
+	g->host.loadKit(g->host.ctx, g->kits.kits[g->entries[e].kit].path, g->entries[e].voice);
+	g->browseFolder = entryFolder(g, e);
+}
+
+// loads the previous (dir -1) or next entry in the current one's folder, wrapping around; from the init kit, the
+// first or last of all
 static void stepKit(TackGui* g, int dir)
 {
-	tack_scanKits(&g->kits);
-	const int n = g->kits.numKits;
+	scan(g);
+	const int n = (int)g->entries.size();
 	if(!n) return;
-	const int cur = currentKit(g);
+	const int cur = currentEntry(g);
 	int next;
 	if(cur < 0) {
 		next = dir > 0 ? 0 : n - 1;
 	} else {
-		const int folder = g->kits.kits[cur].folder;
+		const int folder = entryFolder(g, cur);
 		int first = cur, last = cur;
-		while(first > 0 && g->kits.kits[first - 1].folder == folder) first--;
-		while(last < n - 1 && g->kits.kits[last + 1].folder == folder) last++;
+		while(first > 0 && entryFolder(g, first - 1) == folder) first--;
+		while(last < n - 1 && entryFolder(g, last + 1) == folder) last++;
 		next = cur + dir;
 		if(next < first) next = last;
 		if(next > last) next = first;
 	}
-	g->host.loadKit(g->host.ctx, g->kits.kits[next].path);
-	g->browseFolder = g->kits.kits[next].folder;
+	load(g, next);
 }
 
 static void openBrowser(TackGui* g)
 {
-	tack_scanKits(&g->kits);
-	const int cur = currentKit(g);
-	g->browseFolder = cur >= 0 ? g->kits.kits[cur].folder : (g->kits.numFolders && g->host.kitPath(g->host.ctx)[0] ? 0 : -1);
+	scan(g);
+	const int cur = currentEntry(g);
+	g->browseFolder = cur >= 0 ? entryFolder(g, cur) : (!g->entries.empty() && g->host.kitPath(g->host.ctx)[0] ? entryFolder(g, 0) : -1);
 }
 
-// folders on the left, the selected folder's kits on the right; clicking a kit loads it and leaves the browser
-// open, so kits can be tried one after the other
+// folders on the left, the selected folder's kits (or voices) on the right, alphabetically; clicking one loads it and
+// leaves the browser open, so they can be tried one after the other
 static void drawBrowser(TackGui* g)
 {
 	const ImVec2 size = ImGui::GetIO().DisplaySize;
@@ -536,10 +606,15 @@ static void drawBrowser(TackGui* g)
 	g->browserOpen = true;
 	if(ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
 
+	// folders with something to offer
+	std::vector<bool> used(g->kits.numFolders, false);
+	for(int e = 0; e < (int)g->entries.size(); e++) used[entryFolder(g, e)] = true;
+
 	const float folderW = 190;
 	ImGui::BeginChild("folders", ImVec2(folderW, 0), ImGuiChildFlags_Borders);
 	if(ImGui::Selectable("Tack", g->browseFolder == -1)) g->browseFolder = -1;
 	for(int f = 0; f < g->kits.numFolders; f++) {
+		if(!used[f]) continue;
 		ImGui::PushID(f);
 		if(ImGui::Selectable(g->kits.folders[f][0] ? g->kits.folders[f] : "Kits", g->browseFolder == f)) g->browseFolder = f;
 		ImGui::PopID();
@@ -549,20 +624,18 @@ static void drawBrowser(TackGui* g)
 
 	ImGui::SameLine();
 	ImGui::BeginChild("kits", ImVec2(0, 0), ImGuiChildFlags_Borders);
-	const char* current = g->host.kitPath(g->host.ctx);
 	const float kitW = 150;
 	const int columns = std::max(1, (int)(ImGui::GetContentRegionAvail().x / (kitW + ImGui::GetStyle().ItemSpacing.x)));
 	if(g->browseFolder < 0) {
-		if(ImGui::Selectable("Init Kit", !current[0], 0, ImVec2(kitW, 0))) g->host.loadKit(g->host.ctx, nullptr);
+		if(ImGui::Selectable(g->host.voice < 0 ? "Init Kit" : "Init", !g->host.kitPath(g->host.ctx)[0], 0, ImVec2(kitW, 0)))
+			g->host.loadKit(g->host.ctx, nullptr, -1);
 	} else {
 		int column = 0;
-		for(int i = 0; i < g->kits.numKits; i++) {
-			const TackKit& kit = g->kits.kits[i];
-			if(kit.folder != g->browseFolder) continue;
+		for(int e = 0; e < (int)g->entries.size(); e++) {
+			if(entryFolder(g, e) != g->browseFolder) continue;
 			if(column++ % columns) ImGui::SameLine();
-			ImGui::PushID(i);
-			if(ImGui::Selectable(kit.name, !strcmp(kit.path, current), 0, ImVec2(kitW, 0)))
-				g->host.loadKit(g->host.ctx, kit.path);
+			ImGui::PushID(e);
+			if(ImGui::Selectable(g->entries[e].name, isCurrent(g, e), 0, ImVec2(kitW, 0))) load(g, e);
 			ImGui::PopID();
 		}
 	}
@@ -570,11 +643,54 @@ static void drawBrowser(TackGui* g)
 	ImGui::EndPopup();
 }
 
+// a voice plugin's chromatic switch, drawn as a small keyboard: lit when notes set the pitch
+static void chromaticSwitch(TackGui* g)
+{
+	const bool on = value(g, TACK_GUI_CHROMATIC_ID) >= 0.5;
+	const ImVec2 size(30, ImGui::GetFrameHeight());
+	const ImVec2 p = ImGui::GetCursorScreenPos();
+	if(ImGui::InvisibleButton("chromatic", size)) edit(g, TACK_GUI_CHROMATIC_ID, on ? 0 : 1);
+	const bool hovered = ImGui::IsItemHovered();
+	if(hovered)
+		ImGui::SetTooltip(on ? "Chromatic: notes set the pitch, C3 is the tuned pitch" : "Not chromatic: every note plays the tuned pitch");
+
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), ImGui::GetColorU32(hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button), 3);
+	const ImU32 white = on ? ImGui::GetColorU32(ImGuiCol_SliderGrab) : ImGui::GetColorU32(ImGuiCol_TextDisabled);
+	const ImU32 black = ImGui::GetColorU32(ImGuiCol_Button);
+	// seven white keys with five black ones over them
+	const float x0 = p.x + 4, y0 = p.y + 4, w = (size.x - 8) / 7, h = size.y - 8;
+	dl->AddRectFilled(ImVec2(x0, y0), ImVec2(x0 + 7 * w, y0 + h), white, 1);
+	for(int k = 1; k < 7; k++) dl->AddLine(ImVec2(x0 + k * w, y0), ImVec2(x0 + k * w, y0 + h), black);
+	for(int k : { 1, 2, 4, 5, 6 })
+		dl->AddRectFilled(ImVec2(x0 + k * w - w * 0.35f, y0), ImVec2(x0 + k * w + w * 0.35f, y0 + h * 0.6f), black);
+}
+
+// audition the selected voice
+static void drawAudition(TackGui* g)
+{
+	if(g->tab >= LXR_PARAMS_FX_VOICE) return;
+	ImGui::SameLine(0, 24);
+	if(g->tab == 5) {
+		if(ImGui::Button("Trig closed")) g->host.audition(g->host.ctx, 5);
+		ImGui::SameLine();
+		if(ImGui::Button("Trig open")) g->host.audition(g->host.ctx, 6);
+	} else if(ImGui::Button("Trig")) {
+		g->host.audition(g->host.ctx, g->tab);
+	}
+}
+
 static void drawHeader(TackGui* g)
 {
-	ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab), "TACK");
-	ImGui::SameLine();
+	// the plugin's name; a voice plugin's chromatic switch next to it, then the kits' voices it can play like
+	// Tack's kits
+	static const char* const titles[] = { "TACK DRUM", "TACK DRUM", "TACK DRUM", "TACK SNARE", "TACK CYMBAL", "TACK HI-HAT" };
+	ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab), "%s", g->host.voice < 0 ? "TACK" : titles[g->host.voice]);
 	const char* kit = g->host.kitName(g->host.ctx);
+	if(g->host.voice >= 0) {
+		ImGui::SameLine(0, 12);
+		chromaticSwitch(g);
+	}
 	ImGui::SameLine(0, 16);
 	if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
 	ImGui::SameLine(0, 2);
@@ -591,9 +707,10 @@ static void drawHeader(TackGui* g)
 		}
 		g->keepClosed = false;
 	}
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("Choose a kit from the kit folder");
+	if(ImGui::IsItemHovered())
+		ImGui::SetTooltip(g->host.voice < 0 ? "Choose a kit from the kit folder" : "Choose a voice from the kits in the kit folder");
 	ImGui::SameLine(0, 8);
-	if(ImGui::Button("Save kit")) {
+	if(ImGui::Button(g->host.voice < 0 ? "Save kit" : "Save")) {
 		// start from the kit's name, as far as the device allows it
 		int n = 0;
 		for(const char* c = kit ? kit : ""; *c && n < 8; c++)
@@ -601,10 +718,14 @@ static void drawHeader(TackGui* g)
 		g->saveName[n] = 0;
 		g->saveExists = g->saveFailed = false;
 		g->focusName = true;
-		ImGui::OpenPopup("Save kit");
+		ImGui::OpenPopup("###save");
 		puglGrabFocus(g->view);
 	}
-
+	if(g->host.voice >= 0) {
+		// no tabs, and no play button: notes play the voice
+		ImGui::Separator();
+		return;
+	}
 
 	for(int t = 0; t <= LXR_PARAMS_FX_VOICE; t++) {
 		if(t) ImGui::SameLine();
@@ -614,19 +735,9 @@ static void drawHeader(TackGui* g)
 		if(selected) ImGui::PopStyleColor();
 	}
 
-	// audition the selected voice
-	if(g->tab < LXR_PARAMS_FX_VOICE) {
-		ImGui::SameLine(0, 24);
-		if(g->tab == 5) {
-			if(ImGui::Button("Play closed")) g->host.audition(g->host.ctx, 5);
-			ImGui::SameLine();
-			if(ImGui::Button("Play open")) g->host.audition(g->host.ctx, 6);
-		} else if(ImGui::Button("Play")) {
-			g->host.audition(g->host.ctx, g->tab);
-		}
-	}
+	drawAudition(g);
 	ImGui::Separator();
-	// the boxes start at HEADER_H whatever the header's exact height
+	// the boxes start at headerHeight() whatever the header's exact height
 }
 
 static int kitNameFilter(ImGuiInputTextCallbackData* data)
@@ -638,17 +749,19 @@ static void drawSaveDialog(TackGui* g)
 {
 	const ImVec2 size = ImGui::GetIO().DisplaySize;
 	ImGui::SetNextWindowPos(ImVec2(size.x * 0.5f, size.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-	if(!ImGui::BeginPopupModal("Save kit", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+	const bool voice = g->host.voice >= 0;
+	if(!ImGui::BeginPopupModal(voice ? "Save voice###save" : "Save kit###save", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
 		return;
 	ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 460);
 	// the folder, with the home folder as ~
 	const char* folder = tack_kitFolder();
 	const char* home = getenv("HOME");
 	const size_t homeLen = home ? strlen(home) : 0;
-	if(homeLen && !strncmp(folder, home, homeLen) && folder[homeLen] == '/')
-		ImGui::TextDisabled("To ~%s/" TACK_USER_PACK ", where the host's preset browser lists it", folder + homeLen);
-	else
-		ImGui::TextDisabled("To %s/" TACK_USER_PACK ", where the host's preset browser lists it", folder);
+	const bool inHome = homeLen && !strncmp(folder, home, homeLen) && folder[homeLen] == '/';
+	// a voice is saved as a kit that has only this voice, which the voice plugins list under its own name
+	ImGui::TextDisabled("To %s%s/" TACK_USER_PACK ", %s", inHome ? "~" : "", inHome ? folder + homeLen : folder,
+		voice ? "as a kit with only this voice" : "where the host's preset browser lists it");
 
 	if(g->focusName) {
 		ImGui::SetKeyboardFocusHere();
@@ -688,6 +801,7 @@ static void drawFrame(TackGui* g)
 	ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 	ImGui::Begin("Tack", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
 		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus);
+	if(g->host.voice >= 0) g->tab = g->host.voice;
 	drawHeader(g);
 	drawTab(g);
 	drawSaveDialog(g);
@@ -841,7 +955,7 @@ TackGui* tack_guiCreate(const TackGuiHost* host)
 	puglSetViewHint(g->view, PUGL_CONTEXT_PROFILE, PUGL_OPENGL_CORE_PROFILE);
 	puglSetViewHint(g->view, PUGL_DOUBLE_BUFFER, 1);
 	puglSetViewHint(g->view, PUGL_RESIZABLE, 0);
-	puglSetSizeHint(g->view, PUGL_DEFAULT_SIZE, windowWidth(), windowHeight());
+	puglSetSizeHint(g->view, PUGL_DEFAULT_SIZE, windowWidth(), windowHeight(host->voice));
 	puglSetEventFunc(g->view, onEvent);
 	return g;
 }
@@ -859,10 +973,10 @@ void tack_guiDestroy(TackGui* g)
 	delete g;
 }
 
-void tack_guiGetSize(uint32_t* width, uint32_t* height)
+void tack_guiGetSize(int voice, uint32_t* width, uint32_t* height)
 {
 	*width = windowWidth();
-	*height = windowHeight();
+	*height = windowHeight(voice);
 }
 
 bool tack_guiSetParent(TackGui* g, uintptr_t parent)

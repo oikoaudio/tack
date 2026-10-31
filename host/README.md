@@ -72,7 +72,10 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   list from the front panel's menu tables (`menuPages`, `valueNames`, `parameter_dtypes`, `modTargets`), so names,
   ranges and value texts follow the firmware; `build/host/list_params` prints it. Parameter ids are the firmware's
   parameter numbers, so they stay stable. Changes go through the same queue as notes, so automation lines up with
-  them to within the same ±0.73 ms. The four FX
+  them to within the same ±0.73 ms. The amounts (every parameter with a knob) can be modulated by the host: its
+  modulators add to the parameter's value without moving it, as CLAP modulation does, and the editor shows the
+  modulation as a thin ring around the knob. The sum is rounded to the parameter's steps and kept in its range, so
+  modulation is as coarse as automation; options (waveforms, destinations, outputs) aren't modulatable. The four FX
   parameters mean something different per FX type and are named with all their meanings ("FX Color/Decay/Range").
   LFO destinations cover every modulation target; the front panel's "destination voice" only narrowed its list and
   is left out. Its target list has the FX parameters once per voice, so Tack lists each target once, and names
@@ -84,7 +87,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   with them, and the built-in "Init Kit" preset is the same sound. No kits are bundled with Tack; the factory and
   third-party kits belong to their authors. Linux only for now.
 - **Choosing kits in the editor:** the same kits are in the editor too. Clicking the kit's name opens a browser: the
-  kit folder's folders on the left (a pack, or a project folder in it), their kits on the right in slot order.
+  kit folder's folders on the left (a pack, or a project folder in it), their kits on the right alphabetically.
   Clicking a kit loads it and leaves the browser open, to try one after another. The arrows next to the name step to
   the previous or next kit in the same folder. The editor reads the kit folder each time, so new kits show up at
   once. A `*` after the name means the kit was edited in the editor since it was loaded or saved; loading another kit
@@ -98,7 +101,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
 - **Editor:** a tab per voice plus FX. Each tab shows the front panel's sub-pages as boxes of up to 4 x 2 controls,
   three boxes to a row (`clap/gui.cpp`): knobs for amounts (drag, Shift for fine, wheel steps, double-click resets
   to the init kit value) and drop-downs for options, with short labels and the full name as a tooltip. The FX tab
-  shows the controls of the selected FX type under that type's names. Play buttons audition the selected voice. It
+  shows the controls of the selected FX type under that type's names. Trig buttons trigger the selected voice. It
   is Dear ImGui (MIT) drawn into a pugl (ISC) OpenGL view, fetched at pinned versions, embedded in the host's X11
   window and driven by the host's timer; edits go to the audio thread through a queue and reach the host as
   parameter gestures. `build/host/gui_test Tack.clap [seconds] [kit.snd]` opens it without a DAW (also under
@@ -115,6 +118,10 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   switch, on the Mix & FX page, decides where Direct voices go: with "Stereo" (the default) to Main, so everything
   is there, with "Individual" to their own outputs, panned, leaving Main with only the voices that go through the
   FX. Both settings sum to the same mix. The switch is saved with the project, not with kits, and isn't automatable.
+  With "Stereo" only Main is resampled to the host's rate, which halves Tack's CPU use (about 1.3% of one core
+  here, against 2.8% with "Individual"). Switching to "Individual" while playing starts resampling the voices'
+  outputs from that moment, so they can be up to half an engine sample (11 µs) off Main until the project is
+  reopened or the audio engine restarts.
   The device's other destinations, its second output pair and the mono jacks, become Direct (and the FX bus always
   returns to Main), a deliberate difference; none of the factory or Hrtl kits use them, and kit files keep what
   they store.
@@ -125,16 +132,48 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   `build/host/multi_test Tack.clap kit.snd...` renders a different kit in each of several instances, interleaved
   and on one thread each, and checks every result against the kit rendered alone. Linux only for now (`memfd`).
 
+### Single voices: Tack Drum, Snare, Cymbal and Hi-hat
+
+`Tack.clap` holds four more plugins, one per kind of voice, for playing a single voice on its own track or in a
+host's drum rack. Each runs a whole engine but plays and shows one voice: Tack Drum is drum 1 (drums 1-3 are the
+same engine), the others the snare, cymbal and hi-hat.
+
+- **Notes:** on any channel, chromatically: C3 plays the voice at its tuned pitch. The keyboard switch next to the
+  name (the "Chromatic" parameter) turns that off: every note then plays the tuned pitch, as a drum pad would.
+  Tack Hi-hat plays the open hat on channel 2 and the closed hat on every other channel; a closed hit chokes an
+  open one, as on the device. Open and closed differ only in their decay ("Decay Open", "Decay Closed").
+- **Presets:** the voices of the kits in the kit folder, in the plugin's own browser (click the name; the arrows
+  step through a folder): every kit's drums 1-3 in Tack Drum ("Lambo Drum 2"), its snare, cymbal or hi-hat in the
+  others, leaving out voices that are just the init kit's. A voice is copied onto the plugin's voice with its
+  modulation: targets and LFO retrigger on its own voice move with it. What depended on the rest of its kit doesn't
+  come along (another voice's LFO on it, its LFO on another voice, an LFO retriggered by another voice), so a few
+  voices sound different on their own. The host's preset browser only lists the init kit for the voice plugins: a
+  kit file that offers several presets is a preset container, and hosts didn't list those (Bitwig 6.1.6 showed no
+  Tack presets at all).
+- **Saving:** the editor's "Save" button writes the voice as a kit with only this voice, to the "User" pack like
+  Tack's kits: the voice in its own place (Tack Drum's on drum 1), every other voice the init kit's. The voice
+  browser lists it under its own name ("Clap", not "Clap Drum 1"), Tack and the device load it as a kit.
+- **Parameters:** the voice's own, named without the voice ("Filter Frequency", ids as in Tack). Velocity and LFO
+  destinations offer only the voice's own parameters. No FX bus: the voice plays directly on the plugin's one
+  output.
+- **Editor:** the voice's page of the Tack editor, without its output menu; no play button, notes play it.
+- **CPU:** the engine computes only the plugin's voice, without the FX bus, and resamples only its two channels:
+  about 0.7% of one core here, against 1.3% for a whole Tack. The noise in snare, cymbal and hi-hat sounds
+  differs sample by sample from the same voice in Tack (other voices no longer draw from the random number
+  generator in between), not in level or colour.
+- Velocity and LFO destinations of the other voices are off, since those voices aren't computed.
+
 To install it into `~/.clap`: `cmake --build build/host --target install_tack`. It copies the plugin in one step
 rather than linking to the build output, so a host watching the folder never loads a half-written file mid-build.
 
-`build/host/clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id=value@seconds ...]`
+`build/host/clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount [@seconds] ...]`
 is a minimal CLAP host for testing without a DAW: it loads a kit through the preset-load extension, plays notes (on
-channel 1 unless given, e.g. `2:48` for drum 1 an octave down), sets parameters through flush or as timed events, and
-with `-s` runs the state through save, a new instance and load before playing. `clap-validator list presets
+channel 1 unless given, e.g. `2:48` for drum 1 an octave down), sets parameters (`=`) or modulates them (`~`)
+through flush or as timed events, and with `-s` runs the state through save, a new instance and load before playing.
+`gui_test` takes modulation from `$TACK_MOD` (`"37~-60 8~30"`) to show it in the editor. `clap-validator list presets
 build/host/Tack.clap` shows what the preset browser will see.
 
-`clap-validator validate build/host/Tack.clap`: 38 passed, 0 failed, 6 skipped. The skipped tests are for
+`clap-validator validate build/host/Tack.clap`: 192 tests for the five plugins, 162 passed, 0 failed, 30 skipped. The skipped tests are for
 extensions Tack doesn't have (64-bit audio, configurable ports).
 
 Not done yet: macOS and Windows, a styling pass on the editor.

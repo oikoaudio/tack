@@ -66,6 +66,26 @@ uint16_t lxr_params_default(uint16_t param);
 /** Firmware parameter number of the FX type, whose value (0 off, 1-4) selects what the FX parameters mean. */
 uint16_t lxr_params_fxTypeParam(void);
 
+/** Whether a parameter is a modulation destination (velocity or LFO). */
+bool lxr_params_isTarget(uint16_t param);
+
+/**
+ * For a modulation destination: the voice (0-5) whose parameter the plugin value drives, or -1 for off, the FX bus
+ * or a global parameter.
+ */
+int lxr_params_targetVoice(uint16_t param, uint16_t value);
+
+/**
+ * Copies one voice of a kit onto a voice of another kit (both in firmware values): each parameter goes to the one
+ * with the same place on the target voice (drums 1-3 have the same parameters; other voices only copy onto
+ * themselves). Modulation targets on the source voice move to the same parameter on the target voice; targets on
+ * other voices become off. An LFO retriggered by its own voice is retriggered by the target voice.
+ */
+void lxr_params_copyVoice(const uint8_t* fromKit, int fromVoice, uint8_t* toKit, int toVoice);
+
+/** Whether a voice of a kit sounds like the init kit's: every parameter of it the same, its output aside. */
+bool lxr_params_voiceIsInit(const uint8_t* kit, int voice);
+
 /** Text for a plugin value, as the front panel would show it. */
 void lxr_params_valueText(uint16_t param, uint16_t value, char* buf, size_t size);
 

@@ -10,6 +10,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,9 +33,27 @@ typedef struct
 	const char* (*kitPath)(void* ctx);
 	/** whether the kit was edited in the editor since it was loaded or saved */
 	bool (*kitEdited)(void* ctx);
-	/** loads a kit file, or the init kit if path is NULL; false if it couldn't be read */
-	bool (*loadKit)(void* ctx, const char* path);
+	/**
+	 * loads a kit file, or the init kit if path is NULL; false if it couldn't be read. A voice plugin takes one voice
+	 * of the kit (0-5; -1 its own), the whole kit plugin all of it (voice -1).
+	 */
+	bool (*loadKit)(void* ctx, const char* path, int voice);
+	/** -1 for the whole kit; else the one voice (0-5) the plugin has, whose tab is all the editor shows */
+	int voice;
+	/** whether the plugin has a kit parameter */
+	bool (*hasParam)(void* ctx, uint32_t id);
+	/** whether a parameter's value is on offer (a single voice's destinations stay on the voice) */
+	bool (*offersValue)(void* ctx, uint32_t id, uint16_t value);
+	/** the text for a value, as the plugin names it */
+	void (*valueText)(void* ctx, uint32_t id, uint16_t value, char* text, size_t size);
+	/** the voice of the kit file a voice plugin plays (see loadKit), -1 for the whole kit */
+	int (*kitVoice)(void* ctx);
+	/** the host's modulation of a parameter, in plugin values, on top of its value */
+	double (*modulation)(void* ctx, uint32_t id);
 } TackGuiHost;
+
+/** Plugin parameter id of a voice plugin's chromatic switch, shown as a keyboard in the editor. */
+#define TACK_GUI_CHROMATIC_ID 1001
 
 /** Plugin parameter id of the outputs switch (0 stereo, 1 individual), which the editor also shows. */
 #define TACK_GUI_SEPARATE_OUTPUTS_ID 1000
@@ -43,7 +62,8 @@ typedef struct TackGui TackGui;
 
 TackGui* tack_guiCreate(const TackGuiHost* host);
 void tack_guiDestroy(TackGui* gui);
-void tack_guiGetSize(uint32_t* width, uint32_t* height);
+/** The editor's size: a voice plugin's (voice 0-5) is shorter than the whole kit's (-1). */
+void tack_guiGetSize(int voice, uint32_t* width, uint32_t* height);
 /** Embeds the editor in a host window (an X11 window id) and creates it. */
 bool tack_guiSetParent(TackGui* gui, uintptr_t parent);
 bool tack_guiShow(TackGui* gui);

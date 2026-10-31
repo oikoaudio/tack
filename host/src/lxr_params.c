@@ -462,6 +462,80 @@ static void targetText(uint8_t modTargetIdx, char* buf, size_t size)
 		snprintf(buf, size, "%s %s %s", pageNames[voice - 1], cat, name);
 }
 
+bool lxr_params_isTarget(uint16_t param)
+{
+	return param < END_OF_SOUND_PARAMETERS && (isVeloDest(param) || isLfoDest(param));
+}
+
+int lxr_params_targetVoice(uint16_t param, uint16_t value)
+{
+	if(!lxr_params_isTarget(param)) return -1;
+	const uint8_t t = lxr_params_toFirmware(param, value);
+	if(t == 0 || modTargets[t].param == PAR_NONE) return -1;
+	const int i = lxr_params_indexOf(modTargets[t].param);
+	return i >= 0 && infos[i].voice < LXR_PARAMS_NUM_VOICES ? infos[i].voice : -1;
+}
+
+// the parameter with the same place on another voice: same group, same label
+static int counterpart(uint16_t param, int voice)
+{
+	const int i = lxr_params_indexOf(param);
+	if(i < 0) return -1;
+	if(infos[i].voice == voice) return param;
+	for(int j = 0; j < count; j++)
+		if(infos[j].voice == voice && infos[j].group == infos[i].group && !strcmp(infos[j].label, infos[i].label))
+			return infos[j].param;
+	return -1;
+}
+
+// a modulation target (modTargets index) of one voice's destination, moved to another voice's destination
+static uint8_t moveTarget(uint8_t target, int fromVoice, uint16_t toDest, int toVoice)
+{
+	if(target == 0 || target >= getNumModTargets() || modTargets[target].param == PAR_NONE) return 0;
+	const int i = lxr_params_indexOf(modTargets[target].param);
+	if(i < 0 || infos[i].voice != fromVoice) return 0;
+	const int param = counterpart(modTargets[target].param, toVoice);
+	if(param < 0) return 0;
+	int first = 2, last = getNumModTargets() - 1;
+	if(isVeloDest(toDest)) {
+		first = modTargetVoiceOffsets[toDest - PAR_VEL_DEST_1].start;
+		last = modTargetVoiceOffsets[toDest - PAR_VEL_DEST_1].end;
+	}
+	for(int t = first; t <= last; t++)
+		if(modTargets[t].param == param) return t;
+	return 0;
+}
+
+void lxr_params_copyVoice(const uint8_t* fromKit, int fromVoice, uint8_t* toKit, int toVoice)
+{
+	lxr_params_count();
+	for(int i = 0; i < count; i++) {
+		if(infos[i].voice != fromVoice) continue;
+		const uint16_t from = infos[i].param;
+		const int to = counterpart(from, toVoice);
+		if(to < 0) continue;
+		uint8_t value = fromKit[from];
+		if(lxr_params_isTarget(from))
+			value = moveTarget(value, fromVoice, to, toVoice);
+		// an LFO retriggered by its own voice (v1-v6) stays retriggered by its voice
+		else if(isMenu(from, MENU_RETRIGGER) && value == fromVoice + 1)
+			value = toVoice + 1;
+		toKit[to] = value;
+	}
+}
+
+bool lxr_params_voiceIsInit(const uint8_t* kit, int voice)
+{
+	uint8_t init[END_OF_SOUND_PARAMETERS];
+	lxr_host_initKit(init);
+	lxr_params_count();
+	for(int i = 0; i < count; i++) {
+		const uint16_t p = infos[i].param;
+		if(infos[i].voice == voice && !isMenu(p, MENU_AUDIO_OUT) && kit[p] != init[p]) return false;
+	}
+	return true;
+}
+
 void lxr_params_valueText(uint16_t param, uint16_t value, char* buf, size_t size)
 {
 	const int i = lxr_params_indexOf(param);
