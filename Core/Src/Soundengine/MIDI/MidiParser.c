@@ -166,7 +166,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 		const uint16_t paramNr = msg.data1-1;
 		if(updateOriginalValue && !isFloatModulator) {
-			midiParser_originalCcValues[paramNr+1] = value.itg;
+			midiParser_originalCcValues[msg.data1] = value.itg;
 		}
 
 		switch(msg.data1)
