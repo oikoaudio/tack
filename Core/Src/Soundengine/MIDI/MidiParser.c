@@ -134,6 +134,7 @@ float midiParser_calcDetune(uint8_t value)
 static void midiParser_nrpnHandler(uint16_t value)
 {
 	MidiMsg msg2;
+	if(midiParser_activeNrpnNumber > 126) return;	/* past the 255 values midiParser_originalCcValues holds: a kit's bytes can set it */
 	msg2.status = MIDI_CC2;
 	msg2.data1 = midiParser_activeNrpnNumber;
 	msg2.data2 = value;
