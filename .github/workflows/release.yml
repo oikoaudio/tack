@@ -57,7 +57,7 @@ jobs:
           for d in "$RUNNER_TEMP"/fetched/*-src; do
             cp -a "$d" "$RUNNER_TEMP/src/$name/third_party/$(basename "$d" -src)"
           done
-          rm -rf "$RUNNER_TEMP/src/$name"/third_party/*/.git
+          find "$RUNNER_TEMP/src/$name/third_party" -name .git -prune -exec rm -rf {} +
           ls "$RUNNER_TEMP/src/$name/third_party"
           tar -czf "dist/$name.tar.gz" -C "$RUNNER_TEMP/src" "$name"
       - uses: actions/upload-artifact@v4

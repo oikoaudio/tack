@@ -1,15 +1,16 @@
 # Tack
 
-Tack is a drum synth for desktop computers, built as CLAP plugins by oikoaudio. It runs the sound engine of the
-LXR-02 drum machine by Sonic Potions and Erica Synths. Tack is a modified version of that firmware's sound engine.
-The engine code in `Core/Src/Soundengine` is the firmware's, changed only by a few bug fixes, and Tack adds the
-plugin, its editor and the code that runs the engine on a computer.
+Tack is a drum synth for desktop computers, built as CLAP, VST® 3 and Audio Unit plugins by oikoaudio. It runs the
+sound engine of the LXR-02 drum machine by Sonic Potions and Erica Synths. Tack is a modified version of that
+firmware's sound engine. The engine code in `Core/Src/Soundengine` is the firmware's, changed only by a few bug fixes,
+and Tack adds the plugins, their editor and the code that runs the engine on a computer.
 
 Tack is not affiliated with or endorsed by Erica Synths or Sonic Potions.
 
 ## Plugins
 
-`Tack.clap` contains five plugins.
+Tack comes as `Tack.clap`, `Tack.vst3` and, on macOS, `Tack.component`, the Audio Unit. Each holds the
+same five plugins.
 
 | Plugin | Plays |
 |---|---|
@@ -31,7 +32,7 @@ modulate them. Each plugin has its own editor. The editor does not copy the hard
 Tack loads kit files in the device's `.SND` format, the files the LXR-02 writes to its SD card. Put folders of kits
 in the kit folder, `~/.local/share/Tack/Kits/` on Linux (or `$XDG_DATA_HOME/Tack/Kits/` if that is set) and
 `Documents/Tack/Kits` on Windows and macOS. Each folder in it is a pack.
-Tack lists the kits in its own kit browser and in the host's preset browser. The single-voice plugins offer the
+Tack lists the kits in its own kit browser, and the CLAP also lists them in the host's preset browser. The single-voice plugins offer the
 matching voices of every kit, so Tack Snare lists each kit's snare.
 
 Saving a kit writes a `.SND` file to the `User` pack in the format the device writes, and the device can load it. On
@@ -43,8 +44,10 @@ No kits come with Tack. The factory kits and third-party kits belong to their au
 
 ## Status
 
-Tack works on Linux x86-64 and is tested in Bitwig 6.1.6. It also builds for Windows and macOS. The Windows build
-renders the same as Linux under Wine, but nobody has played it in a DAW yet, and nobody has built the macOS one yet.
+Tack works on Linux x86-64 and on an Apple silicon Mac (M1). The CLAP and the VST3 are tested in Bitwig 6.1.6 on
+both, and the Audio Unit in Logic Pro. It also builds for Windows. The Windows build renders the same as Linux under
+Wine, but nobody has played it in a DAW yet. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux
+and Windows, and CI checks the Audio Unit with `auval`.
 There are no prebuilt binaries, so build Tack from source.
 
 Report a problem with the [bug report form](https://github.com/oikoaudio/tack/issues/new?template=bug-report.yml).
@@ -53,7 +56,8 @@ Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 ## Building and installing
 
 You need CMake 3.21 or newer, Ninja, a C and C++ compiler and the OpenGL and X11 development files. Tack is tested
-with gcc 15. CMake fetches the CLAP SDK, pugl and Dear ImGui at pinned versions, and libsamplerate if it isn't installed.
+with gcc 15. CMake fetches the CLAP SDK, clap-wrapper, the VST3 SDK, Apple's AudioUnitSDK, pugl and Dear ImGui at pinned
+versions, and libsamplerate if it isn't installed.
 
 ```sh
 cmake -S host -B build/host -G Ninja
@@ -61,7 +65,8 @@ cmake --build build/host
 cmake --build build/host --target install_tack
 ```
 
-The last command copies `Tack.clap` to `~/.clap`. [host/README.md](host/README.md#windows-and-macos) has the
+The last command copies `Tack.clap` to `~/.clap` and `Tack.vst3` to `~/.vst3`. Add `-DTACK_VST3_AU=OFF` to the
+first command to build only the CLAP. [host/README.md](host/README.md#windows-and-macos) has the
 commands for Windows and macOS.
 
 [host/README.md](host/README.md) is the technical reference. It covers the MIDI note map, parameters and modulation,
@@ -72,7 +77,7 @@ the firmware code.
 
 | Path | Contents |
 |---|---|
-| `host/` | Tack. The desktop build of the sound engine, the CLAP plugins, the editor and test tools. |
+| `host/` | Tack. The desktop build of the sound engine, the plugins, the editor and test tools. |
 | `Core/Src/Soundengine/` | The firmware's sound engine, which Tack compiles. |
 | `Core/`, `Drivers/`, `Middlewares/`, `FATFS/`, `USB_DEVICE_MIDI/`, `cmake/`, `CMakeLists.txt` | The original LXR-02 firmware for the STM32F765. |
 
@@ -128,8 +133,9 @@ firmware's release doesn't say how that license relates to the GPL, so Tack keep
 If you redistribute Tack or build on it, keep to the same terms.
 
 Third-party code in the repository keeps its own license, listed in [NOTICE.md](NOTICE.md#third-party-components). The
-plugin build also fetches the CLAP SDK (MIT), pugl (ISC), Dear ImGui (MIT) and libsamplerate (BSD-2-Clause), and each
-release includes their licenses.
+plugin build also fetches the CLAP SDK (MIT), clap-wrapper (MIT), the VST3 SDK (MIT), AudioUnitSDK (Apache 2.0), pugl
+(ISC), Dear ImGui (MIT) and libsamplerate (BSD-2-Clause), and each release includes the licenses of those built into
+its plugins.
 
 ## Credits
 
@@ -143,4 +149,7 @@ That firmware grew out of the original LXR by Julian Schmidt of Sonic Potions, p
 The Sonic Potions firmware also has code from Rudeog, Patrick Dowling and Andrew Shakinovsky, whom its README thanks.
 
 Tack's plugin, editor and host code is by oikoaudio, at
-[github.com/oikoaudio/tack](https://github.com/oikoaudio/tack).
+[github.com/oikoaudio/tack](https://github.com/oikoaudio/tack). The VST3 and the Audio Unit are made from the CLAP
+with [clap-wrapper](https://github.com/free-audio/clap-wrapper) by the CLAP team.
+
+VST is a registered trademark of Steinberg Media Technologies GmbH.

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-only
 #
 # Runs the command-line tests against a build: renders, event timing, independent instances, every plugin in
-# Tack.clap and a state round trip. CI runs it on every platform; it works locally too.
+# Tack.clap and a state round trip, then the same for Tack.vst3 if the build has it. CI runs it on every
+# platform; it works locally too.
 #
 #   host/tools/smoke_test.sh build/host            # Linux, macOS
 #   host/tools/smoke_test.sh build/win wine        # the Windows build, through Wine
@@ -48,5 +49,10 @@ step "state round trip"
 tool clap_render "$plugin" "$out/s1.wav" 48000 -p "$out/b.snd" 37=70 1000=1 >/dev/null
 tool clap_render "$plugin" "$out/s2.wav" 48000 -p "$out/b.snd" 37=70 1000=1 -s >/dev/null
 cmp "$out/s1.wav" "$out/s2.wav"
+
+if [ -d "$build/Tack.vst3" ]; then
+	step "Tack.vst3"
+	tool vst3_test "$build/Tack.vst3" 2> >(grep -v "AUDIO in" >&2)
+fi
 
 echo "all passed"

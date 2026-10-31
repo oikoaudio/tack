@@ -64,6 +64,22 @@ static const char* shortLabel(const char* label)
 
 static const char* const tabNames[] = { "Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Mix & FX" };
 
+// each kind of voice has a colour: red drums, orange snare, yellow cymbal and cream hi-hat.
+// A voice plugin wears its voice's; Tack the open tab's. Values stay the accent orange.
+static const ImVec4 voiceColours[] =
+{
+	ImVec4(0.82f, 0.23f, 0.18f, 1), ImVec4(0.82f, 0.23f, 0.18f, 1), ImVec4(0.82f, 0.23f, 0.18f, 1),
+	ImVec4(0.94f, 0.49f, 0.14f, 1), ImVec4(0.95f, 0.76f, 0.24f, 1), ImVec4(0.93f, 0.90f, 0.83f, 1),
+};
+
+// a voice's colour (0-5), or the accent for none (the FX tab)
+static ImVec4 voiceColour(int voice)
+{
+	return voice >= 0 && voice < 6 ? voiceColours[voice] : ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab);
+}
+
+static ImVec4 darker(ImVec4 c, float f) { return ImVec4(c.x * f, c.y * f, c.z * f, c.w); }
+
 struct TackGui
 {
 	TackGuiHost host;
@@ -73,6 +89,8 @@ struct TackGui
 	bool glReady = false;
 	double lastTime = 0;
 	int tab = 0;
+	// window pixels per unit of the sizes in this file: the host's scale (set_scale), or on macOS the screen's
+	double scale = 1;
 
 	// the save kit dialog
 	char saveName[9] = "";
@@ -706,7 +724,18 @@ static void drawHeader(TackGui* g)
 	// the plugin's name; a voice plugin's chromatic switch next to it, then the kits' voices it can play like
 	// Tack's kits
 	static const char* const titles[] = { "TACK DRUM", "TACK DRUM", "TACK DRUM", "TACK SNARE", "TACK CYMBAL", "TACK HI-HAT" };
-	ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab), "%s", g->host.voice < 0 ? "TACK" : titles[g->host.voice]);
+	// a band in the voice's colour along the top
+	const ImVec4 colour = voiceColour(g->tab);
+	const ImVec2 origin = ImGui::GetWindowPos();
+	ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + ImGui::GetWindowWidth(), origin.y + 4),
+		ImGui::GetColorU32(colour));
+	// the name opens the about box
+	const char* title = g->host.voice < 0 ? "TACK" : titles[g->host.voice];
+	const ImVec2 at = ImGui::GetCursorPos();
+	if(ImGui::InvisibleButton("about", ImGui::CalcTextSize(title))) ImGui::OpenPopup("###about");
+	if(ImGui::IsItemHovered()) ImGui::SetTooltip("About Tack");
+	ImGui::SetCursorPos(at);
+	ImGui::TextColored(g->host.voice < 0 ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab) : colour, "%s", title);
 	const char* kit = g->host.kitName(g->host.ctx);
 	if(g->host.voice >= 0) {
 		ImGui::SameLine(0, 12);
@@ -748,12 +777,19 @@ static void drawHeader(TackGui* g)
 		return;
 	}
 
+	// the tabs: each voice's with a line in its colour, the open one filled with it
 	for(int t = 0; t <= LXR_PARAMS_FX_VOICE; t++) {
 		if(t) ImGui::SameLine();
 		const bool selected = g->tab == t;
-		if(selected) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+		const ImVec4 c = voiceColour(t < LXR_PARAMS_FX_VOICE ? t : -1);
+		if(selected) ImGui::PushStyleColor(ImGuiCol_Button, darker(c, 0.5f));
 		if(ImGui::Button(tabNames[t], ImVec2(90, 0))) g->tab = t;
 		if(selected) ImGui::PopStyleColor();
+		if(t < LXR_PARAMS_FX_VOICE) {
+			const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(a.x, b.y - 2), b, ImGui::GetColorU32(c), 3,
+				ImDrawFlags_RoundCornersBottom);
+		}
 	}
 
 	drawAudition(g);
@@ -764,6 +800,36 @@ static void drawHeader(TackGui* g)
 static int kitNameFilter(ImGuiInputTextCallbackData* data)
 {
 	return data->EventChar < 128 && tack_isKitNameChar((char)data->EventChar) ? 0 : 1;
+}
+
+// what Tack is, where it comes from and its licences: the GPL's "Appropriate Legal Notices", and the attribution
+// Steinberg's VST usage guidelines ask for
+static void drawAbout(TackGui* g)
+{
+	const ImVec2 size = ImGui::GetIO().DisplaySize;
+	ImGui::SetNextWindowPos(ImVec2(size.x * 0.5f, size.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	if(!ImGui::BeginPopupModal("About Tack###about", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove))
+		return;
+	ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 560);
+	ImGui::TextColored(ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab), "TACK %s", TACK_VERSION);
+	ImGui::Text("A drum synth by oikoaudio. github.com/oikoaudio/tack");
+	ImGui::Spacing();
+	ImGui::TextWrapped("Its sound engine is the LXR-02 firmware's, by Sonic Potions and Erica Synths, modified. Tack "
+		"is not affiliated with or endorsed by Erica Synths or Sonic Potions.");
+	ImGui::Spacing();
+	ImGui::TextWrapped("Copyright (C) 2012-2026 Erica Synths, 2013 Julian Schmidt (Sonic Potions), 2026 oikoaudio.");
+	ImGui::TextWrapped("Tack is free software under the GNU General Public License version 3, with the additional terms "
+		"in NOTICE.md, and keeps to the Sonic Potions LXR licence: it may not be sold. It comes with ABSOLUTELY NO "
+		"WARRANTY. LICENSE, NOTICE.md and the licences of the libraries in it come with Tack, and its source is at "
+		"the address above.");
+	ImGui::Spacing();
+	ImGui::TextWrapped("Built with the CLAP SDK, clap-wrapper, the VST3 SDK, Apple's AudioUnitSDK, Dear ImGui, pugl and "
+		"libsamplerate.");
+	ImGui::TextDisabled("VST is a registered trademark of Steinberg Media Technologies GmbH.");
+	ImGui::PopTextWrapPos();
+	ImGui::Spacing();
+	if(ImGui::Button("Close", ImVec2(90, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+	ImGui::EndPopup();
 }
 
 static void drawSaveDialog(TackGui* g)
@@ -826,6 +892,7 @@ static void drawFrame(TackGui* g)
 	drawHeader(g);
 	drawTab(g);
 	drawSaveDialog(g);
+	drawAbout(g);
 	drawBrowser(g);
 	ImGui::End();
 }
@@ -880,7 +947,13 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		puglObscureView(view);
 		break;
 	case PUGL_CONFIGURE:
-		io.DisplaySize = ImVec2((float)event->configure.width, (float)event->configure.height);
+#ifdef __APPLE__
+		// pugl counts pixels; the screen's backing scale changes when the window moves to another screen
+		g->scale = puglGetScaleFactor(view);
+#endif
+		// ImGui lays out in the editor's units and draws, fonts too, at the full resolution
+		io.DisplaySize = ImVec2((float)(event->configure.width / g->scale), (float)(event->configure.height / g->scale));
+		io.DisplayFramebufferScale = ImVec2((float)g->scale, (float)g->scale);
 		break;
 	case PUGL_EXPOSE: {
 		if(!g->glReady) break;
@@ -891,20 +964,20 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		ImGui::NewFrame();
 		drawFrame(g);
 		ImGui::Render();
-		glViewport(0, 0, (GLsizei)io.DisplaySize.x, (GLsizei)io.DisplaySize.y);
+		glViewport(0, 0, (GLsizei)std::lround(io.DisplaySize.x * g->scale), (GLsizei)std::lround(io.DisplaySize.y * g->scale));
 		glClearColor(0.09f, 0.09f, 0.10f, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		break;
 	}
 	case PUGL_MOTION:
-		io.AddMousePosEvent((float)event->motion.x, (float)event->motion.y);
+		io.AddMousePosEvent((float)(event->motion.x / g->scale), (float)(event->motion.y / g->scale));
 		break;
 	case PUGL_BUTTON_PRESS:
 	case PUGL_BUTTON_RELEASE: {
 		// pugl numbers buttons left, right, middle; ImGui left, right, middle too
 		setMods(io, event->button.state);
-		io.AddMousePosEvent((float)event->button.x, (float)event->button.y);
+		io.AddMousePosEvent((float)(event->button.x / g->scale), (float)(event->button.y / g->scale));
 		if(event->button.button < 3)
 			io.AddMouseButtonEvent((int)event->button.button, event->type == PUGL_BUTTON_PRESS);
 		break;
@@ -920,6 +993,8 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		setMods(io, event->key.state);
 		const ImGuiKey key = imguiKey(event->key.key);
 		if(key != ImGuiKey_None) io.AddKeyEvent(key, event->type == PUGL_KEY_PRESS);
+		// keys the editor doesn't use go back to the host, so that space still starts and stops it (macOS)
+		if(!io.WantCaptureKeyboard) return PUGL_UNSUPPORTED;
 		break;
 	}
 	case PUGL_TEXT:
@@ -958,6 +1033,21 @@ static void applyStyle()
 	c[ImGuiCol_TextSelectedBg] = c[ImGuiCol_Header];
 }
 
+// the window's size in pixels
+static void pixelSize(const TackGui* g, uint32_t* width, uint32_t* height)
+{
+	*width = (uint32_t)std::lround(windowWidth() * g->scale);
+	*height = (uint32_t)std::lround(windowHeight(g->host.voice) * g->scale);
+}
+
+static void applySize(TackGui* g)
+{
+	uint32_t w, h;
+	pixelSize(g, &w, &h);
+	puglSetSizeHint(g->view, PUGL_DEFAULT_SIZE, w, h);
+	if(puglGetNativeView(g->view)) puglSetSizeHint(g->view, PUGL_CURRENT_SIZE, w, h);
+}
+
 TackGui* tack_guiCreate(const TackGuiHost* host)
 {
 	TackGui* g = new TackGui();
@@ -981,7 +1071,10 @@ TackGui* tack_guiCreate(const TackGuiHost* host)
 	puglSetViewHint(g->view, PUGL_CONTEXT_PROFILE, PUGL_OPENGL_CORE_PROFILE);
 	puglSetViewHint(g->view, PUGL_DOUBLE_BUFFER, 1);
 	puglSetViewHint(g->view, PUGL_RESIZABLE, 0);
-	puglSetSizeHint(g->view, PUGL_DEFAULT_SIZE, windowWidth(), windowHeight(host->voice));
+#ifdef __APPLE__
+	g->scale = puglGetScaleFactor(g->view);
+#endif
+	applySize(g);
 	puglSetEventFunc(g->view, onEvent);
 	return g;
 }
@@ -999,10 +1092,27 @@ void tack_guiDestroy(TackGui* g)
 	delete g;
 }
 
-void tack_guiGetSize(int voice, uint32_t* width, uint32_t* height)
+void tack_guiGetSize(const TackGui* g, uint32_t* width, uint32_t* height)
 {
+#ifdef __APPLE__
+	// Cocoa sizes are in points
 	*width = windowWidth();
-	*height = windowHeight(voice);
+	*height = windowHeight(g->host.voice);
+#else
+	pixelSize(g, width, height);
+#endif
+}
+
+bool tack_guiSetScale(TackGui* g, double scale)
+{
+#ifdef __APPLE__
+	return false;
+#else
+	if(!(scale >= 0.5 && scale <= 4)) return false;
+	g->scale = scale;
+	applySize(g);
+	return true;
+#endif
 }
 
 bool tack_guiSetParent(TackGui* g, uintptr_t parent)

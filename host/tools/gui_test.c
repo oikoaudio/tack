@@ -8,10 +8,13 @@
  *   gui_test Tack.clap [seconds] [kit.snd]
  *
  * $TACK_MOD="id~amount ..." modulates parameters as a host's modulators would (plugin values), to show it.
+ * $TACK_SCALE="factor" scales the editor as a host does for a high-DPI screen (set_scale; X11 and Windows), and
+ * $TACK_RESCALE="factor@seconds" changes the scale while it shows, as when the window moves to another screen.
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,9 +38,32 @@ static bool flushRequested;
 static void requestFlush(const clap_host_t* h) { flushRequested = true; }
 static const clap_host_params_t hostParams = { rescan, clear, requestFlush };
 
+// the host's window, which the editor asks to resize after a new scale
+static PuglView* window;
+// pugl sizes windows in pixels, but on Cocoa the editor's sizes are in points
+static PuglSpan pixels(uint32_t size)
+{
+#ifdef __APPLE__
+	return (PuglSpan)lround(size * puglGetScaleFactor(window));
+#else
+	return (PuglSpan)size;
+#endif
+}
+static void resizeHintsChanged(const clap_host_t* h) {}
+static bool requestResize(const clap_host_t* h, uint32_t width, uint32_t height)
+{
+	printf("editor asks for %ux%u\n", width, height);
+	fflush(stdout);
+	return puglSetSizeHint(window, PUGL_CURRENT_SIZE, pixels(width), pixels(height)) == PUGL_SUCCESS;
+}
+static bool requestShow(const clap_host_t* h) { return false; }
+static void closed(const clap_host_t* h, bool wasDestroyed) {}
+static const clap_host_gui_t hostGui = { resizeHintsChanged, requestResize, requestShow, requestShow, closed };
+
 static const void* hostGetExtension(const clap_host_t* h, const char* id)
 {
 	if(!strcmp(id, CLAP_EXT_TIMER_SUPPORT)) return &timerSupport;
+	if(!strcmp(id, CLAP_EXT_GUI)) return &hostGui;
 	if(!strcmp(id, CLAP_EXT_PARAMS)) return &hostParams;
 	return NULL;
 }
@@ -94,14 +120,17 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
+	const char* scale = getenv("TACK_SCALE");
+	if(scale && !gui->set_scale(plugin, atof(scale))) printf("the editor doesn't take a scale here\n");
+
 	// the host's window: a plain view the editor goes into
 	uint32_t w, h;
 	gui->get_size(plugin, &w, &h);
 	PuglWorld* world = puglNewWorld(PUGL_PROGRAM, 0);
 	puglSetWorldString(world, PUGL_CLASS_NAME, "TackGuiTest");
-	PuglView* window = puglNewView(world);
+	window = puglNewView(world);
 	puglSetBackend(window, puglStubBackend());
-	puglSetSizeHint(window, PUGL_DEFAULT_SIZE, (PuglSpan)w, (PuglSpan)h);
+	puglSetSizeHint(window, PUGL_DEFAULT_SIZE, pixels(w), pixels(h));
 	puglSetViewString(window, PUGL_WINDOW_TITLE, "Tack (gui_test)");
 	puglSetEventFunc(window, onWindowEvent);
 	if(puglRealize(window) || puglShow(window, PUGL_SHOW_RAISE)) { fprintf(stderr, "no window\n"); return 1; }
@@ -128,9 +157,16 @@ int main(int argc, char** argv)
 	}
 	if(numMods) { params->flush(plugin, &in, &out); numMods = 0; }
 
+	double rescale = 0, rescaleAt = -1;
+	if(getenv("TACK_RESCALE")) sscanf(getenv("TACK_RESCALE"), "%lf@%lf", &rescale, &rescaleAt);
+
 	// the host's event loop: on Windows and macOS it also delivers the editor's events
 	const double start = puglGetTime(world);
 	while(!quit && puglGetTime(world) - start < seconds) {
+		if(rescaleAt >= 0 && puglGetTime(world) - start >= rescaleAt) {
+			rescaleAt = -1;
+			if(!gui->set_scale(plugin, rescale)) printf("the editor doesn't take a scale here\n");
+		}
 		puglUpdate(world, 0.02);
 		if(timerOn) pluginTimer->on_timer(plugin, timerId);
 		// not processing audio, so do what a host does when asked to flush

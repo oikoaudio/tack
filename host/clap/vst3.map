@@ -1,0 +1,10 @@
+/* the symbols Tack.vst3 exports on Linux: the VST3 entry points, and the engine its instances load copies of */
+{
+	global:
+		GetPluginFactory;
+		ModuleEntry;
+		ModuleExit;
+		tack_engine;
+	local:
+		*;
+};

@@ -26,11 +26,12 @@ static const char* const fxTypeNames[] = { "", "Distortion", "Ring Mod", "Compre
 // see adjustValue() in lxr_host.c: a voice plays directly or through the FX bus
 static const char* const audioOutNames[] = { "Direct", "FX" };
 
-// the LCD has room for 8 characters; spell the abbreviations out
+// the LCD has room for 8 characters; spell the abbreviations out. "Veloc EG" is the voice's amplitude envelope,
+// unrelated to velocity, which has its own parameters: Tack calls it Amp EG.
 static const char* const spellings[][2] =
 {
 	{"Oscilltr", "Oscillator"}, {"Transnt", "Transient"}, {"Nois/Osc", "Noise/Osc"}, {"PitchMod", "Pitch Mod"},
-	{"Veloc EG", "Velocity EG"}, {"Fx", "FX"}, {"ClockSnc", "Clock Sync"}, {"Dcy Clsd", "Decay Closed"},
+	{"Veloc EG", "Amp EG"}, {"Fx", "FX"}, {"ClockSnc", "Clock Sync"}, {"Dcy Clsd", "Decay Closed"},
 	{"Dcy Open", "Decay Open"}, {"DstParam", "Destination"}, {"DstVoice", "Dest Voice"}, {"Freqcy 1", "Frequency 1"},
 	{"Freqcy 2", "Frequency 2"}, {"Frequncy", "Frequency"}, {"Overdriv", "Overdrive"}, {"PreDelay", "Pre-delay"},
 	{"PulsWdth", "Pulse Width"}, {"Reflxion", "Reflection"}, {"RepeatCt", "Repeat Count"}, {"Resnance", "Resonance"},

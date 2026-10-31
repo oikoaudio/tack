@@ -1,8 +1,8 @@
 name: Build
 
-# Builds Tack for Linux, Windows and macOS, runs host/tools/smoke_test.sh and clap-validator, and keeps each
-# platform's release zip as an artifact. Runs for pull requests that are ready for review (not drafts), for every
-# push to main, by hand, and from the release workflow.
+# Builds Tack for Linux, Windows and macOS, runs host/tools/smoke_test.sh, clap-validator, the VST3 SDK's validator
+# (Linux) and auval (macOS), and keeps each platform's release zip as an artifact. Runs for pull requests that are
+# ready for review (not drafts), for every push to main, by hand, and from the release workflow.
 on:
   push:
     branches: [main]
@@ -60,6 +60,11 @@ jobs:
           unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/validator"
           tar -xzf "$RUNNER_TEMP"/validator/*.tar.gz -C "$RUNNER_TEMP/validator"
           "$(find "$RUNNER_TEMP/validator" -type f -name clap-validator | head -1)" validate build/Tack.clap
+      - name: VST3 validator
+        run: |
+          set -o pipefail
+          cmake --build build --target vst3_validator
+          build/validator-build/bin/Debug/validator build/Tack.vst3 2>&1 | grep -v "AUDIO in"
       - uses: actions/upload-artifact@v4
         with:
           name: tack-linux-x86_64
@@ -120,6 +125,15 @@ jobs:
           unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/validator"
           tar -xzf "$RUNNER_TEMP"/validator/*.tar.gz -C "$RUNNER_TEMP/validator"
           "$(find "$RUNNER_TEMP/validator" -type f -name clap-validator | head -1)" validate build/Tack.clap
+      - name: auval
+        run: |
+          # auval finds Audio Units where hosts do, in the Components folder
+          cmake --build build --target install_tack
+          killall -9 AudioComponentRegistrar || true
+          for subtype in Tack Tdrm Tsnr Tcym That; do
+            auval -v aumu $subtype Oiko 2>&1 | tee "$RUNNER_TEMP/auval.txt" | grep -v "AUDIO in" | tail -5
+            grep -q "AU VALIDATION SUCCEEDED" "$RUNNER_TEMP/auval.txt"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: tack-macos-universal

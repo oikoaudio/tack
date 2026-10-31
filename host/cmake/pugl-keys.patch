@@ -1,0 +1,100 @@
+diff --git a/src/mac.m b/src/mac.m
+index c2551cf..9a5344f 100644
+--- a/src/mac.m
++++ b/src/mac.m
+@@ -792,7 +792,11 @@ handleCrossing(PuglWrapperView* view, NSEvent* event, const PuglEventType type)
+ 
+   PuglEvent pressEvent;
+   pressEvent.key = ev;
+-  puglDispatchEvent(puglview, &pressEvent);
++  if (puglDispatchEvent(puglview, &pressEvent)) {
++    // Unhandled, pass it on, for example to the host of a plugin
++    [[self nextResponder] keyDown:event];
++    return;
++  }
+ 
+   if (!spec) {
+     [self interpretKeyEvents:@[event]];
+@@ -823,7 +827,9 @@ handleCrossing(PuglWrapperView* view, NSEvent* event, const PuglEventType type)
+ 
+   PuglEvent releaseEvent;
+   releaseEvent.key = ev;
+-  puglDispatchEvent(puglview, &releaseEvent);
++  if (puglDispatchEvent(puglview, &releaseEvent)) {
++    [[self nextResponder] keyUp:event];
++  }
+ }
+ 
+ /* NSTextInputClient */
+diff --git a/src/win.c b/src/win.c
+index 5b74c10..6a22107 100644
+--- a/src/win.c
++++ b/src/win.c
+@@ -997,7 +997,15 @@ handleMessage(PuglView* view, UINT message, WPARAM wParam, LPARAM lParam)
+     return DefWindowProc(view->impl->hwnd, message, wParam, lParam);
+   }
+ 
+-  puglDispatchEvent(view, &event);
++  if (puglDispatchEvent(view, &event) && view->parent &&
++      (message == WM_KEYDOWN || message == WM_KEYUP ||
++       message == WM_SYSKEYDOWN || message == WM_SYSKEYUP)) {
++    // Unhandled, pass it on to the top-level window, for example a plugin host
++    HWND root = GetAncestor(view->impl->hwnd, GA_ROOT);
++    if (root && root != view->impl->hwnd) {
++      SendMessage(root, message, wParam, lParam);
++    }
++  }
+ 
+   return 0;
+ }
+diff --git a/src/x11.c b/src/x11.c
+index 0058986..558415a 100644
+--- a/src/x11.c
++++ b/src/x11.c
+@@ -887,6 +887,20 @@ lookupString(XIC xic, XEvent* const xevent, char* const str, KeySym* const sym)
+   return status == XBufferOverflow ? 0 : n;
+ }
+ 
++static void
++forwardKey(PuglView* const view, XEvent xevent)
++{
++  // Pass an unhandled key on to the parent window, for example a plugin host
++  if (view->parent) {
++    xevent.xkey.window = (Window)view->parent;
++    XSendEvent(view->world->impl->display,
++               (Window)view->parent,
++               True,
++               xevent.type == KeyPress ? KeyPressMask : KeyReleaseMask,
++               &xevent);
++  }
++}
++
+ static void
+ translateKey(PuglView* const view, XEvent* const xevent, PuglEvent* const event)
+ {
+@@ -920,7 +934,11 @@ translateKey(PuglView* const view, XEvent* const xevent, PuglEvent* const event)
+     const int sfound  = lookupString(view->impl->xic, xevent, sstr, &sym);
+     if (sfound > 0) {
+       // Dispatch key event now
+-      puglDispatchEvent(view, event);
++      if (puglDispatchEvent(view, event)) {
++        forwardKey(view, *xevent);
++        event->type = PUGL_NOTHING;
++        return;
++      }
+ 
+       // "Return" a text event in its place
+       event->text.type      = PUGL_TEXT;
+@@ -1984,6 +2002,12 @@ dispatchX11Events(PuglWorld* const world)
+         XUnsetICFocus(view->impl->xic);
+       }
+       break;
++    case PUGL_KEY_PRESS:
++    case PUGL_KEY_RELEASE:
++      if (puglDispatchEvent(view, &event)) {
++        forwardKey(view, xevent);
++      }
++      break;
+     default:
+       // Dispatch event to application immediately
+       st = puglDispatchEvent(view, &event);

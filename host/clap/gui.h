@@ -77,8 +77,16 @@ typedef struct TackGui TackGui;
 
 TackGui* tack_guiCreate(const TackGuiHost* host);
 void tack_guiDestroy(TackGui* gui);
-/** The editor's size: a voice plugin's (voice 0-5) is shorter than the whole kit's (-1). */
-void tack_guiGetSize(int voice, uint32_t* width, uint32_t* height);
+/**
+ * The editor's size, as the plugin API counts it: pixels on X11 and Windows, points on macOS. A voice plugin's is
+ * shorter than the whole kit's.
+ */
+void tack_guiGetSize(const TackGui* gui, uint32_t* width, uint32_t* height);
+/**
+ * Scales the editor by the host's factor (X11 and Windows), also once it is showing; the host then needs the new
+ * size. False on macOS, where the screen decides the scale, and for a factor out of range.
+ */
+bool tack_guiSetScale(TackGui* gui, double scale);
 /** Embeds the editor in a host window (an X11 window id, an HWND or an NSView) and creates it. */
 bool tack_guiSetParent(TackGui* gui, uintptr_t parent);
 bool tack_guiShow(TackGui* gui);

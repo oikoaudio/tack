@@ -28,6 +28,7 @@
 #include "presets.h"
 #include "engine.h"
 #include "gui.h"
+#include "wrapper_info.h"
 
 #define TACK_CHUNK	256
 
@@ -129,6 +130,8 @@ typedef struct
 
 	// the editor; its changes reach the engine and the host through guiEvents
 	TackGui* gui;
+	bool guiParented;	// the editor is in the host's window
+	const clap_host_gui_t* hostGui;
 	const clap_host_timer_support_t* hostTimer;
 	clap_id guiTimer;
 	GuiEvent guiEvents[GUI_QUEUE_SIZE];
@@ -948,6 +951,7 @@ static void guiDestroy(const clap_plugin_t* plugin)
 	if(!TACK_GUI_OWN_TIMER) k->hostTimer->unregister_timer(k->host, k->guiTimer);
 	tack_guiDestroy(k->gui);
 	k->gui = NULL;
+	k->guiParented = false;
 }
 
 static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
@@ -968,11 +972,21 @@ static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloat
 	return true;
 }
 
-static bool guiSetScale(const clap_plugin_t* plugin, double scale) { return false; }
-
 static bool guiGetSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height)
 {
-	tack_guiGetSize(((Tack*)plugin->plugin_data)->type->voice, width, height);
+	Tack* k = plugin->plugin_data;
+	if(!k->gui) return false;
+	tack_guiGetSize(k->gui, width, height);
+	return true;
+}
+
+static bool guiSetScale(const clap_plugin_t* plugin, double scale)
+{
+	Tack* k = plugin->plugin_data;
+	if(!k->gui || !tack_guiSetScale(k->gui, scale)) return false;
+	// a new scale for an editor that is already showing, e.g. on a screen with another DPI: ask for its new size
+	uint32_t w, h;
+	if(k->guiParented && k->hostGui && guiGetSize(plugin, &w, &h)) k->hostGui->request_resize(k->host, w, h);
 	return true;
 }
 
@@ -983,18 +997,18 @@ static bool guiAdjustSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t
 static bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
 {
 	uint32_t w, h;
-	tack_guiGetSize(((Tack*)plugin->plugin_data)->type->voice, &w, &h);
-	return width == w && height == h;
+	return guiGetSize(plugin, &w, &h) && width == w && height == h;
 }
 
 static bool guiSetParent(const clap_plugin_t* plugin, const clap_window_t* window)
 {
 	Tack* k = plugin->plugin_data;
 #if defined(_WIN32) || defined(__APPLE__)
-	return k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->ptr);
+	k->guiParented = k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->ptr);
 #else
-	return k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->x11);
+	k->guiParented = k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->x11);
 #endif
+	return k->guiParented;
 }
 
 static bool guiSetTransient(const clap_plugin_t* plugin, const clap_window_t* window) { return false; }
@@ -1020,6 +1034,7 @@ static bool tackInit(const clap_plugin_t* plugin)
 	Tack* k = plugin->plugin_data;
 	k->hostParams = k->host->get_extension(k->host, CLAP_EXT_PARAMS);
 	k->hostTimer = k->host->get_extension(k->host, CLAP_EXT_TIMER_SUPPORT);
+	k->hostGui = k->host->get_extension(k->host, CLAP_EXT_GUI);
 	k->hostState = k->host->get_extension(k->host, CLAP_EXT_STATE);
 	snprintf(k->kitName, sizeof k->kitName, "%s", k->type->voice < 0 ? "Init Kit" : "Init");
 	k->hostPresetLoad = k->host->get_extension(k->host, CLAP_EXT_PRESET_LOAD);
@@ -1138,7 +1153,7 @@ static const void* entryGetFactory(const char* id)
 	if(!strcmp(id, CLAP_PLUGIN_FACTORY_ID)) return &factory;
 	if(!strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID) || !strcmp(id, CLAP_PRESET_DISCOVERY_FACTORY_ID_COMPAT))
 		return tack_presetDiscoveryFactory();
-	return NULL;
+	return tack_wrapperFactory(id);
 }
 
 CLAP_EXPORT const clap_plugin_entry_t clap_entry = { CLAP_VERSION_INIT, entryInit, entryDeinit, entryGetFactory };
