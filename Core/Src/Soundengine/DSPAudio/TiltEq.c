@@ -66,7 +66,9 @@ void TiltEq_setParameter(TiltEq* eq, float p)
 		eq->lgain = 0;
 		eq->hgain = 1;
 
-		TiltEq_setFreq(eq, (20000)*p);
+		// at 0 Hz lp_out stops following the input, and its last value stays on the output as a DC offset
+		const float fc = (20000)*p;
+		TiltEq_setFreq(eq, fc < 10 ? 10 : fc);
 
 	} else {
 		//lowpass
