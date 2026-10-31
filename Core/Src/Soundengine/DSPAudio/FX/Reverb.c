@@ -372,7 +372,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 		    tmp *= r->feedback;
 
-		    tmp = AllpassDelay_process(&r->apDelay[1], (tmp));
+		    tmp = AllpassDelay_process(&r->apDelay[0], (tmp));
 		    tmp = VerbDelay_process(&r->delay[1], tmp);
 
 		     r->lastOut = calcOnePole(&r->lpFeedback, tmp*r->feedback);
