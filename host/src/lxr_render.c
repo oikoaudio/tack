@@ -3,17 +3,20 @@
  *
  * Renders voices of the init kit through the full mixer to a stereo WAV file.
  *
- *   lxr_render [-r rate] out.wav [voice...]
+ *   lxr_render [-r rate] [-k kit.snd] [-m] out.wav [voice...]
  *
  * Voices are 0-2 drums, 3 snare, 4 cymbal, 5 closed hi-hat, 6 open hi-hat (default: all, in order).
  * Each listed voice is triggered at velocity 127, STEP_SECONDS apart. Both DAC pairs are summed into the file.
  * Without -r the file is at the engine's own rate, REAL_FS; with it, the output goes through the resampler.
+ * -k loads a kit file from the device's SD card instead of the init kit.
+ * -m renders with separate outputs (needs -r); the file is still the sum of all of them.
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <math.h>
 #include "lxr_host.h"
@@ -66,23 +69,25 @@ static uint32_t renderResampled(int16_t** audio, double fs)
 	const uint32_t numFrames = preroll + (numVoices - 1) * step + (uint32_t)(TAIL_SECONDS * fs);
 	*audio = malloc(sizeof(int16_t) * 2 * numFrames);
 
-	float buf[4 * 512];
+	float buf[LXR_HOST_OUT_CHANNELS * 512];
 	uint32_t pos = 0;
 	int next = 0;
 	while(pos < numFrames)
 	{
-		const uint32_t nextTrigger = next < numVoices ? preroll + next * step : numFrames;
-		if(pos == nextTrigger) {
-			lxr_host_noteOn(voices[next++], SEQ_DEFAULT_NOTE, 127);
-			continue;
-		}
-
-		uint32_t n = nextTrigger - pos;
-		if(n > 512) n = 512;
+		const uint32_t n = numFrames - pos < 512 ? numFrames - pos : 512;
+		for(; next < numVoices && preroll + next * step < pos + n; next++)
+			lxr_host_queueNoteOn(preroll + next * step - pos, voices[next], 127);
 		lxr_host_process(buf, n);
 		for(uint32_t i = 0; i < n; i++) {
-			(*audio)[(pos + i)*2 + 0] = sumDacs(lrintf(buf[i*4 + 0] * 32768.f), lrintf(buf[i*4 + 2] * 32768.f));
-			(*audio)[(pos + i)*2 + 1] = sumDacs(lrintf(buf[i*4 + 1] * 32768.f), lrintf(buf[i*4 + 3] * 32768.f));
+			const float* f = &buf[i * LXR_HOST_OUT_CHANNELS];
+			// DAC2 here also collects the separate outputs, which are silent unless -m
+			float l2 = f[LXR_HOST_OUT_DAC2], r2 = f[LXR_HOST_OUT_DAC2 + 1];
+			for(int c = LXR_HOST_OUT_VOICE(0); c < LXR_HOST_OUT_CHANNELS; c += 2) {
+				l2 += f[c];
+				r2 += f[c + 1];
+			}
+			(*audio)[(pos + i)*2 + 0] = sumDacs(lrintf(f[LXR_HOST_OUT_DAC1] * 32768.f), lrintf(l2 * 32768.f));
+			(*audio)[(pos + i)*2 + 1] = sumDacs(lrintf(f[LXR_HOST_OUT_DAC1 + 1] * 32768.f), lrintf(r2 * 32768.f));
 		}
 		pos += n;
 	}
@@ -92,13 +97,17 @@ static uint32_t renderResampled(int16_t** audio, double fs)
 int main(int argc, char** argv)
 {
 	double fs = 0;
+	const char* kitPath = NULL;
+	bool separate = false;
 	int arg = 1;
-	if(argc > 2 && !strcmp(argv[1], "-r")) {
-		fs = atof(argv[2]);
-		arg = 3;
+	for(; arg < argc && argv[arg][0] == '-'; arg++) {
+		if(!strcmp(argv[arg], "-m")) separate = true;
+		else if(!strcmp(argv[arg], "-r") && arg + 1 < argc) fs = atof(argv[++arg]);
+		else if(!strcmp(argv[arg], "-k") && arg + 1 < argc) kitPath = argv[++arg];
+		else break;
 	}
-	if(arg >= argc || (fs != 0 && fs < 8000)) {
-		fprintf(stderr, "usage: %s [-r rate] out.wav [voice...]\n", argv[0]);
+	if(arg >= argc || argv[arg][0] == '-' || (fs != 0 && fs < 8000) || (separate && !fs)) {
+		fprintf(stderr, "usage: %s [-r rate] [-k kit.snd] [-m] out.wav [voice...]\n", argv[0]);
 		return 1;
 	}
 	const char* path = argv[arg++];
@@ -115,6 +124,16 @@ int main(int argc, char** argv)
 		for(; numVoices < LXR_HOST_NUM_VOICES; numVoices++) voices[numVoices] = numVoices;
 
 	lxr_host_init();
+	if(kitPath) {
+		uint8_t kit[LXR_HOST_NUM_PARAMS];
+		char name[9];
+		if(lxr_host_readKitFile(kitPath, kit, name)) {
+			perror(kitPath);
+			return 1;
+		}
+		lxr_host_loadKit(kit);
+		printf("kit \"%s\"\n", name);
+	}
 
 	int16_t* audio;
 	uint32_t frames;
@@ -123,6 +142,7 @@ int main(int argc, char** argv)
 			fprintf(stderr, "could not create resampler\n");
 			return 1;
 		}
+		lxr_host_setSeparateOutputs(separate);
 		frames = renderResampled(&audio, fs);
 	} else {
 		fs = REAL_FS;
