@@ -13,6 +13,7 @@
 
 
 #include "Soundengine/DSPAudio/Oscillator.h"
+#include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/random.h"
 #include "Soundengine/DSPAudio/Samples.h"
 #include "Soundengine/MIDI/MidiParser.h"
@@ -277,6 +278,8 @@ IN_ITCM_RAM void calcNextOscSampleFmBlock(OscInfo* osc, int16_t* modBuffer, int1
 			break;
 
 		default:
+			//sample playback is compiled out, and a kit or a CC can still ask for it
+			bufferTool_clearBuffer(buf,size);
 			calcUserSampleOscFmBlock(osc,modBuffer,buf,size,gain);
 			break;
 
@@ -404,6 +407,8 @@ IN_ITCM_RAM void calcNextOscSampleBlock(OscInfo* osc, int16_t* buf, const uint8_
 		//	if( osc->waveform - OSC_SAMPLE_START > sampleMemory_getNumSamples() ) return; // return if out of range
 
 		//	calcUserSampleOscBlock(osc,buf,size, gain);
+			//sample playback is compiled out, and a kit or a CC can still ask for it
+			bufferTool_clearBuffer(buf,size);
 			break;
 		}
 }
