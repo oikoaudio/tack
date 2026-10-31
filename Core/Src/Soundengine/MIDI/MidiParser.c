@@ -1427,7 +1427,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				break;
 
 			case CC2_FX_DELAY_TYPE:
-				fxBus.delay.delayType = value.itg;
+				Delay_setType(&fxBus.delay, value.itg);
 			break;
 
 			default:

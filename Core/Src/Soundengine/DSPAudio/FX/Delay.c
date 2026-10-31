@@ -346,6 +346,17 @@ void Delay_setDelayTime(Delay* d, float t)
 
 }
 
+void Delay_setType(Delay* d, uint8_t type)
+{
+	// ping-pong splits FX_BUFFER into one half per channel and masks its pointers to half the size. Bring the
+	// pointers into range for the new layout, or the first samples after a switch index past the end of FX_BUFFER.
+	const uint32_t mask = type == DELAY_NORMAL ? FX_BUFFER_SIZE : FX_BUFFER_SIZE>>1;
+	d->delayType = type;
+	d->write &= mask;
+	d->oldRead &= mask;
+	d->newRead &= mask;
+}
+
 void Delay_setFeedback(Delay* d, float fb)
 {
 	d->feedback = fb;
