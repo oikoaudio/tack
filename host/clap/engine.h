@@ -3,7 +3,9 @@
  *
  * The sound engine keeps its state in globals, so every plugin instance runs its own copy of it: Tack loads a
  * private copy of its own binary per instance and drives the engine in that copy through this table. The copy's
- * internal references bind to its own globals because everything but the entry points has hidden visibility.
+ * internal references bind to its own globals because everything but the entry points has hidden visibility (on
+ * Windows, isn't exported). On macOS the copies are of an engine-only library in the bundle instead, so that they
+ * don't bring the editor's Objective-C classes along: the runtime would see each class once per copy.
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -31,14 +33,21 @@ typedef struct
 	void (*shutdown)(void);
 } TackEngine;
 
+#ifdef _WIN32
+#define TACK_EXPORT __declspec(dllexport)
+#else
+#define TACK_EXPORT __attribute__((visibility("default")))
+#endif
+
 /** The engine of the binary this is called in. Exported, so that it can be looked up in a loaded copy. */
-const TackEngine* tack_engine(void);
+TACK_EXPORT const TackEngine* tack_engine(void);
 
 typedef struct
 {
 	const TackEngine* api;
 	void* handle;	/**< the loaded copy, NULL when using this binary's own engine */
-	int fd;			/**< the copy's in-memory file, kept open while it is loaded */
+	int fd;			/**< Linux: the copy's in-memory file, kept open while it is loaded */
+	char* path;		/**< Windows and macOS: the copy's temporary file, removed when it is unloaded */
 } TackEngineCopy;
 
 /**

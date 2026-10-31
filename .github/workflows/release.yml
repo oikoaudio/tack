@@ -1,0 +1,93 @@
+name: Release
+
+# A release is a pushed v<version> tag on main, matching the version in host/CMakeLists.txt. This builds and tests
+# every platform from that tag and leaves a draft release with the zips, the complete source and SHA256SUMS for the
+# maintainer to read and publish; nothing is published automatically.
+on:
+  push:
+    tags: ['v[0-9]*']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Tag
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The tag matches the version and is on main
+        run: |
+          declared=$(sed -n 's/^project(LXR_Host VERSION \([0-9.]*\).*/\1/p' host/CMakeLists.txt)
+          test "v$declared" = "$GITHUB_REF_NAME" || {
+            echo "Tag $GITHUB_REF_NAME does not match host/CMakeLists.txt ($declared)"; exit 1; }
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "Tag $GITHUB_REF_NAME is not on main"; exit 1; }
+
+  build:
+    needs: check
+    uses: ./.github/workflows/build.yml
+    with:
+      release: true
+
+  # The GPL and the Sonic Potions licence both want the complete source with every binary: the repository at the tag
+  # plus the sources CMake fetches for the libraries built into the plugin
+  source:
+    name: Source archive
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Libraries the configure step looks for
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libgl1-mesa-dev
+      - name: Repository and fetched dependencies
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          name=tack-$version-source
+          mkdir -p dist "$RUNNER_TEMP/src"
+          git archive --format=tar --prefix="$name/" HEAD | tar -x -C "$RUNNER_TEMP/src"
+          # configuring fetches every dependency at its pinned version, without building anything
+          cmake -S host -B "$RUNNER_TEMP/deps" -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DLXR_HOST_CLAP=ON \
+            -DFETCHCONTENT_BASE_DIR="$RUNNER_TEMP/fetched" >/dev/null
+          mkdir -p "$RUNNER_TEMP/src/$name/third_party"
+          for d in "$RUNNER_TEMP"/fetched/*-src; do
+            cp -a "$d" "$RUNNER_TEMP/src/$name/third_party/$(basename "$d" -src)"
+          done
+          rm -rf "$RUNNER_TEMP/src/$name"/third_party/*/.git
+          ls "$RUNNER_TEMP/src/$name/third_party"
+          tar -czf "dist/$name.tar.gz" -C "$RUNNER_TEMP/src" "$name"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tack-source
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  draft:
+    name: Draft release
+    needs: [build, source]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: tack-*
+          merge-multiple: true
+          path: dist
+      - name: Create the draft
+        run: |
+          cd dist
+          sha256sum *.zip *.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+          # 0.x versions are alpha: no promise that saved projects load in later versions
+          prerelease=""
+          case "$GITHUB_REF_NAME" in v0.*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" --draft $prerelease --verify-tag \
+            --title "Tack ${GITHUB_REF_NAME#v}" --generate-notes *.zip *.tar.gz SHA256SUMS

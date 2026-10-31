@@ -12,11 +12,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <dirent.h>
-#include <errno.h>
-#include <sys/stat.h>
 #include "lxr_host.h"
+#include "lxr_files.h"
 #include "lxr_params.h"
+#ifdef _WIN32
+#include <windows.h>
+#include <shlobj.h>
+#endif
 
 static const clap_universal_plugin_id_t pluginId = { "clap", TACK_PLUGIN_ID };
 
@@ -31,16 +33,40 @@ static const clap_preset_discovery_provider_descriptor_t providerDesc =
 //-----------------------------------------------------------
 const char* tack_kitFolder(void)
 {
-	// Linux only for now: $XDG_DATA_HOME/Tack/Kits, by default ~/.local/share/Tack/Kits
+	// Linux: $XDG_DATA_HOME/Tack/Kits, by default ~/.local/share/Tack/Kits. Windows and macOS: Documents/Tack/Kits,
+	// where people find it to copy kits from an SD card into
 	static char path[1024];
 	if(path[0]) return path;
+#ifdef _WIN32
+	PWSTR docs = NULL;
+	char utf8[MAX_PATH * 4] = "";
+	if(SUCCEEDED(SHGetKnownFolderPath(&FOLDERID_Documents, 0, NULL, &docs)))
+		WideCharToMultiByte(CP_UTF8, 0, docs, -1, utf8, sizeof utf8, NULL, NULL);
+	CoTaskMemFree(docs);
+	snprintf(path, sizeof path, "%s/Tack/Kits", utf8);
+	tack_slashes(path);
+#elif defined(__APPLE__)
+	const char* home = getenv("HOME");
+	snprintf(path, sizeof path, "%s/Documents/Tack/Kits", home ? home : "");
+#else
 	const char* data = getenv("XDG_DATA_HOME");
 	const char* home = getenv("HOME");
 	if(data && data[0])
 		snprintf(path, sizeof path, "%s/Tack/Kits", data);
 	else
 		snprintf(path, sizeof path, "%s/.local/share/Tack/Kits", home ? home : "");
+#endif
 	return path;
+}
+
+void tack_slashes(char* path)
+{
+#ifdef _WIN32
+	for(char* p = path; *p; p++)
+		if(*p == '\\') *p = '/';
+#else
+	(void)path;
+#endif
 }
 //-----------------------------------------------------------
 bool tack_isKitNameChar(char c)
@@ -67,14 +93,14 @@ int tack_saveKit(const uint8_t* kit, const char* name, bool overwrite, char* pat
 		if(*p != '/' && *p) continue;
 		const char c = *p;
 		*p = 0;
-		if(mkdir(folder, 0755) && errno != EEXIST) return TACK_SAVE_FAILED;
+		// a drive ("C:") is there already
+		if(!(p > folder && p[-1] == ':') && lxr_makeFolder(folder)) return TACK_SAVE_FAILED;
 		*p = c;
 		if(!c) break;
 	}
 
 	if(snprintf(path, pathSize, "%s/%s.SND", folder, base) >= (int)pathSize) return TACK_SAVE_FAILED;
-	struct stat st;
-	if(!overwrite && !stat(path, &st)) return TACK_SAVE_EXISTS;
+	if(!overwrite && (lxr_isFile(path) || lxr_isFolder(path))) return TACK_SAVE_EXISTS;
 	return lxr_host_writeKitFile(path, kit, name) ? TACK_SAVE_FAILED : TACK_SAVE_OK;
 }
 //-----------------------------------------------------------
@@ -137,19 +163,17 @@ static void collectKits(PathList* list, const char* folder, int depth)
 {
 	char dirPath[2048];
 	snprintf(dirPath, sizeof dirPath, "%s%s%s", tack_kitFolder(), folder[0] ? "/" : "", folder);
-	DIR* dir = opendir(dirPath);
+	LxrFolder* dir = lxr_openFolder(dirPath);
 	if(!dir) return;
-	struct dirent* e;
-	while((e = readdir(dir))) {
-		if(e->d_name[0] == '.') continue;
+	const char* name;
+	while((name = lxr_readFolder(dir))) {
+		if(name[0] == '.') continue;
 		char rel[2048], path[4096];
-		snprintf(rel, sizeof rel, "%s%s%s", folder, folder[0] ? "/" : "", e->d_name);
-		snprintf(path, sizeof path, "%s/%s", dirPath, e->d_name);
-		struct stat st;
-		if(stat(path, &st)) continue;
-		if(S_ISDIR(st.st_mode)) {
+		snprintf(rel, sizeof rel, "%s%s%s", folder, folder[0] ? "/" : "", name);
+		snprintf(path, sizeof path, "%s/%s", dirPath, name);
+		if(lxr_isFolder(path)) {
 			if(depth < 4) collectKits(list, rel, depth + 1);
-		} else if(S_ISREG(st.st_mode) && isKitFile(e->d_name)) {
+		} else if(isKitFile(name) && lxr_isFile(path)) {
 			if(list->n == list->cap) {
 				list->cap = list->cap ? 2 * list->cap : 256;
 				list->paths = realloc(list->paths, list->cap * sizeof *list->paths);
@@ -157,7 +181,7 @@ static void collectKits(PathList* list, const char* folder, int depth)
 			list->paths[list->n++] = strdup(rel);
 		}
 	}
-	closedir(dir);
+	lxr_closeFolder(dir);
 }
 
 // by folder, then file name, so that each folder's kits come together
@@ -234,28 +258,29 @@ static bool providerInit(const clap_preset_discovery_provider_t* provider)
 	};
 	indexer->declare_location(indexer, &builtIn);
 
+	// the kit folder only once it exists: hosts treat a missing location as an error. It appears with the first kit
+	// pack, or the first kit saved, and hosts pick it up at their next scan
+	if(!lxr_isFolder(tack_kitFolder())) return true;
 	const clap_preset_discovery_location_t folder = {
 		CLAP_PRESET_DISCOVERY_IS_USER_CONTENT, "Kits", CLAP_PRESET_DISCOVERY_LOCATION_FILE, tack_kitFolder()
 	};
 	indexer->declare_location(indexer, &folder);
 
 	// each subfolder is a sound pack
-	DIR* dir = opendir(tack_kitFolder());
+	LxrFolder* dir = lxr_openFolder(tack_kitFolder());
 	if(dir) {
-		struct dirent* e;
-		while((e = readdir(dir))) {
-			if(e->d_name[0] == '.') continue;
+		const char* name;
+		while((name = lxr_readFolder(dir))) {
+			if(name[0] == '.') continue;
 			char path[2048];
-			struct stat st;
-			snprintf(path, sizeof path, "%s/%s", tack_kitFolder(), e->d_name);
-			if(stat(path, &st) || !S_ISDIR(st.st_mode)) continue;
+			snprintf(path, sizeof path, "%s/%s", tack_kitFolder(), name);
+			if(!lxr_isFolder(path)) continue;
 			const clap_preset_discovery_soundpack_t pack = {
-				CLAP_PRESET_DISCOVERY_IS_USER_CONTENT, e->d_name, e->d_name, NULL, NULL, NULL, NULL,
-				CLAP_TIMESTAMP_UNKNOWN
+				CLAP_PRESET_DISCOVERY_IS_USER_CONTENT, name, name, NULL, NULL, NULL, NULL, CLAP_TIMESTAMP_UNKNOWN
 			};
 			indexer->declare_soundpack(indexer, &pack);
 		}
-		closedir(dir);
+		lxr_closeFolder(dir);
 	}
 	return true;
 }
@@ -279,6 +304,12 @@ static bool providerGetMetadata(const clap_preset_discovery_provider_t* provider
 		receiver->set_flags(receiver, CLAP_PRESET_DISCOVERY_IS_FACTORY_CONTENT);
 		return true;
 	}
+
+	// the host may hand the location back with \ on Windows; the kit folder has /
+	char loc[4096];
+	snprintf(loc, sizeof loc, "%s", location);
+	tack_slashes(loc);
+	location = loc;
 
 	uint8_t kit[LXR_HOST_NUM_PARAMS];
 	char name[9];

@@ -1,0 +1,109 @@
+name: Bug report
+description: Report a crash, a sound problem, or a problem with kits, the editor or a host in Tack.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please use one report per problem and remove sensitive information from logs and screenshots.
+
+  - type: dropdown
+    id: plugin
+    attributes:
+      label: Plugin
+      options:
+        - Tack
+        - Tack Drum
+        - Tack Snare
+        - Tack Cymbal
+        - Tack Hi-hat
+        - Firmware built from this repository
+        - Build or test tools
+    validations:
+      required: true
+
+  - type: dropdown
+    id: report-type
+    attributes:
+      label: Report type
+      options:
+        - Crash or failure to load
+        - Sound or DSP problem
+        - Kit loading or saving
+        - Automation, modulation or state problem
+        - Editor problem
+        - Building from source
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or source commit
+      placeholder: Tack 0.1.0, or the Git commit used for a local build
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      placeholder: macOS 15.6, Windows 11 24H2, Ubuntu 24.04, etc.
+    validations:
+      required: true
+
+  - type: input
+    id: daw
+    attributes:
+      label: DAW and version
+      placeholder: Bitwig Studio 6.1, REAPER 7, etc.
+
+  - type: input
+    id: audio-settings
+    attributes:
+      label: Audio settings
+      description: Include sample rate and buffer size when known, and whether Tack's outputs are Stereo or Individual.
+      placeholder: 48 kHz, 256 samples, Stereo
+
+  - type: input
+    id: kit
+    attributes:
+      label: Kit
+      description: The kit or voice that shows the problem, and the pack it comes from. Attach the .SND file only if you made it yourself.
+      placeholder: Factory/PROJ00/02-DUBEE.SND
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the observed result and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Load Tack and the kit...
+        2. Set...
+        3. Play...
+    validations:
+      required: true
+
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Logs, screenshots, or audio examples
+      description: Drag files here or provide links. Do not include private project material.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I reproduced this with the version shown above and searched for an existing report.
+          required: true

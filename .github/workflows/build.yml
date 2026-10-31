@@ -1,0 +1,127 @@
+name: Build
+
+# Builds Tack for Linux, Windows and macOS, runs host/tools/smoke_test.sh and clap-validator, and keeps each
+# platform's release zip as an artifact. Runs for pull requests that are ready for review (not drafts), for every
+# push to main, by hand, and from the release workflow.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        description: 'Called by the release workflow'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # every dependency from its pinned source, linked statically, with its licence for the zip
+  CMAKE_ARGS: -G Ninja -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER
+  VALIDATOR_URL: https://github.com/free-audio/clap-validator/releases/download/0.4.1
+
+jobs:
+  linux:
+    name: Linux
+    # Private repositories pay for Actions minutes: until the repository is public, only releases and runs by hand
+    if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
+    # the oldest supported runner, so the plugin runs on distributions with glibc 2.35 or newer
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools and libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-12 g++-12 libx11-dev libgl1-mesa-dev
+      - name: Build
+        env:
+          CC: gcc-12
+          CXX: g++-12
+        run: |
+          cmake -S host -B build $CMAKE_ARGS -DTACK_PACKAGE_PLATFORM=linux-x86_64
+          cmake --build build
+          cmake --build build --target package_tack
+      - name: Smoke test
+        run: host/tools/smoke_test.sh build
+      - name: clap-validator
+        run: |
+          zip=clap-validator-0.4.1-127-g152b982-ubuntu-22.04.zip
+          curl -fsSL -o "$RUNNER_TEMP/$zip" "$VALIDATOR_URL/$zip"
+          echo "49edadcfb407ea0dd946ce418300e853fbd2660fa4b0d00e4f19ff8eef24ad90  $RUNNER_TEMP/$zip" | sha256sum -c
+          mkdir "$RUNNER_TEMP/validator"
+          unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/validator"
+          tar -xzf "$RUNNER_TEMP"/validator/*.tar.gz -C "$RUNNER_TEMP/validator"
+          "$(find "$RUNNER_TEMP/validator" -type f -name clap-validator | head -1)" validate build/Tack.clap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tack-linux-x86_64
+          path: build/package/*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows
+    if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
+    # cross-compiled with mingw-w64 (host/cmake/mingw-w64.cmake) and tested through Wine
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix wine wine64
+          # the POSIX thread model, which multi_test's threads need
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+      - name: Build
+        run: |
+          cmake -S host -B build $CMAKE_ARGS -DCMAKE_TOOLCHAIN_FILE=$PWD/host/cmake/mingw-w64.cmake \
+            -DTACK_PACKAGE_PLATFORM=windows-x86_64
+          cmake --build build
+          cmake --build build --target package_tack
+      - name: Smoke test, through Wine
+        run: host/tools/smoke_test.sh build wine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tack-windows-x86_64
+          path: build/package/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS
+    if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: brew install ninja
+      - name: Build
+        run: |
+          # one bundle for Apple silicon and Intel Macs, macOS 11 and newer
+          cmake -S host -B build $CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0 -DTACK_PACKAGE_PLATFORM=macos-universal
+          cmake --build build
+          cmake --build build --target package_tack
+      - name: Smoke test
+        run: host/tools/smoke_test.sh build
+      - name: clap-validator
+        run: |
+          zip=clap-validator-0.4.1-127-g152b982-macos-universal.zip
+          curl -fsSL -o "$RUNNER_TEMP/$zip" "$VALIDATOR_URL/$zip"
+          echo "bbec8cd7d18274e549d5d8c12ece3cec54be966129388dd2e742b9957f2ba9f1  $RUNNER_TEMP/$zip" | shasum -a 256 -c
+          mkdir "$RUNNER_TEMP/validator"
+          unzip -q "$RUNNER_TEMP/$zip" -d "$RUNNER_TEMP/validator"
+          tar -xzf "$RUNNER_TEMP"/validator/*.tar.gz -C "$RUNNER_TEMP/validator"
+          "$(find "$RUNNER_TEMP/validator" -type f -name clap-validator | head -1)" validate build/Tack.clap
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tack-macos-universal
+          path: build/package/*.zip
+          if-no-files-found: error

@@ -13,9 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <dlfcn.h>
 #include <pthread.h>
 #include <clap/clap.h>
+#include "clap_load.h"
 
 #define BLOCK 256
 #define FRAMES (48000 * 4)
@@ -120,11 +120,9 @@ int main(int argc, char** argv)
 	if(argc < 3) { fprintf(stderr, "usage: %s plugin.clap kit.snd...\n", argv[0]); return 1; }
 	const int n = argc - 2 < MAX_INSTANCES ? argc - 2 : MAX_INSTANCES;
 
-	void* lib = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
-	if(!lib) { fprintf(stderr, "%s\n", dlerror()); return 1; }
-	const clap_plugin_entry_t* entry = dlsym(lib, "clap_entry");
-	entry->init(argv[1]);
-	factory = entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
+	ClapFile lib;
+	if(!clapLoad(&lib, argv[1])) return 1;
+	factory = lib.entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
 	pluginId = factory->get_plugin_descriptor(factory, 0)->id;
 
 	// each kit alone
@@ -154,8 +152,7 @@ int main(int argc, char** argv)
 	for(int i = 0; i < n; i++) { failures += compare(argv[i + 2], inst[i].out, solo[i]); destroy(&inst[i]); free(inst[i].out); }
 
 	for(int i = 0; i < n; i++) free(solo[i]);
-	entry->deinit();
-	dlclose(lib);
+	clapUnload(&lib);
 	printf(failures ? "FAILED\n" : "all instances independent\n");
 	return failures ? 1 : 0;
 }

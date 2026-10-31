@@ -354,7 +354,8 @@ lcd_clear();
 lcd_string("Sonic Potions");
 //goto 2nd line
 lcd_setcursor(0,2);
-lcd_string("LXR2 Drums V");
+// Tack's fork changes the firmware (see the README), and NOTICE.md asks modified versions to say so at start-up
+lcd_string("Modified V");
 lcd_string(FIRMWARE_VERSION);
 #endif
 

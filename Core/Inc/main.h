@@ -116,11 +116,13 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 
 
+#ifndef LXR_HOST_BUILD	// see Soundengine/config.h
 // Helper to declare variable in CCM memory, pre-loaded from flash at startup
 #define INDTCM __attribute__ ((section(".dtcm")))
 
 // Helper to declare variable in CCM memory that is zeroed at startup
 #define INDTCMZ __attribute__ ((section(".dtcmz")))
+#endif
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

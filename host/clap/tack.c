@@ -153,8 +153,8 @@ static const char* voiceFeatures[] = {
 
 #define DESCRIPTOR(idSuffix, pluginName, what, feats) { \
 	.clap_version = CLAP_VERSION_INIT, .id = TACK_PLUGIN_ID idSuffix, .name = pluginName, .vendor = "oikoaudio", \
-	.url = "", .manual_url = "", .support_url = "", .version = "0.1.0", \
-	.description = what ". DSP derived from the Erica Synths LXR firmware (modified); not affiliated with Erica Synths.", \
+	.url = "", .manual_url = "", .support_url = "", .version = TACK_VERSION, \
+	.description = what ". DSP derived from the LXR-02 firmware by Sonic Potions and Erica Synths (modified); not affiliated with either.", \
 	.features = feats }
 
 static const clap_plugin_descriptor_t descriptors[] =
@@ -774,6 +774,7 @@ static bool loadKit(Tack* k, const char* path, int voice)
 	}
 	setKit(k, kit);
 	snprintf(k->kitPath, sizeof k->kitPath, "%s", path ? path : "");
+	tack_slashes(k->kitPath);	// as the kit folder, so the editor finds it there
 	k->kitVoice = path ? voice : -1;
 	k->kitEdited = false;
 	return true;
@@ -884,6 +885,23 @@ static bool guiLoadKit(void* ctx, const char* path, int voice)
 	return true;
 }
 
+static bool guiLoadVoice(void* ctx, const char* path, int fromVoice, int toVoice)
+{
+	Tack* k = ctx;
+	uint8_t file[LXR_HOST_NUM_PARAMS], kit[LXR_HOST_NUM_PARAMS];
+	if(k->type->voice >= 0 || toVoice < 0 || toVoice >= LXR_PARAMS_NUM_VOICES || lxr_host_readKitFile(path, file, NULL))
+		return false;
+	memcpy(kit, k->values, sizeof kit);
+	lxr_params_copyVoice(file, fromVoice, kit, toVoice);
+	// the voice keeps its place in the mix
+	kit[PAR_AUDIO_OUT1 + toVoice] = k->values[PAR_AUDIO_OUT1 + toVoice];
+	setKit(k, kit);
+	// still the same kit, edited: its name and file stay
+	k->kitEdited = true;
+	if(k->hostState) k->hostState->mark_dirty(k->host);
+	return true;
+}
+
 static int guiSaveKit(void* ctx, const char* name, bool overwrite)
 {
 	Tack* k = ctx;
@@ -902,15 +920,23 @@ static int guiSaveKit(void* ctx, const char* name, bool overwrite)
 	return r;
 }
 
+// the editor is embedded in a window of the host's
+#if defined(_WIN32)
+#define GUI_API CLAP_WINDOW_API_WIN32
+#elif defined(__APPLE__)
+#define GUI_API CLAP_WINDOW_API_COCOA
+#else
+#define GUI_API CLAP_WINDOW_API_X11
+#endif
+
 static bool guiIsApiSupported(const clap_plugin_t* plugin, const char* api, bool isFloating)
 {
-	// Linux only for now: embedded in the host's X11 window
-	return !strcmp(api, CLAP_WINDOW_API_X11) && !isFloating;
+	return !strcmp(api, GUI_API) && !isFloating;
 }
 
 static bool guiGetPreferredApi(const clap_plugin_t* plugin, const char** api, bool* isFloating)
 {
-	*api = CLAP_WINDOW_API_X11;
+	*api = GUI_API;
 	*isFloating = false;
 	return true;
 }
@@ -919,7 +945,7 @@ static void guiDestroy(const clap_plugin_t* plugin)
 {
 	Tack* k = plugin->plugin_data;
 	if(!k->gui) return;
-	if(k->hostTimer) k->hostTimer->unregister_timer(k->host, k->guiTimer);
+	if(!TACK_GUI_OWN_TIMER) k->hostTimer->unregister_timer(k->host, k->guiTimer);
 	tack_guiDestroy(k->gui);
 	k->gui = NULL;
 }
@@ -927,14 +953,14 @@ static void guiDestroy(const clap_plugin_t* plugin)
 static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
 {
 	Tack* k = plugin->plugin_data;
-	// the editor needs a timer from the host to handle its window events
-	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || !k->hostTimer) return false;
+	// on X11 the editor needs a timer from the host to handle its window events
+	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || (!TACK_GUI_OWN_TIMER && !k->hostTimer)) return false;
 	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiAudition, guiKitName, guiSaveKit,
 		guiKitPath, guiKitEdited, guiLoadKit, k->type->voice, guiHasParam, guiOffersValue, guiValueText, guiKitVoice,
-		guiModulation };
+		guiModulation, guiLoadVoice };
 	k->gui = tack_guiCreate(&host);
 	if(!k->gui) return false;
-	if(!k->hostTimer->register_timer(k->host, GUI_TIMER_MS, &k->guiTimer)) {
+	if(!TACK_GUI_OWN_TIMER && !k->hostTimer->register_timer(k->host, GUI_TIMER_MS, &k->guiTimer)) {
 		tack_guiDestroy(k->gui);
 		k->gui = NULL;
 		return false;
@@ -964,7 +990,11 @@ static bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t hei
 static bool guiSetParent(const clap_plugin_t* plugin, const clap_window_t* window)
 {
 	Tack* k = plugin->plugin_data;
+#if defined(_WIN32) || defined(__APPLE__)
+	return k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->ptr);
+#else
 	return k->gui && tack_guiSetParent(k->gui, (uintptr_t)window->x11);
+#endif
 }
 
 static bool guiSetTransient(const clap_plugin_t* plugin, const clap_window_t* window) { return false; }

@@ -1,281 +1,146 @@
-# LXR V2 firmware (desktop, STM32F765VG)
+# Tack
 
-Firmware for the LXR V2 desktop drum machine: an STM32F765 (Cortex-M7, 216 MHz) running the
-drum voices, FX bus, step sequencer, MIDI (DIN + USB), SD-card preset storage and the LCD/button UI.
+Tack is a drum synth for desktop computers, built as CLAP plugins by oikoaudio. It runs the sound engine of the
+LXR-02 drum machine by Sonic Potions and Erica Synths. Tack is a modified version of that firmware's sound engine.
+The engine code in `Core/Src/Soundengine` is the firmware's, changed only by a few bug fixes, and Tack adds the
+plugin, its editor and the code that runs the engine on a computer.
 
-> **Licence and trademarks:** the firmware source code is free software under the GNU GPL version 3
-> ([LICENSE](LICENSE)). You're welcome to study, change and share it, for example to write your own
-> updates for your LXR. The names **"Erica Synths" and "LXR"** and the **LXR hardware** are the property
-> of Erica Synths and are **not** covered by this licence. Building and installing your own firmware is
-> at your own risk: Erica Synths provides no support for self-built or modified firmware. See
-> [Licence, trademarks and hardware](#licence-trademarks-and-hardware) below and [NOTICE.md](NOTICE.md).
+Tack is not affiliated with or endorsed by Erica Synths or Sonic Potions.
 
-## Updating your LXR
+## Plugins
 
-Every LXR has a built-in updater (the bootloader) that installs new firmware from the SD card. You
-don't need any extra hardware:
+`Tack.clap` contains five plugins.
 
-1. [Build the firmware](#building-the-firmware). This creates the update file `LXR_V2_V<version>.img`.
-2. [Copy it to the SD card and install it](#installing-the-update) on the LXR.
-
-### Building the firmware
-
-You need [CMake](https://cmake.org/download/) 3.21 or newer, [Ninja](https://ninja-build.org/),
-the [Arm GNU Toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads)
-(`arm-none-eabi-gcc`, tested with 14.3.rel1 and 11.3.rel1) and [Python 3](https://www.python.org/downloads/)
-(to create the `.img` update file). The build finds them on `PATH`.
-
-**1. Install the tools (once)**
-
-*macOS* (Apple Silicon and Intel), with [Homebrew](https://brew.sh):
-
-```sh
-brew install cmake ninja
-brew install --cask gcc-arm-embedded
-```
-
-Use exactly this `--cask gcc-arm-embedded` package, the official Arm toolchain. The similarly named
-`brew install arm-none-eabi-gcc` does **not** include the C library the firmware needs, and the build
-fails with it. Python 3 comes with the Xcode Command Line Tools, which Homebrew installs.
-If you installed the toolchain with Arm's own `.pkg` installer instead, it isn't on `PATH`: add
-`-DARM_TOOLCHAIN_DIR=/Applications/ArmGNUToolchain/<version>/arm-none-eabi/bin` to the first `cmake`
-command below.
-
-*Windows:* install CMake, Ninja and Python 3 (e.g. `winget install Kitware.CMake Ninja-build.Ninja
-Python.Python.3.12`) and the Arm GNU Toolchain with its Windows installer. On the installer's last page,
-tick "Add path to environment variable".
-
-*Linux:* install CMake, Ninja and Python 3 with your package manager (e.g.
-`sudo apt install cmake ninja-build python3`) and the Arm GNU Toolchain from Arm's download page, then
-add its `bin` folder to `PATH`.
-
-**2. Build**
-
-Open a terminal (Terminal on macOS, PowerShell on Windows) in this folder and run:
-
-```sh
-cmake --preset release
-cmake --build --preset release
-```
-
-When the build has finished it shows where the update file is and how to install it:
-
-```
-======================================================================
-  Firmware update file:
-    .../lxr_desktop_app/build/release/LXR_V2_V1.7.img
-  ...
-```
-
-The version in the file name, and on the LXR's start-up screen, is set by `project(VERSION ...)` in
-[CMakeLists.txt](CMakeLists.txt).
-
-### Installing the update
-
-1. Copy `LXR_V2_V<version>.img` from `build/release/` to the top folder of the SD card. Delete any
-   older `LXR*.img` files from the card: the updater installs the first one it finds.
-   On a Mac, eject the card in Finder before you take it out. Finder also leaves hidden files starting
-   with `._` on the card; the updater ignores them.
-2. Switch the LXR off and put the card in.
-3. Hold down the encoder button and switch the LXR on. Keep holding the button until
-   "LXR Updater" appears on the display.
-4. The display shows "Checking Firmware...", then "Loading Firmware" with the progress in percent.
-5. When it shows "Update OK!" the LXR restarts by itself with the new firmware.
-
-The updater itself is never changed by an update. If an update fails or is interrupted (for example by
-a power cut), the LXR can always be updated again the same way.
-
-### Troubleshooting
-
-If the updater stops with one of these messages, switch the LXR off, fix the cause and try again:
-
-| Display | Cause |
+| Plugin | Plays |
 |---|---|
-| `can't mount` / `SD Card` | No SD card, or the card can't be read. The card must be formatted as FAT32. Cards larger than 32 GB usually come formatted as exFAT, which the updater can't read. On a Mac, reformat the card in Disk Utility with the format "MS-DOS (FAT)". |
-| `LXRE*.img` / `Not Found!` | No update file in the top folder of the card. The file name must start with `LXR` and end with `.img`. |
-| `Can't open` / `LXRE*.img!` | The update file couldn't be read. Copy it to the card again. |
-| `LXR*.img` / `Not Valid!` | The file isn't an update for the desktop LXR (for example a Eurorack module update, or a damaged file). |
-| `LXR*.img` / `Wrong Size!`, `Wrong` / `Checksum!` | The file is damaged or incomplete. Build it again or copy it to the card again. |
-| `Can't erase` / `Flash!`, `Flash write` / `Error!` | Writing the firmware to the LXR's memory failed. Switch the LXR off and try the update again. |
+| Tack | The whole kit, which is three drums, snare, cymbal, closed and open hi-hat, and the FX bus. It has seven stereo outputs, Main and one each for the three drums, snare, cymbal and hi-hat. |
+| Tack Drum | One drum voice |
+| Tack Snare | The snare |
+| Tack Cymbal | The cymbal |
+| Tack Hi-hat | The closed and open hi-hat |
 
-## Build options
+In Tack, notes on MIDI channel 1 from C3 up trigger the voices, one note each. Channels 2 to 8 each play one voice
+chromatically. The single-voice plugins play chromatically on any channel, or at the voice's tuned pitch on every note
+when their Chromatic switch is off.
 
-| Option | Effect |
+Every sound parameter on the device's front panel is a plugin parameter, 227 in Tack, and the host can automate and
+modulate them. Each plugin has its own editor. The editor does not copy the hardware's front panel or its look.
+
+## Kits
+
+Tack loads kit files in the device's `.SND` format, the files the LXR-02 writes to its SD card. Put folders of kits
+in the kit folder, `~/.local/share/Tack/Kits/` on Linux (or `$XDG_DATA_HOME/Tack/Kits/` if that is set) and
+`Documents/Tack/Kits` on Windows and macOS. Each folder in it is a pack.
+Tack lists the kits in its own kit browser and in the host's preset browser. The single-voice plugins offer the
+matching voices of every kit, so Tack Snare lists each kit's snare.
+
+Saving a kit writes a `.SND` file to the `User` pack in the format the device writes, and the device can load it. On
+the device's SD card a kit file needs a slot number in its name, such as `05-NAME.SND`. The single-voice plugins save
+a kit with only their voice in it. Tack's browser marks such files with the kind of voice, "Clap (Snare)", and
+picking one replaces only that voice of the open kit. A drum goes onto the drum tab that is open.
+
+No kits come with Tack. The factory kits and third-party kits belong to their authors.
+
+## Status
+
+Tack works on Linux x86-64 and is tested in Bitwig 6.1.6. It also builds for Windows and macOS. The Windows build
+renders the same as Linux under Wine, but nobody has played it in a DAW yet, and nobody has built the macOS one yet.
+There are no prebuilt binaries, so build Tack from source.
+
+Report a problem with the [bug report form](https://github.com/oikoaudio/tack/issues/new?template=bug-report.yml).
+Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
+
+## Building and installing
+
+You need CMake 3.21 or newer, Ninja, a C and C++ compiler and the OpenGL and X11 development files. Tack is tested
+with gcc 15. CMake fetches the CLAP SDK, pugl and Dear ImGui at pinned versions, and libsamplerate if it isn't installed.
+
+```sh
+cmake -S host -B build/host -G Ninja
+cmake --build build/host
+cmake --build build/host --target install_tack
+```
+
+The last command copies `Tack.clap` to `~/.clap`. [host/README.md](host/README.md#windows-and-macos) has the
+commands for Windows and macOS.
+
+[host/README.md](host/README.md) is the technical reference. It covers the MIDI note map, parameters and modulation,
+outputs and FX routing, how kits load and save, the command-line tools for testing without a DAW, and the bugs fixed in
+the firmware code.
+
+## Repository layout
+
+| Path | Contents |
 |---|---|
-| `cmake --preset debug` | Debug build: `-O3 -g3` with `DEBUG` defined, output in `build/debug/`. The release build uses `-O3 -g0`. Both need `-O3` for the audio engine to keep up in real time. |
-| `-DARM_TOOLCHAIN_DIR=<bin folder>` | Use a toolchain that isn't on `PATH`, e.g. `/Applications/ArmGNUToolchain/14.3.rel1/arm-none-eabi/bin` (macOS) or `C:/toolchain_arm-none-eabi/11.3rel1/bin` (Windows) |
-| `-DLXR_ITCM_OPT=<flag>` | Optimisation for the code in the fast ITCM memory, see [Memory map](#memory-map) (default `-O2`) |
-| `-DLXR_GENERATE_LISTING=ON` | Also write a disassembly listing (`.list`) |
+| `host/` | Tack. The desktop build of the sound engine, the CLAP plugins, the editor and test tools. |
+| `Core/Src/Soundengine/` | The firmware's sound engine, which Tack compiles. |
+| `Core/`, `Drivers/`, `Middlewares/`, `FATFS/`, `USB_DEVICE_MIDI/`, `cmake/`, `CMakeLists.txt` | The original LXR-02 firmware for the STM32F765. |
 
-Options are passed when configuring, e.g. `cmake --preset release -DLXR_GENERATE_LISTING=ON`.
-The toolchain file and the CMake modules and tools are in the `cmake/` folder.
+The firmware still builds for the device, with `cmake --preset release` and `cmake --build --preset release` in the
+top folder and the Arm GNU Toolchain on `PATH`. The
+[upstream README](https://github.com/erica-synths/lxr-desktop-app) explains the toolchain setup and how to install an
+update from the SD card. Firmware built from this repository is a modified version, and its start-up screen says
+"Modified V" and the version, as [NOTICE.md](NOTICE.md) requires.
 
-All files the build creates (in `build/<preset>/`):
+## Changes to the firmware
 
-| File                     | Purpose                                                        |
-|--------------------------|----------------------------------------------------------------|
-| `LXR_V2_V<version>.img`  | **Update file for the SD card** (see [Installing the update](#installing-the-update)) |
-| `LXR_V2_STM32F765.elf`   | Firmware with debug information, for a debugger               |
-| `LXR_V2_STM32F765.bin`   | Raw firmware image (from 0x08008000)                          |
-| `LXR_V2_STM32F765.hex`   | Intel HEX of the same                                         |
-| `LXR_V2_STM32F765.map`   | Linker map                                                    |
+This fork changes the firmware in six places. The first four are bug fixes in the sound engine, found while running
+it on a computer, and Tack and the device firmware both get them. None of them has been reported upstream.
 
-## Cleaning the build
+| Commit | File | Change |
+|---|---|---|
+| 68b326f | `Core/Src/Soundengine/MIDI/MidiParser.c` | Loading a kit wrote one byte far past the end of `midiParser_originalCcValues`. The kit loader sends `PAR_BANK_CHANGE` as CC 0, so the parameter number underflowed to 65535. The parser now indexes with the CC number. |
+| c35f360 | `Core/Src/Soundengine/DSPAudio/FX/Delay.c`, `Delay.h`, `MidiParser.c` | Switching the delay from normal to ping-pong while it ran kept pointers that are only valid in normal mode, and the next samples read and wrote up to index 49150 of the 32768-entry delay buffer. `Delay_setType()` now masks the pointers for the new mode. |
+| ea2a87b | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | The interpolating wavetable oscillators read one sample past the end of each 1024-sample table, from the next table or past the end of the array. They now wrap to the start of the same table. The init kit renders bit-identically. |
+| 5d54c5f | `Core/Src/Soundengine/DSPAudio/FX/Distortion.c` | At full-scale input the diode distortion read one entry past the end of `table_1n914`. It now interpolates from the last pair of entries, which gives the same result. |
+| 89aacd5, 147dcf6 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
+| 4597e3b | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
 
-**Remove the compiled files** (including the `.img`) but keep the settings. The next build then
-compiles everything again:
+Tack also plays a few things differently from the device. Those changes live in its own code under `host/`, not
+in the firmware, and [host/README.md](host/README.md) describes them: the pulse width minimum, the init kit's FX
+values and the output routing.
 
-```sh
-cmake --build --preset release --target clean
-```
+## License
 
-Use `--preset debug` to clean the debug build.
+Tack is free software under the GNU General Public License version 3 only, in [LICENSE](LICENSE), with the additional
+permission and additional terms under section 7 in [NOTICE.md](NOTICE.md). These are the terms Erica Synths published
+the LXR-02 firmware under. It comes without any warranty.
 
-**Start completely from scratch:** delete the build folder, which also forgets all settings such as
-`-DARM_TOOLCHAIN_DIR` or `-DLXR_BOOTLOADER_HEX`, then configure and build again:
+The additional terms apply to Tack as well.
 
-```sh
-rm -rf build                        # Linux, macOS, Git Bash
-Remove-Item -Recurse -Force build   # Windows PowerShell
-rmdir /s /q build                   # Windows Command Prompt
+- "Erica Synths", "LXR" and "LXR-02" and their logos are trademarks of Erica Synths. The GPL grants no right to use
+  them. Tack uses them only to say where its code comes from.
+- Modified versions must be marked as modified and must not be presented as official Erica Synths software. Tack is
+  a modified version.
+- The LXR hardware, including its front panel and appearance, is the property of Erica Synths and is not covered by
+  any license in this repository.
 
-cmake --preset release
-cmake --build --preset release
-```
+The firmware descends from Julian Schmidt's original LXR firmware, copyright 2013 Julian Schmidt, which Sonic Potions
+published under its own license, in [LICENSES/SonicPotions-LXR.txt](LICENSES/SonicPotions-LXR.txt). That license
+forbids selling the code or using it in a commercial product or activity, requires modified versions to come with
+their complete source, and requires its notice, conditions and disclaimer to come with every copy. The LXR-02
+firmware's release doesn't say how that license relates to the GPL, so Tack keeps to both.
 
-Start from scratch when you switch to a different compiler (another `ARM_TOOLCHAIN_DIR`, or a
-different `arm-none-eabi-gcc` on `PATH`), because an existing build folder keeps using the compiler it
-was first set up with. Do the same if the build behaves strangely after updating the sources.
-With CMake 3.24 or newer, `cmake --preset release --fresh` redoes the setup without deleting the folder.
+- Tack is free. It is never sold, bundled with anything paid, or offered behind a paywall.
+- Every release comes with its complete source, including the source of the libraries built into the plugin.
+- Every release includes the Sonic Potions license, the GPL and NOTICE.md.
 
-The `build/` folder is never committed to git.
+If you redistribute Tack or build on it, keep to the same terms.
 
-## Memory map
+Third-party code in the repository keeps its own license, listed in [NOTICE.md](NOTICE.md#third-party-components). The
+plugin build also fetches the CLAP SDK (MIT), pugl (ISC), Dear ImGui (MIT) and libsamplerate (BSD-2-Clause), and each
+release includes their licenses.
 
-| Region   | Address                   | Size   | Contents                                              |
-|----------|---------------------------|--------|-------------------------------------------------------|
-| FLASH    | 0x08000000 – 0x08007FFF   | 32 KB  | Bootloader (`LXR_V2_STM32F765_Bootloader`)            |
-| FLASH    | 0x08008000 –              | 992 KB | This firmware (`VECT_TAB_OFFSET` 0x8000)              |
-| ITCM     | 0x00000000                | 16 KB  | `IN_ITCM_RAM` hot DSP code, copied there by `main()`  |
-| DTCM     | 0x20000000                | 128 KB | `INDTCM`/`INDTCMZ` data, DMA buffers, the stack       |
-| RAM      | 0x20020000                | 384 KB | `.data`, `.bss`, heap                                 |
+## Credits
 
-The ITCM is tight. Current GCC releases generate too much code at `-O3` for it, so the translation
-units that contain ITCM code are compiled with `LXR_ITCM_OPT` (default `-O2`). The linker prints
-region usage after every build.
+Tack's sound is the LXR-02's: the voices, the FX bus and the kit format are the work of Sonic Potions and Erica
+Synths. The LXR-02 is Sonic Potions' design, made and sold by Erica Synths, who published its firmware at
+[github.com/erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app), copyright 2012-2026
+Erica Synths. This repository is a fork of it.
 
-## Source layout and CMake targets
+That firmware grew out of the original LXR by Julian Schmidt of Sonic Potions, published at
+[github.com/SonicPotions/LXR](https://github.com/SonicPotions/LXR), and many of its source files still carry his name.
+The Sonic Potions firmware also has code from Rudeog, Patrick Dowling and Andrew Shakinovsky, whom its README thanks.
 
-The project was originally generated with STM32CubeMX/STM32CubeIDE, which explains the directory
-layout and the `USER CODE BEGIN/END` comments. It no longer depends on either tool: the CubeMX project
-(`.ioc`) was removed because regenerating code from it overwrites application code in `main.c`.
-Pins, clocks and peripherals are configured in `Core/Inc/main.h`, `Core/Src/main.c`
-(`SystemClock_Config`, `MX_*_Init`) and `Core/Src/stm32f7xx_hal_msp.c`; edit them there.
-
-Every component is an OBJECT library linked into `LXR_V2_STM32F765`:
-
-| Target          | Sources                                         | Contents                                              |
-|-----------------|-------------------------------------------------|-------------------------------------------------------|
-| `stm32f7_hal`   | `Drivers/`                                      | ST HAL + CMSIS                                         |
-| `fatfs`         | `Middlewares/Third_Party/FatFs`, `FATFS/`       | FatFs and the SD card glue                            |
-| `usb_midi`      | `Middlewares/JS`, `USB_DEVICE_MIDI/`            | USB device stack with the custom USB-MIDI class       |
-| `lxr_platform`  | `Core/Startup`, `Core/Src/main.c`, ...          | Startup, clocks, peripheral init, interrupts          |
-| `lxr_io`        | `Core/Src/IO`                                   | Button/LED shift registers, pots and faders           |
-| `lxr_ui`        | `Core/Src/menu`, `lcd.c`, `buttonHandler.c`, ...| LCD, encoder, buttons, LEDs, menu pages               |
-| `lxr_preset`    | `Core/Src/Preset`                               | Kit/pattern/project load & save on SD                 |
-| `lxr_dsp`       | `Core/Src/Soundengine/DSPAudio`                 | Oscillators, filters, envelopes, voices, master FX    |
-| `lxr_engine`    | `Core/Src/Soundengine/*.c`                      | Codec/I2S DMA, sample block rendering, FX bus, clock in/out |
-| `lxr_midi`      | `Core/Src/Soundengine/MIDI`                     | MIDI UART, parsers, parameter mapping                 |
-| `lxr_sequencer` | `Core/Src/Soundengine/Sequencer`                | Step sequencer, Euclidean generator, clock sync       |
-| `lxr_usb_app`   | `Core/Src/Soundengine/USB`                      | USB-MIDI message queue                                |
-
-Source files are listed explicitly in the `CMakeLists.txt` files. Add new files there.
-
-## Advanced: programming with a debug probe
-
-Not needed for updates: use the [SD card](#installing-the-update) for that. This section is for
-development, factory programming and repairs, with an ST-Link debug probe connected to the LXR's
-debug header and [OpenOCD](https://openocd.org/) installed (the build finds it on `PATH`; on macOS:
-`brew install open-ocd`).
-
-**Firmware only.** Writes just the firmware; the bootloader is left alone:
-
-```sh
-cmake --build --preset release --target flash
-```
-
-**Blank devices (bootloader + firmware).** A blank device, or replacing the bootloader on purpose,
-needs the bootloader as well. The bootloader is a separate project, so by default the build doesn't
-include it. Tell the build where to find it in one of two ways:
-
-```sh
-# A: a prebuilt bootloader .hex (e.g. from a bootloader release)
-cmake --preset release -DLXR_BOOTLOADER_HEX=path/to/LXR_V2_STM32F765_Bootloader.hex
-
-# B: the bootloader source code, which is then built together with the firmware
-cmake --preset release -DLXR_BOOTLOADER_DIR=path/to/LXR_V2_STM32F765_Bootloader
-```
-
-The build checks that the bootloader is valid for this device: it must fit in the 32 KB bootloader
-sector and accept desktop (`LXRV2IMG`) update images, so the firmware, a full image or the Eurorack
-bootloader are rejected. It then also writes `LXR_V2_V<version>_full.hex`/`.bin` (bootloader +
-firmware, the whole flash from 0x08000000) and enables:
-
-```sh
-cmake --build --preset release --target flash_full
-```
-
-The same `.hex`/`.bin` can also be loaded with STM32CubeProgrammer (the `.bin` goes to 0x08000000).
-To go back to a firmware-only build, clear the setting: `-DLXR_BOOTLOADER_HEX=` or `-DLXR_BOOTLOADER_DIR=`.
-
-> **Warning:** `flash_full` overwrites the bootloader. If that is interrupted, the device can no longer
-> update itself from the SD card and has to be recovered with a debug probe. The target therefore
-> prints a warning and only continues after you type `yes`; without an interactive terminal (e.g. a
-> build started from an IDE) it refuses. For scripts and factory programming, set the environment
-> variable `LXR_CONFIRM_BOOTLOADER_OVERWRITE=yes` to skip the question.
-
-The bootloader write-protects its own flash sector (sector 0) every time it boots, so on a unit that
-has run before, sector 0 cannot simply be erased. `flash_full` therefore clears that protection first;
-the new bootloader sets it again on its first boot. Other programming tools need the same step
-(in STM32CubeProgrammer: Option bytes → Write protection → uncheck nWRP0).
-
-The OpenOCD settings can be changed with `LXR_OPENOCD_INTERFACE`, `LXR_OPENOCD_TRANSPORT`,
-`LXR_OPENOCD_SPEED` (default 1000 kHz) and `LXR_OPENOCD_WORKAREA` (default 0x8000). The defaults are
-deliberately conservative: with a 64 KB work area at the faster default clock, an ST-Link V2 (firmware
-V2J29) failed half-way through programming.
-
-## Licence, trademarks and hardware
-
-Copyright (C) 2012-2026 Erica Synths.
-
-**Firmware licence.** The firmware, the bootloader and the build system are licensed under the
-[GNU General Public License version 3](LICENSE) (GPL-3.0-only), with an additional permission for
-the STMicroelectronics libraries and the additional terms in [NOTICE.md](NOTICE.md). In short:
-
-- You may use, study and change the firmware, for example to build your own updates for your device.
-- If you share or distribute the firmware, or a modified version of it, including pre-installed on a
-  device, you must provide the complete source code under the same licence, and the people you give it
-  to may install their own modified versions.
-- Modified firmware must be marked as modified (its start-up screen must show this, e.g. with a
-  different name or version text) and must not be presented as official Erica Synths firmware.
-- The firmware comes **without any warranty**. Building and installing your own or modified firmware is
-  entirely at your own risk, and Erica Synths provides no support for it.
-
-**Trademarks.** "Erica Synths", "LXR" and "LXR-02" and the associated logos are trademarks of
-Erica Synths. The GPL licence does **not** grant any right to use them. They may not be used for any
-product, firmware release, service or commercial activity without prior written permission from
-Erica Synths. Truthful references such as "custom firmware for the Erica Synths LXR-02" are fine.
-
-**Hardware.** The LXR hardware (schematics, circuit board layouts, front panel, enclosure and industrial
-design) is the intellectual property of Erica Synths and is protected by copyright and design rights.
-It is **not** part of this repository and is **not** licensed under the GPL or any other licence. It may
-not be copied, manufactured or sold, in whole or in part, without prior written permission from
-Erica Synths.
-
-**Third-party code.** The repository includes components from STMicroelectronics, Arm and ChaN (FatFs)
-under their own licences. See [NOTICE.md](NOTICE.md#third-party-components).
-
-
-<sup>
-Use code OPENLXR15 on the Erica Synths website for a discount on the LXR (active for 1 week since open-source announcment) :)
-</sup>
+Tack's plugin, editor and host code is by oikoaudio, at
+[github.com/oikoaudio/tack](https://github.com/oikoaudio/tack).

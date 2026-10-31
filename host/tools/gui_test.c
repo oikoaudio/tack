@@ -2,7 +2,8 @@
  * gui_test.c
  *
  * Opens Tack's editor in a window of its own, as a host would: loads the plugin, optionally a kit, embeds the
- * editor and drives its timer. For trying the editor without a DAW, or under Xvfb for screenshots.
+ * editor in a plain pugl window and drives it. For trying the editor without a DAW, or under Xvfb (or Wine) for
+ * screenshots.
  *
  *   gui_test Tack.clap [seconds] [kit.snd]
  *
@@ -14,10 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <dlfcn.h>
-#include <X11/Xlib.h>
+#include <pugl/pugl.h>
+#include <pugl/stub.h>
 #include <clap/clap.h>
+#include "clap_load.h"
 
 static const clap_plugin_t* plugin;
 static const clap_plugin_timer_support_t* pluginTimer;
@@ -59,16 +60,21 @@ static bool evPush(const clap_output_events_t* l, const clap_event_header_t* e)
 	return true;
 }
 
+static bool quit;
+static PuglStatus onWindowEvent(PuglView* view, const PuglEvent* event)
+{
+	if(event->type == PUGL_CLOSE) quit = true;
+	return PUGL_SUCCESS;
+}
+
 int main(int argc, char** argv)
 {
 	if(argc < 2) { fprintf(stderr, "usage: %s plugin.clap [seconds] [kit.snd]\n", argv[0]); return 1; }
 	const double seconds = argc > 2 ? atof(argv[2]) : 3600;
 
-	void* lib = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
-	if(!lib) { fprintf(stderr, "%s\n", dlerror()); return 1; }
-	const clap_plugin_entry_t* entry = dlsym(lib, "clap_entry");
-	entry->init(argv[1]);
-	const clap_plugin_factory_t* factory = entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
+	ClapFile lib;
+	if(!clapLoad(&lib, argv[1])) return 1;
+	const clap_plugin_factory_t* factory = lib.entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
 	// the first plugin in the file, or the one $TACK_PLUGIN_ID names
 	const char* id = getenv("TACK_PLUGIN_ID");
 	plugin = factory->create_plugin(factory, &host, id ? id : factory->get_plugin_descriptor(factory, 0)->id);
@@ -81,20 +87,30 @@ int main(int argc, char** argv)
 	const clap_plugin_gui_t* gui = plugin->get_extension(plugin, CLAP_EXT_GUI);
 	pluginTimer = plugin->get_extension(plugin, CLAP_EXT_TIMER_SUPPORT);
 	const clap_plugin_params_t* params = plugin->get_extension(plugin, CLAP_EXT_PARAMS);
-	if(!gui || !gui->create(plugin, CLAP_WINDOW_API_X11, false)) { fprintf(stderr, "no X11 editor\n"); return 1; }
+	const char* api = NULL;
+	bool floating;
+	if(!gui || !gui->get_preferred_api(plugin, &api, &floating) || !gui->create(plugin, api, false)) {
+		fprintf(stderr, "no editor\n");
+		return 1;
+	}
 
+	// the host's window: a plain view the editor goes into
 	uint32_t w, h;
 	gui->get_size(plugin, &w, &h);
-	Display* dpy = XOpenDisplay(NULL);
-	if(!dpy) { fprintf(stderr, "no X display\n"); return 1; }
-	Window win = XCreateSimpleWindow(dpy, DefaultRootWindow(dpy), 0, 0, w, h, 0, 0, 0);
-	XStoreName(dpy, win, "Tack (gui_test)");
-	XMapWindow(dpy, win);
-	XFlush(dpy);
+	PuglWorld* world = puglNewWorld(PUGL_PROGRAM, 0);
+	puglSetWorldString(world, PUGL_CLASS_NAME, "TackGuiTest");
+	PuglView* window = puglNewView(world);
+	puglSetBackend(window, puglStubBackend());
+	puglSetSizeHint(window, PUGL_DEFAULT_SIZE, (PuglSpan)w, (PuglSpan)h);
+	puglSetViewString(window, PUGL_WINDOW_TITLE, "Tack (gui_test)");
+	puglSetEventFunc(window, onWindowEvent);
+	if(puglRealize(window) || puglShow(window, PUGL_SHOW_RAISE)) { fprintf(stderr, "no window\n"); return 1; }
 
-	clap_window_t cw = { .api = CLAP_WINDOW_API_X11, .x11 = win };
+	clap_window_t cw = { .api = api };
+	if(!strcmp(api, CLAP_WINDOW_API_X11)) cw.x11 = (clap_xwnd)puglGetNativeView(window);
+	else cw.ptr = (void*)puglGetNativeView(window);
 	if(!gui->set_parent(plugin, &cw) || !gui->show(plugin)) { fprintf(stderr, "could not embed the editor\n"); return 1; }
-	printf("editor %ux%u open\n", w, h);
+	printf("editor %ux%u open (%s)\n", w, h, api);
 	fflush(stdout);
 
 	clap_input_events_t in = { NULL, evSize, evGet };
@@ -111,19 +127,20 @@ int main(int argc, char** argv)
 		m = end + strspn(end, " ,");
 	}
 	if(numMods) { params->flush(plugin, &in, &out); numMods = 0; }
-	const struct timespec tick = { 0, 20 * 1000000 };
-	for(double t = 0; t < seconds; t += 0.02) {
-		while(XPending(dpy)) { XEvent e; XNextEvent(dpy, &e); }
+
+	// the host's event loop: on Windows and macOS it also delivers the editor's events
+	const double start = puglGetTime(world);
+	while(!quit && puglGetTime(world) - start < seconds) {
+		puglUpdate(world, 0.02);
 		if(timerOn) pluginTimer->on_timer(plugin, timerId);
 		// not processing audio, so do what a host does when asked to flush
 		if(flushRequested) { flushRequested = false; params->flush(plugin, &in, &out); fflush(stdout); }
-		nanosleep(&tick, NULL);
 	}
 
 	gui->destroy(plugin);
 	plugin->destroy(plugin);
-	XDestroyWindow(dpy, win);
-	XCloseDisplay(dpy);
-	entry->deinit();
+	puglFreeView(window);
+	puglFreeWorld(world);
+	clapUnload(&lib);
 	return 0;
 }

@@ -129,5 +129,5 @@ LxrHostStats lxr_host_stats(void);
 /** Frees the resampler. */
 void lxr_host_shutdown(void);
 
-/** Writes interleaved 16-bit PCM. Returns 0 on success. */
+/** Writes interleaved 16-bit PCM. Returns 0 on success. Paths are UTF-8 here and in the kit file functions. */
 int lxr_host_writeWav(const char* path, const int16_t* data, uint32_t frames, uint16_t channels, uint32_t fs);

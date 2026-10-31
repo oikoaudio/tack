@@ -503,6 +503,14 @@ static void drawTab(TackGui* g)
 // what the browser lists: whole kits in Tack, in a voice plugin the voices of kits it can play
 struct Entry { int kit; int voice; char name[24]; };
 
+// the voice of a kit that is its only one that isn't the init kit's (TackKit.voices), or -1
+static int onlyVoice(uint8_t voices)
+{
+	for(int v = 0; v < 6; v++)
+		if(voices == 1 << v) return v;
+	return -1;
+}
+
 static void buildEntries(TackGui* g)
 {
 	g->entries.clear();
@@ -510,8 +518,12 @@ static void buildEntries(TackGui* g)
 	for(int i = 0; i < g->kits.numKits; i++) {
 		const TackKit& kit = g->kits.kits[i];
 		if(voice < 0) {
+			// a kit with a single voice of its own, as the voice plugins save them, says which
+			static const char* const kinds[] = { "Drum", "Drum", "Drum", "Snare", "Cymbal", "Hi-hat" };
 			Entry e = { i, -1, "" };
-			snprintf(e.name, sizeof e.name, "%s", kit.name);
+			const int only = onlyVoice(kit.voices);
+			if(only >= 0) snprintf(e.name, sizeof e.name, "%s (%s)", kit.name, kinds[only]);
+			else snprintf(e.name, sizeof e.name, "%s", kit.name);
 			g->entries.push_back(e);
 			continue;
 		}
@@ -556,7 +568,16 @@ static int currentEntry(TackGui* g)
 
 static void load(TackGui* g, int e)
 {
-	g->host.loadKit(g->host.ctx, g->kits.kits[g->entries[e].kit].path, g->entries[e].voice);
+	const TackKit& kit = g->kits.kits[g->entries[e].kit];
+	const int only = onlyVoice(kit.voices);
+	if(g->host.voice < 0 && only >= 0) {
+		// a voice saved on its own replaces just that voice of the kit: in its place, or a drum on the drum tab that
+		// is open
+		g->host.loadVoice(g->host.ctx, kit.path, only, only < 3 && g->tab < 3 ? g->tab : only);
+		g->browseFolder = entryFolder(g, e);
+		return;
+	}
+	g->host.loadKit(g->host.ctx, kit.path, g->entries[e].voice);
 	g->browseFolder = entryFolder(g, e);
 }
 
@@ -848,10 +869,15 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 	{
 	case PUGL_REALIZE:
 		g->glReady = ImGui_ImplOpenGL3_Init("#version 330 core");
+		if(TACK_GUI_OWN_TIMER) puglStartTimer(view, 1, 0.02);
 		break;
 	case PUGL_UNREALIZE:
+		if(TACK_GUI_OWN_TIMER) puglStopTimer(view, 1);
 		if(g->glReady) ImGui_ImplOpenGL3_Shutdown();
 		g->glReady = false;
+		break;
+	case PUGL_TIMER:
+		puglObscureView(view);
 		break;
 	case PUGL_CONFIGURE:
 		io.DisplaySize = ImVec2((float)event->configure.width, (float)event->configure.height);
@@ -998,5 +1024,6 @@ bool tack_guiHide(TackGui* g)
 void tack_guiIdle(TackGui* g)
 {
 	puglObscureView(g->view);
-	puglUpdate(g->world, 0);
+	// elsewhere the host's event loop delivers the window's events, and this would run it
+	if(!TACK_GUI_OWN_TIMER) puglUpdate(g->world, 0);
 }

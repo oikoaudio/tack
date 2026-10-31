@@ -22,9 +22,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <dlfcn.h>
 #include <clap/clap.h>
 #include "lxr_host.h"
+#include "clap_load.h"
 
 #define BLOCK 256
 #define MAX_ITEMS 64
@@ -130,11 +130,9 @@ int main(int argc, char** argv)
 	}
 	if(numNotes == 0) numNotes = 7;
 
-	void* lib = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
-	if(!lib) { fprintf(stderr, "%s\n", dlerror()); return 1; }
-	const clap_plugin_entry_t* entry = dlsym(lib, "clap_entry");
-	entry->init(argv[1]);
-	const clap_plugin_factory_t* factory = entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
+	ClapFile lib;
+	if(!clapLoad(&lib, argv[1])) return 1;
+	const clap_plugin_factory_t* factory = lib.entry->get_factory(CLAP_PLUGIN_FACTORY_ID);
 	// the first plugin in the file, or the one $TACK_PLUGIN_ID names
 	const char* wanted = getenv("TACK_PLUGIN_ID");
 	const clap_plugin_descriptor_t* desc = factory->get_plugin_descriptor(factory, 0);
@@ -247,8 +245,7 @@ int main(int argc, char** argv)
 	plugin->stop_processing(plugin);
 	plugin->deactivate(plugin);
 	plugin->destroy(plugin);
-	entry->deinit();
-	dlclose(lib);
+	clapUnload(&lib);
 
 	if(lxr_host_writeWav(argv[2], audio, numFrames, 2, (uint32_t)fs)) { perror(argv[2]); return 1; }
 	printf("wrote %u frames at %u Hz to %s\n", numFrames, (uint32_t)fs, argv[2]);

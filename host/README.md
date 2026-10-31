@@ -1,7 +1,8 @@
 # Host build of the sound engine
 
 Builds the LXR sound engine (`Core/Src/Soundengine`) for a desktop computer, so it can be run, tested and listened
-to without the hardware. Tested with gcc 15 on Linux x86-64.
+to without the hardware. Tested with gcc 15 on Linux x86-64. It also builds for Windows and macOS (see
+[Windows and macOS](#windows-and-macos)).
 
 ```sh
 cmake -S host -B build/host -G Ninja
@@ -81,11 +82,11 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   is left out. Its target list has the FX parameters once per voice, so Tack lists each target once, and names
   targets like the parameters (the front panel calls the FM waveform "Oscillator Waveform" there). Reverb is compiled out of the firmware (`USE_REVERB 0`) and isn't offered.
 - **Kits:** Tack offers kit files from the device's SD card (`.SND`) as presets, through CLAP's preset discovery,
-  so hosts list them in their preset browser. It looks in `~/.local/share/Tack/Kits/` (or
-  `$XDG_DATA_HOME/Tack/Kits/`); each subfolder is a sound pack, e.g. a symlink to a backup of a project folder. Kits
+  so hosts list them in their preset browser. It looks in the kit folder, `~/.local/share/Tack/Kits/` on Linux
+  (or `$XDG_DATA_HOME/Tack/Kits/`) and `Documents/Tack/Kits` on Windows and macOS; each subfolder is a sound pack, e.g. a symlink to a backup of a project folder. Kits
   named "Initkit" are skipped, also when the device garbled two of its letters: the device fills empty kit slots
   with them, and the built-in "Init Kit" preset is the same sound. No kits are bundled with Tack; the factory and
-  third-party kits belong to their authors. Linux only for now.
+  third-party kits belong to their authors.
 - **Choosing kits in the editor:** the same kits are in the editor too. Clicking the kit's name opens a browser: the
   kit folder's folders on the left (a pack, or a project folder in it), their kits on the right alphabetically.
   Clicking a kit loads it and leaves the browser open, to try one after another. The arrows next to the name step to
@@ -102,8 +103,8 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   three boxes to a row (`clap/gui.cpp`): knobs for amounts (drag, Shift for fine, wheel steps, double-click resets
   to the init kit value) and drop-downs for options, with short labels and the full name as a tooltip. The FX tab
   shows the controls of the selected FX type under that type's names. Trig buttons trigger the selected voice. It
-  is Dear ImGui (MIT) drawn into a pugl (ISC) OpenGL view, fetched at pinned versions, embedded in the host's X11
-  window and driven by the host's timer; edits go to the audio thread through a queue and reach the host as
+  is Dear ImGui (MIT) drawn into a pugl (ISC) OpenGL view, fetched at pinned versions, embedded in the host's window
+  (X11, Win32 or Cocoa); on X11 the host's timer drives it. Edits go to the audio thread through a queue and reach the host as
   parameter gestures. `build/host/gui_test Tack.clap [seconds] [kit.snd]` opens it without a DAW (also under
   Xvfb, with `__GLX_VENDOR_LIBRARY_NAME=mesa` for software OpenGL).
 - **State:** the kit itself, in the firmware's representation, the outputs switch, the kit's name, its file and whether
@@ -126,11 +127,12 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   returns to Main), a deliberate difference; none of the factory or Hrtl kits use them, and kit files keep what
   they store.
 - **Instances:** the engine keeps its state in globals, so each instance runs its own copy of it. Tack loads a
-  private copy of its own binary per instance (`clap/engine.c`, from an in-memory file) and drives that copy's
+  private copy of its own binary per instance (`clap/engine.c`; on Linux from an in-memory file, on Windows and macOS
+  as described below) and drives that copy's
   engine through a function table, `tack_engine()`, the only symbol it exports besides `clap_entry`. Everything
   else has hidden visibility, so each copy's code uses its own globals. Instances can process in parallel.
   `build/host/multi_test Tack.clap kit.snd...` renders a different kit in each of several instances, interleaved
-  and on one thread each, and checks every result against the kit rendered alone. Linux only for now (`memfd`).
+  and on one thread each, and checks every result against the kit rendered alone.
 
 ### Single voices: Tack Drum, Snare, Cymbal and Hi-hat
 
@@ -152,7 +154,11 @@ same engine), the others the snare, cymbal and hi-hat.
   Tack presets at all).
 - **Saving:** the editor's "Save" button writes the voice as a kit with only this voice, to the "User" pack like
   Tack's kits: the voice in its own place (Tack Drum's on drum 1), every other voice the init kit's. The voice
-  browser lists it under its own name ("Clap", not "Clap Drum 1"), Tack and the device load it as a kit.
+  browser lists it under its own name ("Clap", not "Clap Drum 1"). Tack's browser lists it with its kind of voice
+  ("Clap (Snare)"), and picking it there replaces only that voice of the open kit, keeping the voice's output
+  (Direct or FX). A drum goes onto the drum tab that is open, or onto drum 1 from any other tab. The kit keeps its
+  name and is marked edited. The host's preset browser and the device load the file as a whole kit, with the init
+  kit's other voices.
 - **Parameters:** the voice's own, named without the voice ("Filter Frequency", ids as in Tack). Velocity and LFO
   destinations offer only the voice's own parameters. No FX bus: the voice plays directly on the plugin's one
   output.
@@ -163,7 +169,7 @@ same engine), the others the snare, cymbal and hi-hat.
   generator in between), not in level or colour.
 - Velocity and LFO destinations of the other voices are off, since those voices aren't computed.
 
-To install it into `~/.clap`: `cmake --build build/host --target install_tack`. It copies the plugin in one step
+To install it into the user's CLAP folder (`~/.clap` on Linux): `cmake --build build/host --target install_tack`. It copies the plugin in one step
 rather than linking to the build output, so a host watching the folder never loads a half-written file mid-build.
 
 `build/host/clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount [@seconds] ...]`
@@ -176,7 +182,74 @@ build/host/Tack.clap` shows what the preset browser will see.
 `clap-validator validate build/host/Tack.clap`: 192 tests for the five plugins, 162 passed, 0 failed, 30 skipped. The skipped tests are for
 extensions Tack doesn't have (64-bit audio, configurable ports).
 
-Not done yet: macOS and Windows, a styling pass on the editor.
+Not done yet: trying Tack in a DAW on Windows and macOS, scaling the editor with the display's DPI, a styling pass
+on the editor.
+
+## Windows and macOS
+
+The sound engine renders the same on Windows as on Linux, sample for sample: `clap_render` and `multi_test` give
+byte-identical files under Wine. Nobody has played Tack in a DAW on Windows yet, and nobody has built it for macOS.
+
+Windows, cross-compiled from Linux with mingw-w64:
+
+```sh
+cmake -S host -B build/win -G Ninja -DCMAKE_TOOLCHAIN_FILE=$PWD/host/cmake/mingw-w64.cmake
+cmake --build build/win
+wine build/win/clap_render.exe build/win/Tack.clap out.wav
+```
+
+macOS, with the Xcode command line tools, CMake and Ninja:
+
+```sh
+cmake -S host -B build/mac -G Ninja
+cmake --build build/mac
+build/mac/clap_render build/mac/Tack.clap out.wav
+```
+
+- **Files:** on Windows, `Tack.clap` is one DLL. It links the C and C++ runtimes statically and needs only system
+  DLLs, including the Universal C Runtime that comes with Windows 10 and 11. On macOS it is a bundle with the plugin
+  in `Contents/MacOS` and the engine library in `Contents/Frameworks`. The build signs the bundle ad hoc, which lets
+  it run on the Mac that built it; a release needs a Developer ID signature and notarization.
+- **Installing:** `install_tack` copies the plugin to `%LOCALAPPDATA%\Programs\Common\CLAP` on Windows and to
+  `~/Library/Audio/Plug-Ins/CLAP` on macOS.
+- **Kit folder:** `Documents/Tack/Kits` on both. Paths are UTF-8 throughout (`src/lxr_files.c`), so folders and
+  kits with names outside the Windows code page work.
+- **Instances:** Windows loads each instance's copy of `Tack.clap` from the temp folder and deletes it when the
+  instance closes. The next instance removes copies that a crash left behind. macOS copies the bundle's engine
+  library, `TackEngine.dylib`, into `$TMPDIR` instead of the plugin itself: each copy of the plugin would register
+  the editor's Objective-C classes again, and the runtime keeps one class per name for the whole process. For the
+  same reason the build renames pugl's classes with a Tack prefix, so they can't clash with another plugin's pugl.
+- **Editor:** pugl's Win32 and Cocoa backends. The host's event loop delivers the editor's events there, and the
+  editor redraws from a timer of its own, so it doesn't need the host's timer as on X11. `gui_test` opens the editor
+  on all three platforms, also under Wine.
+
+## Builds, releases and repository settings
+
+`.github/workflows/build.yml` builds Tack for Linux (on Ubuntu 22.04, so it runs with glibc 2.35 or newer), Windows
+(mingw-w64, tested through Wine) and macOS (one bundle for Apple silicon and Intel, macOS 11 or newer). Each job runs
+`host/tools/smoke_test.sh` and, on Linux and macOS, clap-validator, then keeps the platform's zip as an artifact. It
+runs for pull requests that are ready for review, for pushes to main and by hand. While the repository is private,
+only runs by hand and releases build anything, since private repositories pay for Actions minutes.
+
+`host/tools/smoke_test.sh build/host` runs the same tests locally (`host/tools/smoke_test.sh build/win wine` for the
+Windows build). `make_kit out.snd NAME [param=value ...]` writes the test kits it needs, since none can be bundled.
+
+A release starts from a tag on main that matches the version in `host/CMakeLists.txt`:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+`.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release
+with the zips and `SHA256SUMS`. Versions 0.x are marked as pre-releases. Nothing is published until the draft is.
+Locally, `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DTACK_PACKAGE_PLATFORM=linux-x86_64` and the
+`package_tack` target build the same zip: the plugin, the READMEs, the licence and every licence of a library
+linked into it.
+
+`.github/repository.json` describes the GitHub repository's settings and rulesets, as for plugg: no pushes to main
+except through reviewed pull requests whose three builds pass, linear history, and release tags only from
+maintainers. `python3 host/tools/github-settings.py` reports differences and `--apply` makes GitHub match. Rulesets
+need a public repository, so apply them once it goes public.
 
 ## Layout
 

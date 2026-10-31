@@ -83,6 +83,12 @@
 
 //typedef  uint8_t bool;
 
+#ifdef LXR_HOST_BUILD
+// a desktop build (host/) has no tightly coupled memories, and macOS rejects these section names
+#define INDTCM
+#define INDTCMZ
+#define IN_ITCM_RAM
+#else
 // Helper to declare variable in CCM memory, pre-loaded from flash at startup
 #define INDTCM __attribute__ ((section(".dtcm")))
 
@@ -90,5 +96,6 @@
 #define INDTCMZ __attribute__ ((section(".dtcmz")))
 
 #define IN_ITCM_RAM __attribute__((section(".itcm_text")))
+#endif
 
 #endif /* CONFIG_H_ */

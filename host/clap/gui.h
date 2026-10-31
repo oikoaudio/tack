@@ -50,6 +50,11 @@ typedef struct
 	int (*kitVoice)(void* ctx);
 	/** the host's modulation of a parameter, in plugin values, on top of its value */
 	double (*modulation)(void* ctx, uint32_t id);
+	/**
+	 * the whole kit plugin: copies one voice of a kit file onto voice toVoice of the kit, keeping the other voices and
+	 * where the voice plays (Direct or FX); false if the file couldn't be read
+	 */
+	bool (*loadVoice)(void* ctx, const char* path, int fromVoice, int toVoice);
 } TackGuiHost;
 
 /** Plugin parameter id of a voice plugin's chromatic switch, shown as a keyboard in the editor. */
@@ -58,17 +63,27 @@ typedef struct
 /** Plugin parameter id of the outputs switch (0 stereo, 1 individual), which the editor also shows. */
 #define TACK_GUI_SEPARATE_OUTPUTS_ID 1000
 
+/**
+ * X11 needs the host's timer to drive the editor: tack_guiIdle() handles its window events. On Windows and macOS
+ * the host's event loop delivers them, and the editor redraws from a timer of its own.
+ */
+#if defined(_WIN32) || defined(__APPLE__)
+#define TACK_GUI_OWN_TIMER 1
+#else
+#define TACK_GUI_OWN_TIMER 0
+#endif
+
 typedef struct TackGui TackGui;
 
 TackGui* tack_guiCreate(const TackGuiHost* host);
 void tack_guiDestroy(TackGui* gui);
 /** The editor's size: a voice plugin's (voice 0-5) is shorter than the whole kit's (-1). */
 void tack_guiGetSize(int voice, uint32_t* width, uint32_t* height);
-/** Embeds the editor in a host window (an X11 window id) and creates it. */
+/** Embeds the editor in a host window (an X11 window id, an HWND or an NSView) and creates it. */
 bool tack_guiSetParent(TackGui* gui, uintptr_t parent);
 bool tack_guiShow(TackGui* gui);
 bool tack_guiHide(TackGui* gui);
-/** Handles window events and redraws; call regularly. */
+/** Handles window events and redraws; call regularly from the host's timer unless TACK_GUI_OWN_TIMER. */
 void tack_guiIdle(TackGui* gui);
 
 #ifdef __cplusplus

@@ -40,8 +40,11 @@ void tack_voicePresetName(const char* kitName, int voice, uint8_t voices, char* 
 /** Bit v set for each voice (0-5) of a kit (firmware values) that isn't the init kit's. */
 uint8_t tack_soundingVoices(const uint8_t* kit);
 
-/** Where Tack looks for kit files. */
+/** Where Tack looks for kit files. Paths use / as the separator on every platform. */
 const char* tack_kitFolder(void);
+
+/** Turns Windows' \ separators in a path into /; nothing elsewhere. */
+void tack_slashes(char* path);
 
 /** The sound pack, a subfolder of the kit folder, that Tack saves kits to. */
 #define TACK_USER_PACK "User"

@@ -5,6 +5,7 @@
  */
 
 #include "lxr_host.h"
+#include "lxr_files.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -127,7 +128,7 @@ void lxr_host_loadKit(const uint8_t* values)
 int lxr_host_readKitFile(const char* path, uint8_t* values, char* name)
 {
 	// as preset_loadDrumsetSD() and preset_readDrumsetData()
-	FILE* f = fopen(path, "rb");
+	FILE* f = lxr_fopen(path, "rb");
 	if(!f) return -1;
 	char kitName[8];
 	const size_t nameLen = fread(kitName, 1, 8, f);
@@ -152,11 +153,11 @@ int lxr_host_writeKitFile(const char* path, const uint8_t* values, const char* n
 
 	char tmp[4096];
 	if(snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return -1;
-	FILE* f = fopen(tmp, "wb");
+	FILE* f = lxr_fopen(tmp, "wb");
 	if(!f) return -1;
 	const bool ok = fwrite(kitName, 1, 8, f) == 8 && fwrite(values, 1, END_OF_SOUND_PARAMETERS, f) == END_OF_SOUND_PARAMETERS;
-	if(fclose(f) || !ok || rename(tmp, path)) {
-		remove(tmp);
+	if(fclose(f) || !ok || lxr_replaceFile(tmp, path)) {
+		lxr_removeFile(tmp);
 		return -1;
 	}
 	return 0;
@@ -582,7 +583,7 @@ void lxr_host_shutdown(void)
 //-----------------------------------------------------------
 int lxr_host_writeWav(const char* path, const int16_t* data, uint32_t frames, uint16_t channels, uint32_t fs)
 {
-	FILE* f = fopen(path, "wb");
+	FILE* f = lxr_fopen(path, "wb");
 	if(!f) return -1;
 
 	const uint16_t pcm = 1, bits = 16, align = channels * 2;
