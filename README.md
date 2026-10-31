@@ -94,12 +94,12 @@ it on a computer, and Tack and the device firmware both get them. None of them h
 
 | Commit | File | Change |
 |---|---|---|
-| 68b326f | `Core/Src/Soundengine/MIDI/MidiParser.c` | Loading a kit wrote one byte far past the end of `midiParser_originalCcValues`. The kit loader sends `PAR_BANK_CHANGE` as CC 0, so the parameter number underflowed to 65535. The parser now indexes with the CC number. |
-| c35f360 | `Core/Src/Soundengine/DSPAudio/FX/Delay.c`, `Delay.h`, `MidiParser.c` | Switching the delay from normal to ping-pong while it ran kept pointers that are only valid in normal mode, and the next samples read and wrote up to index 49150 of the 32768-entry delay buffer. `Delay_setType()` now masks the pointers for the new mode. |
-| ea2a87b | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | The interpolating wavetable oscillators read one sample past the end of each 1024-sample table, from the next table or past the end of the array. They now wrap to the start of the same table. The init kit renders bit-identically. |
-| 5d54c5f | `Core/Src/Soundengine/DSPAudio/FX/Distortion.c` | At full-scale input the diode distortion read one entry past the end of `table_1n914`. It now interpolates from the last pair of entries, which gives the same result. |
-| 89aacd5, 147dcf6 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
-| 4597e3b | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
+| 3d578f9 | `Core/Src/Soundengine/MIDI/MidiParser.c` | Loading a kit wrote one byte far past the end of `midiParser_originalCcValues`. The kit loader sends `PAR_BANK_CHANGE` as CC 0, so the parameter number underflowed to 65535. The parser now indexes with the CC number. |
+| bccf2ac | `Core/Src/Soundengine/DSPAudio/FX/Delay.c`, `Delay.h`, `MidiParser.c` | Switching the delay from normal to ping-pong while it ran kept pointers that are only valid in normal mode, and the next samples read and wrote up to index 49150 of the 32768-entry delay buffer. `Delay_setType()` now masks the pointers for the new mode. |
+| 05ee9e3 | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | The interpolating wavetable oscillators read one sample past the end of each 1024-sample table, from the next table or past the end of the array. They now wrap to the start of the same table. The init kit renders bit-identically. |
+| 3f7b14f | `Core/Src/Soundengine/DSPAudio/FX/Distortion.c` | At full-scale input the diode distortion read one entry past the end of `table_1n914`. It now interpolates from the last pair of entries, which gives the same result. |
+| 2d0bd12 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
+| 2d0bd12 | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
 
 Tack also plays a few things differently from the device. Those changes live in its own code under `host/`, not
 in the firmware, and [host/README.md](host/README.md) describes them: the pulse width minimum, the init kit's FX
