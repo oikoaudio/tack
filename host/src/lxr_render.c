@@ -6,7 +6,8 @@
  *   lxr_render [-r rate] [-k kit.snd] [-m] out.wav [voice...]
  *
  * Voices are 0-2 drums, 3 snare, 4 cymbal, 5 closed hi-hat, 6 open hi-hat (default: all, in order).
- * Each listed voice is triggered at velocity 127, STEP_SECONDS apart. Both DAC pairs are summed into the file.
+ * Each listed voice is triggered at velocity 127, STEP_SECONDS apart. Both DAC pairs are summed into the file;
+ * Tack routes everything to the first (adjustValue() in lxr_host.c).
  * Without -r the file is at the engine's own rate, REAL_FS; with it, the output goes through the resampler.
  * -k loads a kit file from the device's SD card instead of the init kit.
  * -m renders with separate outputs (needs -r); the file is still the sum of all of them.
@@ -76,18 +77,18 @@ static uint32_t renderResampled(int16_t** audio, double fs)
 	{
 		const uint32_t n = numFrames - pos < 512 ? numFrames - pos : 512;
 		for(; next < numVoices && preroll + next * step < pos + n; next++)
-			lxr_host_queueNoteOn(preroll + next * step - pos, voices[next], 127);
+			lxr_host_queueNoteOn(preroll + next * step - pos, voices[next], SEQ_DEFAULT_NOTE, 127);
 		lxr_host_process(buf, n);
 		for(uint32_t i = 0; i < n; i++) {
 			const float* f = &buf[i * LXR_HOST_OUT_CHANNELS];
-			// DAC2 here also collects the separate outputs, which are silent unless -m
-			float l2 = f[LXR_HOST_OUT_DAC2], r2 = f[LXR_HOST_OUT_DAC2 + 1];
+			// the voice outputs are silent unless -m
+			float l = 0, r = 0;
 			for(int c = LXR_HOST_OUT_VOICE(0); c < LXR_HOST_OUT_CHANNELS; c += 2) {
-				l2 += f[c];
-				r2 += f[c + 1];
+				l += f[c];
+				r += f[c + 1];
 			}
-			(*audio)[(pos + i)*2 + 0] = sumDacs(lrintf(f[LXR_HOST_OUT_DAC1] * 32768.f), lrintf(l2 * 32768.f));
-			(*audio)[(pos + i)*2 + 1] = sumDacs(lrintf(f[LXR_HOST_OUT_DAC1 + 1] * 32768.f), lrintf(r2 * 32768.f));
+			(*audio)[(pos + i)*2 + 0] = sumDacs(lrintf(f[LXR_HOST_OUT_MAIN] * 32768.f), lrintf(l * 32768.f));
+			(*audio)[(pos + i)*2 + 1] = sumDacs(lrintf(f[LXR_HOST_OUT_MAIN + 1] * 32768.f), lrintf(r * 32768.f));
 		}
 		pos += n;
 	}

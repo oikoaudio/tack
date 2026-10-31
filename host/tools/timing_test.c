@@ -26,7 +26,7 @@ static double nativeOnset(void)
 	int16_t dac1[OUTPUT_DMA_SIZE * 2], dac2[OUTPUT_DMA_SIZE * 2];
 	lxr_host_init();
 	for(int b = 0; b < 400; b++) lxr_host_renderBlock(dac1, dac2);
-	lxr_host_noteOn(0, 0, 127);
+	lxr_host_noteOn(0, LXR_HOST_BASE_NOTE, 127);
 	for(int b = 0; b < 16; b++) {
 		lxr_host_renderBlock(dac1, dac2);
 		for(int i = 0; i < OUTPUT_DMA_SIZE; i++)
@@ -57,7 +57,7 @@ int main(int argc, char** argv)
 		uint32_t n = 1 + rand() % 1024;
 		if(n > total - pos) n = total - pos;
 		while(next < HITS && noteAt[next] < pos + n)
-			lxr_host_queueNoteOn(noteAt[next] - pos, 0, 127), next++;
+			lxr_host_queueNoteOn(noteAt[next] - pos, 0, LXR_HOST_BASE_NOTE, 127), next++;
 		lxr_host_process(&out[pos * LXR_HOST_OUT_CHANNELS], n);
 		pos += n;
 	}

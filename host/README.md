@@ -38,11 +38,16 @@ Add `-DLXR_HOST_SANITIZE=ON` to build with AddressSanitizer and UBSan.
 
 ## Tack (CLAP plugin)
 
-`build/host/Tack.clap` is a drum synth plugin built on the engine. It starts with the init kit and has no GUI
-(hosts show their generic parameter editor). Notes from C3 trigger the voices chromatically, each at its default
-pitch:
+`build/host/Tack.clap` is a drum synth plugin built on the engine. It starts with the init kit. The MIDI channel
+decides how notes play:
 
-| Note | Voice |
+| Channel | Plays |
+|---|---|
+| 1 | the kit: notes from C3 trigger the voices, each at its tuned pitch (table below) |
+| 2 - 8 | one voice each (drum 1, drum 2, drum 3, snare, cymbal, closed hi-hat, open hi-hat), chromatically: C3 plays it at its tuned pitch, other notes transpose it |
+| 9 - 16 | nothing |
+
+| Note on channel 1 | Voice |
 |---|---|
 | 60 (C3) | drum 1 |
 | 61 (C#3) | drum 2 |
@@ -54,6 +59,14 @@ pitch:
 
 C3 is MIDI note 60, as in Bitwig, Ableton and Cubase (REAPER calls it C4 by default).
 
+Transposing works as on the device, where a sequencer step or an incoming note sets the pitch: a voice moves by
+(note - 60) semitones, both its oscillators together, so FM timbres and the hats' and cymbal's metallic ratios keep
+their character, and the pitch envelope scales with the note. The snare's noise and the transient samples don't
+move. An oscillator stops at MIDI note 127 (12.5 kHz), so voices tuned near the top, like the init kit's cymbal and
+the hats' second mod oscillator, only go down. The noise waveform is sample-and-hold at the oscillator's frequency,
+so the note sets how bright it is. Each voice is monophonic:
+a new note retriggers it. Note-offs are ignored, as on the device, since every voice is one-shot.
+
 - **Parameters:** all 227 sound parameters the front panel offers, per voice plus the FX bus, named as on the
   device's display with the abbreviations spelled out ("Drum 1 Filter Resonance"). `src/lxr_params.c` builds the
   list from the front panel's menu tables (`menuPages`, `valueNames`, `parameter_dtypes`, `modTargets`), so names,
@@ -62,22 +75,49 @@ C3 is MIDI note 60, as in Bitwig, Ableton and Cubase (REAPER calls it C4 by defa
   them to within the same ±0.73 ms. The four FX
   parameters mean something different per FX type and are named with all their meanings ("FX Color/Decay/Range").
   LFO destinations cover every modulation target; the front panel's "destination voice" only narrowed its list and
-  is left out. Reverb is compiled out of the firmware (`USE_REVERB 0`) and isn't offered.
+  is left out. Its target list has the FX parameters once per voice, so Tack lists each target once, and names
+  targets like the parameters (the front panel calls the FM waveform "Oscillator Waveform" there). Reverb is compiled out of the firmware (`USE_REVERB 0`) and isn't offered.
 - **Kits:** Tack offers kit files from the device's SD card (`.SND`) as presets, through CLAP's preset discovery,
   so hosts list them in their preset browser. It looks in `~/.local/share/Tack/Kits/` (or
   `$XDG_DATA_HOME/Tack/Kits/`); each subfolder is a sound pack, e.g. a symlink to a backup of a project folder. Kits
-  named "Initkit" are skipped: the device fills empty kit slots with them, and the built-in "Init Kit" preset is the
-  same sound. No kits are bundled with Tack; the factory and third-party kits belong to their authors. Linux only
-  for now.
-- **State:** the kit itself, in the firmware's representation.
+  named "Initkit" are skipped, also when the device garbled two of its letters: the device fills empty kit slots
+  with them, and the built-in "Init Kit" preset is the same sound. No kits are bundled with Tack; the factory and
+  third-party kits belong to their authors. Linux only for now.
+- **Choosing kits in the editor:** the same kits are in the editor too. Clicking the kit's name opens a browser: the
+  kit folder's folders on the left (a pack, or a project folder in it), their kits on the right in slot order.
+  Clicking a kit loads it and leaves the browser open, to try one after another. The arrows next to the name step to
+  the previous or next kit in the same folder. The editor reads the kit folder each time, so new kits show up at
+  once. A `*` after the name means the kit was edited in the editor since it was loaded or saved; loading another kit
+  replaces those edits without asking, as on the device. Tack tells the host which preset it loaded, and the
+  project keeps the kit file's path, so the arrows carry on from there when the project is opened again.
+- **Saving kits:** the editor's "Save kit" button writes the kit as it is now to the "User" pack,
+  `Kits/User/<name>.SND`, where the preset browser lists it with the others. The file is what the device writes:
+  a name of up to 8 characters from the device's character set, then the kit's parameters. The device finds kits by
+  slot number, so on its SD card a kit needs a file name such as `05-NAME.SND`. Saving under the name of a kit
+  that is already there asks before overwriting it. Hosts may only see a new kit once they rescan their presets.
+- **Editor:** a tab per voice plus FX. Each tab shows the front panel's sub-pages as boxes of up to 4 x 2 controls,
+  three boxes to a row (`clap/gui.cpp`): knobs for amounts (drag, Shift for fine, wheel steps, double-click resets
+  to the init kit value) and drop-downs for options, with short labels and the full name as a tooltip. The FX tab
+  shows the controls of the selected FX type under that type's names. Play buttons audition the selected voice. It
+  is Dear ImGui (MIT) drawn into a pugl (ISC) OpenGL view, fetched at pinned versions, embedded in the host's X11
+  window and driven by the host's timer; edits go to the audio thread through a queue and reach the host as
+  parameter gestures. `build/host/gui_test Tack.clap [seconds] [kit.snd]` opens it without a DAW (also under
+  Xvfb, with `__GLX_VENDOR_LIBRARY_NAME=mesa` for software OpenGL).
+- **State:** the kit itself, in the firmware's representation, the outputs switch, the kit's name, its file and whether
+  it was edited.
+- **Pulse width:** a deliberate difference from the device: the PWM waveform subtracts two copies of a saw
+  offset by the pulse width, so at width 0 it is silent. Pulse width only matters for PWM, so its minimum is 1 here,
+  and kits that store 0 play with 1.
 - **Latency:** reported to the host, which compensates on playback.
-- **Outputs:** nine stereo outputs: Main, Out 2, Drum 1, Drum 2, Drum 3, Snare, Cymbal, Hi-hat and FX. With the
-  "Separate Outputs" parameter off (the default) only Main and Out 2 sound: the device's two output pairs, chosen by
-  each voice's Audio Out parameter. With it on, each voice plays on its own output, panned, and the FX bus works as a
-  send/return: a voice routed to the FX bus keeps its dry share (1 - dry/wet) on its own output and FX carries the
-  effect's share. Every effect blends dry + (wet - dry) * dry/wet, so all outputs together still sum to the device's
-  mix (bit-identical for the init kit, within a few LSB with the delay). A kit at 100% wet has no dry share, so all
-  its FX-routed voices are only on FX. The switch is saved with the project, not with kits, and isn't automatable.
+- **Outputs:** seven stereo outputs: Main, Drum 1, Drum 2, Drum 3, Snare, Cymbal and Hi-hat. Each voice's Output is
+  Direct or FX: it plays as it is, or goes through the FX bus. The bus works as on the device, a group bus with an
+  insert: the voices routed to it are summed and processed together, and the bus plays on Main. The "Outputs"
+  switch, on the Mix & FX page, decides where Direct voices go: with "Stereo" (the default) to Main, so everything
+  is there, with "Individual" to their own outputs, panned, leaving Main with only the voices that go through the
+  FX. Both settings sum to the same mix. The switch is saved with the project, not with kits, and isn't automatable.
+  The device's other destinations, its second output pair and the mono jacks, become Direct (and the FX bus always
+  returns to Main), a deliberate difference; none of the factory or Hrtl kits use them, and kit files keep what
+  they store.
 - **Instances:** the engine keeps its state in globals, so each instance runs its own copy of it. Tack loads a
   private copy of its own binary per instance (`clap/engine.c`, from an in-memory file) and drives that copy's
   engine through a function table, `tack_engine()`, the only symbol it exports besides `clap_entry`. Everything
@@ -88,15 +128,16 @@ C3 is MIDI note 60, as in Bitwig, Ableton and Cubase (REAPER calls it C4 by defa
 To install it into `~/.clap`: `cmake --build build/host --target install_tack`. It copies the plugin in one step
 rather than linking to the build output, so a host watching the folder never loads a half-written file mid-build.
 
-`build/host/clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [note | id=value | id=value@seconds ...]` is a
-minimal CLAP host for testing without a DAW: it loads a kit through the preset-load extension, plays notes, sets
-parameters through flush or as timed events, and with `-s` runs the state through save, a new instance and load
-before playing. `clap-validator list presets build/host/Tack.clap` shows what the preset browser will see.
+`build/host/clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id=value@seconds ...]`
+is a minimal CLAP host for testing without a DAW: it loads a kit through the preset-load extension, plays notes (on
+channel 1 unless given, e.g. `2:48` for drum 1 an octave down), sets parameters through flush or as timed events, and
+with `-s` runs the state through save, a new instance and load before playing. `clap-validator list presets
+build/host/Tack.clap` shows what the preset browser will see.
 
 `clap-validator validate build/host/Tack.clap`: 38 passed, 0 failed, 6 skipped. The skipped tests are for
 extensions Tack doesn't have (64-bit audio, configurable ports).
 
-Not done yet: a GUI, macOS and Windows, per-voice MIDI channels, pitch from the note number.
+Not done yet: macOS and Windows, a styling pass on the editor.
 
 ## Layout
 

@@ -1,11 +1,12 @@
 /*
  * clap_render.c
  *
- * Minimal CLAP host for testing Tack: loads the plugin, plays notes, writes Out 1 and Out 2 summed to a WAV.
+ * Minimal CLAP host for testing Tack: loads the plugin, plays notes, writes all outputs summed to a WAV.
  *
- *   clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [note | id=value | id=value@seconds ...]
+ *   clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id=value@seconds ...]
  *
- * Notes are MIDI note numbers, played at velocity 1.0 every 0.75 s (default: the 7 voices, notes 60-66).
+ * Notes are MIDI note numbers, played at velocity 1.0 every 0.75 s (default: the 7 voices, notes 60-66), on MIDI
+ * channel 1 unless a channel (1-16) is given: 2:48 plays drum 1 an octave below its tuned pitch.
  * id=value sets a parameter (plugin value) through params.flush before playing; id=value@seconds sends it as an
  * event to process() at that time, as automation would.
  * -s saves the state after setting parameters, destroys the instance, creates a new one and loads the state into it
@@ -78,11 +79,11 @@ static const clap_plugin_t* createPlugin(const clap_plugin_factory_t* factory, c
 int main(int argc, char** argv)
 {
 	if(argc < 3) {
-		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [note | id=value ...]\n", argv[0]);
+		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value ...]\n", argv[0]);
 		return 1;
 	}
 	const double fs = argc > 3 ? atof(argv[3]) : 48000;
-	int notes[MAX_ITEMS] = {60, 61, 62, 63, 64, 65, 66}, numNotes = 0;
+	int notes[MAX_ITEMS] = {60, 61, 62, 63, 64, 65, 66}, channels[MAX_ITEMS] = {0}, numNotes = 0;
 	EventList paramEvents = {0};
 	struct { clap_event_param_value_t ev; uint32_t at; } timed[MAX_ITEMS];
 	int numTimed = 0;
@@ -106,7 +107,9 @@ int main(int argc, char** argv)
 				.param_id = atoi(argv[i]), .note_id = -1, .port_index = -1, .channel = -1, .key = -1, .value = atof(eq + 1),
 			};
 		} else if(numNotes < MAX_ITEMS) {
-			notes[numNotes++] = atoi(argv[i]);
+			const char* colon = strchr(argv[i], ':');
+			channels[numNotes] = colon ? atoi(argv[i]) - 1 : 0;
+			notes[numNotes++] = atoi(colon ? colon + 1 : argv[i]);
 		}
 	}
 	if(numNotes == 0) numNotes = 7;
@@ -202,9 +205,10 @@ int main(int argc, char** argv)
 		if(next < numNotes && t >= pos && t < pos + n) {
 			noteEvents.ev[noteEvents.count].note = (clap_event_note_t){
 				.header = { sizeof(clap_event_note_t), t - pos, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_NOTE_ON, 0 },
-				.note_id = -1, .port_index = 0, .channel = 9, .key = notes[next++], .velocity = 1.0,
+				.note_id = -1, .port_index = 0, .channel = (int16_t)channels[next], .key = notes[next], .velocity = 1.0,
 			};
 			noteEvents.count++;
+			next++;
 		}
 		p.frames_count = n;
 		p.steady_time = pos;

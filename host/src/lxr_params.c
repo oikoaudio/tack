@@ -8,10 +8,12 @@
  */
 
 #include "lxr_params.h"
+#include "lxr_host.h"
 #include <stdio.h>
 #include <string.h>
 #include "Parameters.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/mixer.h"
 #include "menu/menu.h"
 #include "menu/MenuText.h"
 #include "menu/menuPages.h"
@@ -21,7 +23,8 @@
 static const char* const pageNames[] = { "Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Hi-hat" };
 // FX sub-page n shows the parameters of FX type n
 static const char* const fxTypeNames[] = { "", "Distortion", "Ring Mod", "Compressor", "Delay" };
-static const char* const audioOutNames[] = { "Out 1", "Out 2", "Out 1 L", "Out 1 R", "Out 2 L", "Out 2 R", "FX" };
+// see adjustValue() in lxr_host.c: a voice plays directly or through the FX bus
+static const char* const audioOutNames[] = { "Direct", "FX" };
 
 // the LCD has room for 8 characters; spell the abbreviations out
 static const char* const spellings[][2] =
@@ -43,6 +46,9 @@ typedef struct
 
 static LxrParamInfo infos[END_OF_SOUND_PARAMETERS];
 static Extra extras[END_OF_SOUND_PARAMETERS];
+static char groupNames[LXR_PARAMS_NUM_VOICES + 1][LXR_PARAMS_NUM_GROUPS][24];
+// labels of the FX page parameters per FX sub-page
+static char fxLabels[END_OF_SOUND_PARAMETERS][5][24];
 static int16_t indexOfParam[END_OF_SOUND_PARAMETERS];
 static int count = -1;
 
@@ -76,8 +82,7 @@ static uint8_t menuEntries(uint8_t menuId)
 	switch(menuId)
 	{
 	case MENU_TRANS:		return transientNames[0][0];
-	case MENU_AUDIO_OUT:	return outputNames[0][0];
-	case MENU_AUDIO_OUT_FX:	return outputNamesFx[0][0];
+	case MENU_AUDIO_OUT:	return 2;
 	case MENU_FILTER:		return filterTypes[0][0];
 	case MENU_SYNC_RATES:	return syncRateNames[0][0];
 	case MENU_LFO_WAVES:	return lfoWaveNames[0][0];
@@ -99,8 +104,7 @@ static const char* menuEntryName(uint8_t menuId, uint8_t value)
 	switch(menuId)
 	{
 	case MENU_TRANS:		return transientNames[value + 1];
-	case MENU_AUDIO_OUT:
-	case MENU_AUDIO_OUT_FX:	return audioOutNames[value];
+	case MENU_AUDIO_OUT:	return audioOutNames[value];
 	case MENU_FILTER:		return filterTypes[value + 1];
 	case MENU_SYNC_RATES:	return syncRateNames[value + 1];
 	case MENU_LFO_WAVES:	return lfoWaveNames[value + 1];
@@ -117,6 +121,28 @@ static const char* menuEntryName(uint8_t menuId, uint8_t value)
 }
 //-----------------------------------------------------------
 static bool isVeloDest(uint16_t p) { return (parameter_dtypes[p] & 0xff) == DTYPE_TARGET_SELECTION_VELO; }
+
+// LFO destinations by plugin value: 0 off, then the modTargets indices on offer. The LFO menu offers every target
+// except index 1, the global sample rate; the table lists the FX parameters once per voice, so keep the first of
+// each parameter.
+static uint8_t lfoTargets[256];
+static int numLfoTargets;
+
+static void buildLfoTargets(void)
+{
+	numLfoTargets = 1;
+	lfoTargets[0] = 0;
+	for(int t = 2; t < getNumModTargets() && numLfoTargets < 256; t++) {
+		if(modTargets[t].param == PAR_NONE) continue;
+		bool listed = false;
+		for(int j = 1; j < numLfoTargets && !listed; j++) listed = modTargets[lfoTargets[j]].param == modTargets[t].param;
+		if(!listed) lfoTargets[numLfoTargets++] = t;
+	}
+}
+static bool isMenu(uint16_t p, uint8_t menuId)
+{
+	return (parameter_dtypes[p] & 0xff) == DTYPE_MENU && (parameter_dtypes[p] >> 8) == menuId;
+}
 static bool isLfoDest(uint16_t p) { return (parameter_dtypes[p] & 0xff) == DTYPE_TARGET_SELECTION_LFO; }
 
 static void setRange(LxrParamInfo* info, Extra* x)
@@ -140,10 +166,11 @@ static void setRange(LxrParamInfo* info, Extra* x)
 		info->isEnum = true;
 		break;
 	}
-	// the LFO menu offers every target except index 1, the global sample rate
-	case DTYPE_TARGET_SELECTION_LFO:	info->max = getNumModTargets() - 2;	info->isEnum = true;	break;
+	case DTYPE_TARGET_SELECTION_LFO:	info->max = numLfoTargets - 1;	info->isEnum = true;	break;
 	default:			info->max = 127;	break;
 	}
+	// see adjustValue() in lxr_host.c: PWM is silent at pulse width 0
+	if(p >= PAR_PWM_1 && p <= PAR_PWM_6) info->min = 1;
 }
 
 static void buildName(LxrParamInfo* info, const Extra* x, uint8_t nameIdx, const char* fxNamesJoined)
@@ -182,6 +209,7 @@ static void build(void)
 
 	count = 0;
 	memset(indexOfParam, -1, sizeof indexOfParam);
+	buildLfoTargets();
 
 	for(int pg = 0; pg < NUM_PAGES; pg++)
 		for(int sp = 0; sp < NUM_SUB_PAGES; sp++)
@@ -199,9 +227,12 @@ static void build(void)
 				// the LFO's destination voice only narrows the front panel's target list; the destination
 				// parameter covers every target
 				if((parameter_dtypes[p] & 0xff) == DTYPE_VOICE_LFO) continue;
+				// the FX bus always returns to the main output (adjustValue() in lxr_host.c)
+				if(isMenu(p, MENU_AUDIO_OUT_FX)) continue;
 
 				char name[32];
 				longNameOf(tops[i], name, sizeof name);
+				if(pg == FX_MODE_PAGE) snprintf(fxLabels[p][sp], sizeof fxLabels[p][sp], "%s", name);
 				if(indexOfParam[p] >= 0) {
 					// the FX parameters 1-4 mean something different for each FX type
 					if(pg == FX_MODE_PAGE && !strstr(fxJoined[p], name)) {
@@ -221,6 +252,46 @@ static void build(void)
 				x->page = pg;
 				x->subPage = sp;
 				nameIdxOf[count] = tops[i];
+
+				// where it goes in an editor: tabs per voice, a box per front panel sub-page
+				char cat[32];
+				categoryOf(tops[i], cat, sizeof cat);
+				if(pg < (int)(sizeof pageNames / sizeof pageNames[0])) {
+					info->voice = pg < LXR_PARAMS_NUM_VOICES ? pg : LXR_PARAMS_NUM_VOICES - 1;
+					info->group = sp;
+					// the snare has no FM page; its noise, its second sound source, gets that place instead of
+					// sharing the oscillator's
+					if(pg == 3 && (!strcmp(cat, "Noise") || !strcmp(cat, "Noise/Osc"))) {
+						info->group = 3;
+						snprintf(groupNames[3][3], sizeof groupNames[0][0], "Noise");
+					}
+				} else {
+					info->voice = LXR_PARAMS_FX_VOICE;
+					info->group = pg == FX_MODE_PAGE ? sp : LXR_PARAMS_FX_MASTER_GROUP;
+				}
+				char* title = groupNames[info->voice][info->group];
+				if(!title[0]) {
+					if(pg == FX_MODE_PAGE)
+						snprintf(title, sizeof groupNames[0][0], "%s", sp ? fxTypeNames[sp] : "FX");
+					else if(info->voice == LXR_PARAMS_FX_VOICE)
+						snprintf(title, sizeof groupNames[0][0], "Master");
+					else {
+						char cat[32];
+						categoryOf(page->top1, cat, sizeof cat);
+						snprintf(title, sizeof groupNames[0][0], "%s", strcmp(cat, "Voice") ? cat : "Mix");
+					}
+				}
+				// some sub-pages mix sections (a drum's modulation page has pitch and velocity modulation, the snare's
+				// oscillator page its noise): name those. Other category labels are too generic to help (the pitch
+				// EG's slope is filed under the amp EG), so leave them out.
+				static const char* const mixedIn[] = { "Velocity", "Pitch Mod", "Noise", "Noise/Osc" };
+				bool prefix = false;
+				for(size_t m = 0; m < sizeof mixedIn / sizeof mixedIn[0]; m++)
+					prefix |= !strcmp(cat, mixedIn[m]) && strcmp(cat, title);
+				if(prefix)
+					snprintf(info->label, sizeof info->label, "%s %s", cat, name);
+				else
+					snprintf(info->label, sizeof info->label, "%s", name);
 				if(pg == FX_MODE_PAGE) snprintf(fxJoined[p], sizeof fxJoined[p], "%s", name);
 				fxSubPages[p] = 1;
 				setRange(info, x);
@@ -232,6 +303,7 @@ static void build(void)
 	{
 		const uint16_t p = infos[i].param;
 		buildName(&infos[i], &extras[i], nameIdxOf[i], fxSubPages[p] > 1 ? fxJoined[p] : NULL);
+		if(fxSubPages[p] > 1) snprintf(infos[i].label, sizeof infos[i].label, "%s", fxJoined[p]);
 
 		// the front panel sometimes reuses a label within a voice (the pitch EG slope is labelled like the amp
 		// EG slope). Take the category from the first entry on its sub-page instead.
@@ -245,6 +317,21 @@ static void build(void)
 				snprintf(infos[i].module, sizeof infos[i].module, "%s/%s", pageNames[extras[i].page], cat);
 				break;
 			}
+	}
+
+	// two of a kind in one group (the cymbal's and hi-hat's mod oscillator waveforms): number their labels
+	for(int i = 0; i < count; i++)
+	{
+		int n = 1;
+		for(int j = i + 1; j < count; j++)
+			if(infos[j].voice == infos[i].voice && infos[j].group == infos[i].group && !strcmp(infos[j].label, infos[i].label)) {
+				const size_t len = strlen(infos[j].label);
+				snprintf(infos[j].label + len, sizeof infos[j].label - len, " %d", ++n);
+			}
+		if(n > 1) {
+			const size_t len = strlen(infos[i].label);
+			snprintf(infos[i].label + len, sizeof infos[i].label - len, " 1");
+		}
 	}
 
 	// still the same name: two of a kind on one sub-page (the cymbal's and hi-hat's mod oscillator waveforms), so
@@ -281,6 +368,35 @@ int lxr_params_indexOf(uint16_t param)
 	return param < END_OF_SOUND_PARAMETERS ? indexOfParam[param] : -1;
 }
 //-----------------------------------------------------------
+const char* lxr_params_groupName(uint8_t voice, uint8_t group)
+{
+	lxr_params_count();
+	if(voice > LXR_PARAMS_FX_VOICE || group >= LXR_PARAMS_NUM_GROUPS) return NULL;
+	return groupNames[voice][group][0] ? groupNames[voice][group] : NULL;
+}
+
+const char* lxr_params_fxLabel(uint16_t param, uint8_t fxType)
+{
+	lxr_params_count();
+	if(param >= END_OF_SOUND_PARAMETERS || fxType < 1 || fxType > 4) return NULL;
+	return fxLabels[param][fxType][0] ? fxLabels[param][fxType] : NULL;
+}
+uint16_t lxr_params_default(uint16_t param)
+{
+	static uint8_t kit[END_OF_SOUND_PARAMETERS];
+	static bool haveKit;
+	if(!haveKit) {
+		lxr_host_initKit(kit);
+		haveKit = true;
+	}
+	return param < END_OF_SOUND_PARAMETERS ? lxr_params_fromFirmware(param, kit[param]) : 0;
+}
+
+uint16_t lxr_params_fxTypeParam(void)
+{
+	return PAR_FX_TYPE;
+}
+//-----------------------------------------------------------
 uint8_t lxr_params_toFirmware(uint16_t param, uint16_t value)
 {
 	const int i = lxr_params_indexOf(param);
@@ -291,7 +407,9 @@ uint8_t lxr_params_toFirmware(uint16_t param, uint16_t value)
 	if(isVeloDest(param))
 		return value ? modTargetVoiceOffsets[param - PAR_VEL_DEST_1].start + value - 1 : 0;
 	if(isLfoDest(param))
-		return value ? value + 1 : 0;
+		return value < numLfoTargets ? lfoTargets[value] : 0;
+	if(isMenu(param, MENU_AUDIO_OUT))
+		return value ? MIXER_ROUTING_FX_BUS : MIXER_ROUTING_DAC1_STEREO;
 	return value;
 }
 
@@ -304,8 +422,14 @@ uint16_t lxr_params_fromFirmware(uint16_t param, uint8_t value)
 		const ModTargetVoiceOffset* o = &modTargetVoiceOffsets[param - PAR_VEL_DEST_1];
 		return value >= o->start && value <= o->end ? value - o->start + 1 : 0;
 	}
-	if(isLfoDest(param))
-		return value >= 2 && value < getNumModTargets() ? value - 1 : 0;
+	if(isLfoDest(param)) {
+		if(value < 2 || value >= getNumModTargets() || modTargets[value].param == PAR_NONE) return 0;
+		for(int j = 1; j < numLfoTargets; j++)
+			if(modTargets[lfoTargets[j]].param == modTargets[value].param) return j;
+		return 0;
+	}
+	if(isMenu(param, MENU_AUDIO_OUT))
+		return value == MIXER_ROUTING_FX_BUS;
 	if(value > infos[i].max) return infos[i].max;
 	if(value < infos[i].min) return infos[i].min;
 	return value;
@@ -315,6 +439,13 @@ static void targetText(uint8_t modTargetIdx, char* buf, size_t size)
 {
 	if(modTargetIdx == 0 || modTargets[modTargetIdx].param == PAR_NONE) {
 		snprintf(buf, size, "off");
+		return;
+	}
+	// the front panel's target names reuse labels (the FM waveform reads as the oscillator's); the parameter's own
+	// name tells them apart
+	const int i = lxr_params_indexOf(modTargets[modTargetIdx].param);
+	if(i >= 0) {
+		snprintf(buf, size, "%s", infos[i].name);
 		return;
 	}
 	const uint8_t nameIdx = modTargets[modTargetIdx].nameIdx;

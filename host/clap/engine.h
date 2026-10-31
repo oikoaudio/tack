@@ -21,7 +21,7 @@ typedef struct
 	uint8_t (*getParam)(uint16_t param);
 	int (*setOutputRate)(double fs);
 	uint32_t (*latency)(void);
-	void (*queueNoteOn)(uint32_t frame, uint8_t voice, uint8_t vel);
+	void (*queueNoteOn)(uint32_t frame, uint8_t voice, uint8_t note, uint8_t vel);
 	void (*queueParam)(uint32_t frame, uint16_t param, uint8_t value);
 	void (*queueSeparateOutputs)(uint32_t frame, bool on);
 	void (*setSeparateOutputs)(bool on);

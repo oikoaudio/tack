@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.21)
 #   cmake --build build/host
 #   build/host/lxr_render kit.wav
 
-project(LXR_Host LANGUAGES C)
+project(LXR_Host LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
@@ -26,6 +26,10 @@ option(LXR_HOST_CLAP "Build the Tack CLAP plugin" ON)
 # everything ends up in a plugin that shares a process with other plugins: keep the engine's globals private
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_VISIBILITY_INLINES_HIDDEN ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(LXR_CORE ${CMAKE_CURRENT_SOURCE_DIR}/../Core)
 
@@ -103,8 +107,43 @@ if(LXR_HOST_CLAP)
     )
     FetchContent_MakeAvailable(clap)
 
-    add_library(tack MODULE clap/tack.c clap/presets.c clap/engine.c)
-    target_link_libraries(tack PRIVATE lxr_engine clap)
+    # The editor: Dear ImGui drawing into a pugl OpenGL view. Neither has a CMake build, so compile their sources.
+    # pugl (ISC) is pinned to a commit since it has no recent release tags; Dear ImGui (MIT) to a release.
+    FetchContent_Declare(pugl
+        GIT_REPOSITORY https://github.com/lv2/pugl.git
+        GIT_TAG b7637149ebe53124e5be90559e02a0185bbcbd73
+        SOURCE_SUBDIR no-cmake
+    )
+    FetchContent_Declare(imgui
+        GIT_REPOSITORY https://github.com/ocornut/imgui.git
+        GIT_TAG v1.92.9
+        SOURCE_SUBDIR no-cmake
+    )
+    FetchContent_MakeAvailable(pugl imgui)
+    find_package(X11 REQUIRED)
+    find_package(OpenGL REQUIRED)
+
+    add_library(tack_gui_deps STATIC
+        ${pugl_SOURCE_DIR}/src/common.c
+        ${pugl_SOURCE_DIR}/src/internal.c
+        ${pugl_SOURCE_DIR}/src/x11.c
+        ${pugl_SOURCE_DIR}/src/x11_gl.c
+        ${imgui_SOURCE_DIR}/imgui.cpp
+        ${imgui_SOURCE_DIR}/imgui_draw.cpp
+        ${imgui_SOURCE_DIR}/imgui_tables.cpp
+        ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+    )
+    target_include_directories(tack_gui_deps PUBLIC ${pugl_SOURCE_DIR}/include ${imgui_SOURCE_DIR})
+    # PUGL_API is visibility("default") unless defined: keep pugl out of Tack's exports, so it can't clash with
+    # another plugin's pugl in the same host. Only libX11 and libGL are needed.
+    target_compile_definitions(tack_gui_deps PUBLIC PUGL_STATIC PUGL_API= PUGL_DISABLE_DEPRECATED
+        PRIVATE USE_XRANDR=0 USE_XSYNC=0 USE_XCURSOR=0 IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+    target_compile_options(tack_gui_deps PRIVATE -w)
+    target_link_libraries(tack_gui_deps PUBLIC X11::X11 OpenGL::GL ${CMAKE_DL_LIBS})
+
+    add_library(tack MODULE clap/tack.c clap/presets.c clap/engine.c clap/gui.cpp)
+    target_link_libraries(tack PRIVATE lxr_engine clap tack_gui_deps)
     # only clap_entry is exported; also keep statically linked dependencies' symbols out of the dynamic table
     target_link_options(tack PRIVATE -Wl,--exclude-libs,ALL -Wl,--no-undefined)
     set_target_properties(tack PROPERTIES PREFIX "" SUFFIX ".clap" OUTPUT_NAME "Tack")
@@ -122,6 +161,9 @@ if(LXR_HOST_CLAP)
     # test host; it links its own copy of the engine, which also checks that the plugin's copy stays separate
     add_executable(clap_render tools/clap_render.c)
     target_link_libraries(clap_render PRIVATE lxr_engine clap ${CMAKE_DL_LIBS})
+
+    add_executable(gui_test tools/gui_test.c)
+    target_link_libraries(gui_test PRIVATE clap X11::X11 ${CMAKE_DL_LIBS})
 
     add_executable(multi_test tools/multi_test.c)
     target_link_libraries(multi_test PRIVATE clap ${CMAKE_DL_LIBS} pthread)

@@ -6,6 +6,7 @@
 
 #include "lxr_host.h"
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include <math.h>
 #include <samplerate.h>
@@ -27,6 +28,8 @@
 #include "frontPanelParser_ui.h"
 #include "menu/menu.h"
 #include "menu/CcNr2Text.h"
+
+_Static_assert(LXR_HOST_BASE_NOTE == SEQ_DEFAULT_NOTE, "the base note is the firmware's");
 
 // mixer.c defines this without declaring it in mixer.h
 void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer);
@@ -60,6 +63,18 @@ static void setModTarget(uint16_t param, uint8_t modTargetIdx)
 	}
 }
 //-----------------------------------------------------------
+// Tack's one change to the kit data: the PWM waveform subtracts two copies of a saw offset by the pulse width, so
+// at width 0 it is silent. Pulse width only matters for PWM, so 1 is its minimum here.
+static uint8_t adjustValue(uint16_t p, uint8_t value)
+{
+	if(p >= PAR_PWM_1 && p <= PAR_PWM_6 && value < 1) return 1;
+	// one stereo output: a voice plays there directly or through the FX bus, and the bus returns there. The
+	// device's second pair and mono jacks become that output.
+	if(p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6 && value != MIXER_ROUTING_FX_BUS) return MIXER_ROUTING_DAC1_STEREO;
+	if(p == PAR_FX_ROUTING) return MIXER_ROUTING_DAC1_STEREO;
+	return value;
+}
+//-----------------------------------------------------------
 static bool isModTarget(uint16_t p)
 {
 	return (p >= PAR_VEL_DEST_1 && p < PAR_VEL_DEST_1 + 6) || (p >= PAR_TARGET_LFO1 && p < PAR_TARGET_LFO1 + 6);
@@ -90,7 +105,8 @@ static void sendParam(uint16_t p, uint8_t value)
 //-----------------------------------------------------------
 void lxr_host_loadKit(const uint8_t* values)
 {
-	memcpy(activeParameters, values, END_OF_SOUND_PARAMETERS);
+	for(int i = 0; i < END_OF_SOUND_PARAMETERS; i++)
+		activeParameters[i] = adjustValue(i, values[i]);
 
 	// as preset_sendDrumsetParametersImmediate(): mod targets first, then every parameter in parameterOrder
 	const uint8_t nmt = getNumModTargets();
@@ -128,18 +144,44 @@ int lxr_host_readKitFile(const char* path, uint8_t* values, char* name)
 	return 0;
 }
 //-----------------------------------------------------------
+int lxr_host_writeKitFile(const char* path, const uint8_t* values, const char* name)
+{
+	char kitName[8];
+	memset(kitName, ' ', 8);
+	memcpy(kitName, name, strnlen(name, 8));
+
+	char tmp[4096];
+	if(snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp) return -1;
+	FILE* f = fopen(tmp, "wb");
+	if(!f) return -1;
+	const bool ok = fwrite(kitName, 1, 8, f) == 8 && fwrite(values, 1, END_OF_SOUND_PARAMETERS, f) == END_OF_SOUND_PARAMETERS;
+	if(fclose(f) || !ok || rename(tmp, path)) {
+		remove(tmp);
+		return -1;
+	}
+	return 0;
+}
+//-----------------------------------------------------------
 void lxr_host_initKit(uint8_t* values)
 {
-	// as preset_loadDrumset() for the init kit: initKit has an 8 byte header, and like the firmware's loop this
-	// leaves the last 8 parameters at 0
+	// as preset_loadDrumset() for the init kit: initKit has an 8 byte header, and the firmware's loop leaves the
+	// last 8 parameters at 0
 	memset(values, 0, END_OF_SOUND_PARAMETERS);
 	for(int i = 8; i < END_OF_SOUND_PARAMETERS; i++)
 		values[i - 8] = initKit[i];
+
+	// That includes FX parameters 2-4, which silence every FX type at 0 (the delay's range, the distortion's
+	// volume, the compressor's threshold and gain). Init kits saved by the device itself have 27, 127 and 121 there,
+	// so use those: picking an FX type on the init kit then does something.
+	values[PAR_FX_P2] = 27;
+	values[PAR_FX_P3] = 127;
+	values[PAR_FX_P4] = 121;
 }
 //-----------------------------------------------------------
 void lxr_host_setParam(uint16_t param, uint8_t value)
 {
 	if(param >= END_OF_SOUND_PARAMETERS) return;
+	value = adjustValue(param, value);
 	activeParameters[param] = value;
 	sendParam(param, value);
 }
@@ -196,15 +238,11 @@ static void addPanned(const int16_t* data, float panL, float panR, int16_t* out)
 	}
 }
 
-void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], int16_t* fx)
+void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], int16_t* main)
 {
-	// mixer_calcNextSampleBlock() with each voice going to its own buffer instead of a DAC: same control-rate
-	// updates, same order, same pan.
-	//
-	// The FX bus is split like a send and return. Every effect blends dry + (wet - dry) * dryWet, and dryWet only
-	// enters that blend, so a voice routed to the bus keeps its dry share (1 - dryWet) on its own output, and fx
-	// gets the effect's share, wet * dryWet. The outputs still sum to the device's mix. With the FX off, the bus
-	// passes its input through, so those voices stay whole on their own outputs.
+	// mixer_calcNextSampleBlock() with each direct voice going to its own buffer instead of a DAC: same control-rate
+	// updates, same order, same pan. The FX bus is a group bus with an insert: the voices routed to it are summed
+	// and processed together, as on the device, and play on main.
 	modNode_resetTargets();
 	modNode_reassignVeloMod();
 
@@ -232,8 +270,6 @@ void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT
 	int16_t sampleData[OUTPUT_DMA_SIZE];
 	int16_t fxBusData[OUTPUT_DMA_SIZE * 2];
 	bufferTool_clearBuffer(fxBusData, OUTPUT_DMA_SIZE * 2);
-	const bool fxOn = fxBus.fxType != FX_OFF;
-	const float dryWet = fxBus.dryWet;
 
 	for(int v = 0; v < LXR_HOST_NUM_VOICE_OUTS; v++)
 	{
@@ -265,26 +301,14 @@ void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT
 		}
 		mixer_decimateBlock(v, sampleData);
 
-		// every destination becomes the voice's own stereo output, panned
 		memset(voices[v], 0, sizeof voices[v]);
-		if(mixer_audioRouting[v] == MIXER_ROUTING_FX_BUS && fxOn) {
-			addPanned(sampleData, panL, panR, fxBusData);
-			addPanned(sampleData, panL * (1.f - dryWet), panR * (1.f - dryWet), voices[v]);
-		} else {
-			addPanned(sampleData, panL, panR, voices[v]);
-		}
+		addPanned(sampleData, panL, panR, mixer_audioRouting[v] == MIXER_ROUTING_FX_BUS ? fxBusData : voices[v]);
 	}
 
-	memset(fx, 0, sizeof(int16_t) * OUTPUT_DMA_SIZE * 2);
-	if(!fxOn) return;
-
-	// run the bus fully wet; it writes to whichever DAC its routing names, so collect both
-	int16_t dacA[OUTPUT_DMA_SIZE * 2] = {0}, dacB[OUTPUT_DMA_SIZE * 2] = {0};
-	fxBus.dryWet = 1.f;
-	FxBus_process(fxBusData, &dacA[0], &dacA[1], &dacB[0], &dacB[1], OUTPUT_DMA_SIZE);
-	fxBus.dryWet = dryWet;
-	for(int i = 0; i < OUTPUT_DMA_SIZE * 2; i++)
-		fx[i] = sat16(lrintf((dacA[i] + dacB[i]) * dryWet));
+	// the bus writes to the DAC its routing names: DAC1, the second pair of pointers (adjustValue())
+	int16_t dac2[OUTPUT_DMA_SIZE * 2] = {0};
+	memset(main, 0, sizeof(int16_t) * OUTPUT_DMA_SIZE * 2);
+	FxBus_process(fxBusData, &dac2[0], &dac2[1], &main[0], &main[1], OUTPUT_DMA_SIZE);
 }
 //-----------------------------------------------------------
 // Events are timed in engine blocks. An event at output frame t is applied before the engine block nearest to
@@ -303,6 +327,7 @@ typedef struct
 	uint8_t type;
 	uint8_t value;
 	uint16_t target;
+	uint8_t note;
 } Event;
 
 static Event queue[QUEUE_SIZE];
@@ -319,14 +344,14 @@ static LxrHostStats stats;
 static void applyEvent(const Event* e)
 {
 	if(e->type == EVENT_NOTE_ON)
-		lxr_host_noteOn(e->target, SEQ_DEFAULT_NOTE, e->value);
+		lxr_host_noteOn(e->target, e->note, e->value);
 	else if(e->type == EVENT_PARAM)
 		lxr_host_setParam(e->target, e->value);
 	else
 		separateOutputs = e->value;
 }
 
-static void schedule(uint32_t frame, uint8_t type, uint16_t target, uint8_t value)
+static void schedule(uint32_t frame, uint8_t type, uint16_t target, uint8_t value, uint8_t note)
 {
 	if(queueWrite - queueRead >= QUEUE_SIZE) {
 		stats.droppedEvents++;
@@ -338,22 +363,22 @@ static void schedule(uint32_t frame, uint8_t type, uint16_t target, uint8_t valu
 		stats.lateEvents++;
 		block = blocksRendered;
 	}
-	queue[queueWrite++ % QUEUE_SIZE] = (Event){ block, type, value, target };
+	queue[queueWrite++ % QUEUE_SIZE] = (Event){ block, type, value, target, note };
 }
 
-void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t vel)
+void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t note, uint8_t vel)
 {
-	schedule(frame, EVENT_NOTE_ON, voice, vel);
+	schedule(frame, EVENT_NOTE_ON, voice, vel, note);
 }
 
 void lxr_host_queueParam(uint32_t frame, uint16_t param, uint8_t value)
 {
-	schedule(frame, EVENT_PARAM, param, value);
+	schedule(frame, EVENT_PARAM, param, value, 0);
 }
 
 void lxr_host_queueSeparateOutputs(uint32_t frame, bool on)
 {
-	schedule(frame, EVENT_SEPARATE_OUTPUTS, 0, on);
+	schedule(frame, EVENT_SEPARATE_OUTPUTS, 0, on, 0);
 }
 
 void lxr_host_setSeparateOutputs(bool on)
@@ -381,18 +406,18 @@ static long resamplerCallback(void* data, float** frames)
 		applyEvent(&queue[queueRead++ % QUEUE_SIZE]);
 
 	memset(block, 0, sizeof block);
+	int16_t main[OUTPUT_DMA_SIZE * 2];
 	if(separateOutputs) {
-		int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], fx[OUTPUT_DMA_SIZE * 2];
-		lxr_host_renderBlockSeparate(voices, fx);
+		int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2];
+		lxr_host_renderBlockSeparate(voices, main);
 		for(int v = 0; v < LXR_HOST_NUM_VOICE_OUTS; v++)
 			putStereo(block, LXR_HOST_OUT_VOICE(v), voices[v]);
-		putStereo(block, LXR_HOST_OUT_FX, fx);
 	} else {
-		int16_t dac1[OUTPUT_DMA_SIZE * 2], dac2[OUTPUT_DMA_SIZE * 2];
-		lxr_host_renderBlock(dac1, dac2);
-		putStereo(block, LXR_HOST_OUT_DAC1, dac1);
-		putStereo(block, LXR_HOST_OUT_DAC2, dac2);
+		// everything is routed to DAC1 (adjustValue()); DAC2 stays silent
+		int16_t dac2[OUTPUT_DMA_SIZE * 2];
+		lxr_host_renderBlock(main, dac2);
 	}
+	putStereo(block, LXR_HOST_OUT_MAIN, main);
 	blocksRendered++;
 	*frames = block;
 	return OUTPUT_DMA_SIZE;

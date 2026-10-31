@@ -15,18 +15,20 @@
 /** Number of voices that can be triggered: 3 drums, snare, cymbal, closed hi-hat, open hi-hat. */
 #define LXR_HOST_NUM_VOICES 7
 
+/** The note that plays a voice at its tuned pitch (the firmware's SEQ_DEFAULT_NOTE); others transpose by semitones. */
+#define LXR_HOST_BASE_NOTE 60
+
 /** Number of sound engines, each with its own output when outputs are separate: 3 drums, snare, cymbal, hi-hat. */
 #define LXR_HOST_NUM_VOICE_OUTS 6
 
 /**
- * Channels of lxr_host_process() output, as stereo pairs: the device's two DACs, then with separate outputs each
- * voice and the FX bus. The pairs of the mode that's off are silent.
+ * Channels of lxr_host_process() output, as stereo pairs: main, then each voice. Main has the whole mix, or with
+ * separate outputs only the FX bus, the voices routed through it processed together; the voice pairs are silent
+ * unless outputs are separate.
  */
-#define LXR_HOST_OUT_DAC1		0
-#define LXR_HOST_OUT_DAC2		2
-#define LXR_HOST_OUT_VOICE(v)	(4 + 2*(v))
-#define LXR_HOST_OUT_FX			16
-#define LXR_HOST_OUT_CHANNELS	18
+#define LXR_HOST_OUT_MAIN		0
+#define LXR_HOST_OUT_VOICE(v)	(2 + 2*(v))
+#define LXR_HOST_OUT_CHANNELS	14
 
 /** Number of kit parameters, as stored in a kit (parameter numbers 0 .. LXR_HOST_NUM_PARAMS-1). */
 #define LXR_HOST_NUM_PARAMS END_OF_SOUND_PARAMETERS
@@ -44,6 +46,13 @@ void lxr_host_initKit(uint8_t* values);
  */
 int lxr_host_readKitFile(const char* path, uint8_t* values, char* name);
 
+/**
+ * Writes a kit file as the device does (preset_saveDrumsetSD()): name, space-padded to 8 characters, then the
+ * LXR_HOST_NUM_PARAMS values. Writes a temporary file and renames it, so readers never see a partial kit.
+ * Returns 0 on success.
+ */
+int lxr_host_writeKitFile(const char* path, const uint8_t* values, const char* name);
+
 /** Sends a whole kit to the engine, as the device does when loading one. */
 void lxr_host_loadKit(const uint8_t* values);
 
@@ -54,7 +63,10 @@ void lxr_host_loadKit(const uint8_t* values);
 void lxr_host_setParam(uint16_t param, uint8_t value);
 uint8_t lxr_host_getParam(uint16_t param);
 
-/** Triggers a voice now. */
+/**
+ * Triggers a voice now. The note transposes it from its tuned pitch by (note - LXR_HOST_BASE_NOTE) semitones: both
+ * oscillators of a voice, not the snare's noise or the transient samples.
+ */
 void lxr_host_noteOn(uint8_t voice, uint8_t note, uint8_t vel);
 
 /**
@@ -64,11 +76,11 @@ void lxr_host_noteOn(uint8_t voice, uint8_t note, uint8_t vel);
 void lxr_host_renderBlock(int16_t* dac1, int16_t* dac2);
 
 /**
- * Renders one block with each voice in its own interleaved stereo buffer, panned, instead of mixed onto the DACs.
- * The FX bus works as a send/return: voices routed to it keep their dry share on their own outputs and fx gets the
- * effect's share, so all outputs together sum to the device's mix.
+ * Renders one block with each voice that plays directly in its own interleaved stereo buffer, panned, instead of
+ * mixed onto the DACs. Voices routed through the FX bus are processed together, as on the device, and the bus
+ * plays on main. All outputs together are the device's mix.
  */
-void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], int16_t* fx);
+void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT_DMA_SIZE * 2], int16_t* main);
 
 /**
  * The engine always runs at REAL_FS: its filters, envelopes and delay lines are tuned to that rate.
@@ -82,11 +94,11 @@ int lxr_host_setOutputRate(double fs);
  * frames later, to within half an engine block (OUTPUT_DMA_SIZE samples at REAL_FS), the engine's control rate.
  * Events must be queued in time order.
  */
-void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t vel);
+void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t note, uint8_t vel);
 void lxr_host_queueParam(uint32_t frame, uint16_t param, uint8_t value);
 void lxr_host_queueSeparateOutputs(uint32_t frame, bool on);
 
-/** Switches between the device's two outputs and one output per voice plus FX, now. Off by default. */
+/** Switches between everything on main and one output per voice plus the FX bus on main, now. Off by default. */
 void lxr_host_setSeparateOutputs(bool on);
 
 /** Constant delay in output frames between a queued event and its effect on the output. */
