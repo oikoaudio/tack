@@ -9,14 +9,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include "Soundengine/config.h"
-#include "Parameters.h"
-
-/** Number of voices that can be triggered: 3 drums, snare, cymbal, closed hi-hat, open hi-hat. */
-#define LXR_HOST_NUM_VOICES 7
-
-/** The note that plays a voice at its tuned pitch (the firmware's SEQ_DEFAULT_NOTE); others transpose by semitones. */
-#define LXR_HOST_BASE_NOTE 60
+#include "lxr_core.h"
 
 /** Number of sound engines, each with its own output when outputs are separate: 3 drums, snare, cymbal, hi-hat. */
 #define LXR_HOST_NUM_VOICE_OUTS 6
@@ -29,15 +22,6 @@
 #define LXR_HOST_OUT_MAIN		0
 #define LXR_HOST_OUT_VOICE(v)	(2 + 2*(v))
 #define LXR_HOST_OUT_CHANNELS	14
-
-/** Number of kit parameters, as stored in a kit (parameter numbers 0 .. LXR_HOST_NUM_PARAMS-1). */
-#define LXR_HOST_NUM_PARAMS END_OF_SOUND_PARAMETERS
-
-/** Initialises the engine and loads the factory init kit. */
-void lxr_host_init(void);
-
-/** Fills values[LXR_HOST_NUM_PARAMS] with the factory init kit. */
-void lxr_host_initKit(uint8_t* values);
 
 /**
  * Reads a kit file from the device's SD card (.SND): the 8-character kit name, then one byte per parameter. As on
@@ -52,28 +36,6 @@ int lxr_host_readKitFile(const char* path, uint8_t* values, char* name);
  * Returns 0 on success.
  */
 int lxr_host_writeKitFile(const char* path, const uint8_t* values, const char* name);
-
-/** Sends a whole kit to the engine, as the device does when loading one. */
-void lxr_host_loadKit(const uint8_t* values);
-
-/**
- * Sets one kit parameter now, as the front panel does when it is edited. Values are in the firmware's own
- * representation (mod targets are indices into modTargets).
- */
-void lxr_host_setParam(uint16_t param, uint8_t value);
-uint8_t lxr_host_getParam(uint16_t param);
-
-/**
- * Triggers a voice now. The note transposes it from its tuned pitch by (note - LXR_HOST_BASE_NOTE) semitones: both
- * oscillators of a voice, not the snare's noise or the transient samples.
- */
-void lxr_host_noteOn(uint8_t voice, uint8_t note, uint8_t vel);
-
-/**
- * Renders one block of OUTPUT_DMA_SIZE frames through the full mixer and FX bus.
- * dac1 and dac2 are interleaved stereo (OUTPUT_DMA_SIZE*2 samples each), one per output pair on the device.
- */
-void lxr_host_renderBlock(int16_t* dac1, int16_t* dac2);
 
 /**
  * Renders one block with each voice that plays directly in its own interleaved stereo buffer, panned, instead of

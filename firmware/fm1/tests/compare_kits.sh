@@ -21,8 +21,8 @@ grep -q 88172645u "$out/seed/stm32f7xx_hal.h"
 for src in Core/Src/Soundengine/DSPAudio/*.c Core/Src/Soundengine/DSPAudio/FX/*.c Core/Src/Soundengine/DSPAudio/FX/VerbTools/*.c \
     Core/Src/Soundengine/FxBus.c Core/Src/Soundengine/MIDI/ParameterArray.c Core/Src/Soundengine/MIDI/MidiVoiceControl.c \
     Core/Src/Soundengine/MIDI/MidiMessages.c Core/Src/Soundengine/MIDI/MidiParser.c Core/Src/Parameters.c \
-    Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c host/src/lxr_core.c host/src/stubs.c; do
-    clang -O2 -ffp-contract=off -std=gnu11 -Wno-everything -fcommon -ICore/Inc -Ihost/src -DLXR_HOST_BUILD -I"$out/seed" \
+    Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c engine/lxr_core.c host/src/stubs.c; do
+    clang -O2 -ffp-contract=off -std=gnu11 -Wno-everything -fcommon -ICore/Inc -Iengine -Ihost/src -DLXR_HOST_BUILD -I"$out/seed" \
         -c "$src" -o "$out/obj/R/$(echo "$src" | tr / _).o" &
     while [ "$(jobs -r | wc -l)" -ge 16 ]; do wait -n; done
 done

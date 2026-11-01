@@ -78,19 +78,18 @@ the firmware code.
 | Path | Contents |
 |---|---|
 | `host/` | Tack. The desktop build of the sound engine, the plugins, the editor and test tools. |
+| `firmware/fm1/` | Tack as firmware for the M-VAVE FM-1, with a step sequencer. See [its README](firmware/fm1/README.md). |
+| `engine/` | The engine's control layer, which the plugins and the FM-1 firmware share. |
 | `Core/Src/Soundengine/` | The firmware's sound engine, which Tack compiles. |
-| `Core/`, `Drivers/`, `Middlewares/`, `FATFS/`, `USB_DEVICE_MIDI/`, `cmake/`, `CMakeLists.txt` | The original LXR-02 firmware for the STM32F765. |
+| `Core/` | The rest of the LXR-02 firmware's source. It no longer builds for the device, and what Tack does not compile may go. |
 
-The firmware still builds for the device, with `cmake --preset release` and `cmake --build --preset release` in the
-top folder and the Arm GNU Toolchain on `PATH`. The
-[upstream README](https://github.com/erica-synths/lxr-desktop-app) explains the toolchain setup and how to install an
-update from the SD card. Firmware built from this repository is a modified version, and its start-up screen says
-"Modified V" and the version, as [NOTICE.md](NOTICE.md) requires.
+This repository no longer builds firmware for the LXR-02 itself, as nobody here has one to test on. The
+[upstream repository](https://github.com/erica-synths/lxr-desktop-app) does, and this repository's history holds the build as it was.
 
 ## Changes to the firmware
 
-This fork changes the firmware in six places. The first four are bug fixes in the sound engine, found while running
-it on a computer, and Tack and the device firmware both get them. None of them has been reported upstream.
+This fork changes the firmware's code in six places. The first four are bug fixes in the sound engine, found while
+running it on a computer. None of them has been reported upstream.
 
 | Commit | File | Change |
 |---|---|---|

@@ -13,7 +13,7 @@ mkdir -p "$out/O" "$out/F"
 CC=${CC:-clang}
 src=(Core/Src/Soundengine/Sequencer/sequencer.c Core/Src/Soundengine/Sequencer/clockSync.c
      Core/Src/Soundengine/Sequencer/EuklidGenerator.c firmware/fm1/src/seq_platform.c firmware/fm1/tests/seq_trace.c)
-common=(-O2 -ffp-contract=off -std=gnu11 -Wno-everything -Werror=implicit-function-declaration -fcommon -ICore/Inc -Ihost/src
+common=(-O2 -ffp-contract=off -std=gnu11 -Wno-everything -Werror=implicit-function-declaration -fcommon -ICore/Inc -Iengine -Ihost/src
         -Ifirmware/fm1/src)
 for s in "${src[@]}"; do
     "$CC" "${common[@]}" -DLXR_HOST_BUILD -Ifirmware/fm1/tests/original_inc -Ihost/shim -c "$s" -o "$out/O/$(basename "$s").o"

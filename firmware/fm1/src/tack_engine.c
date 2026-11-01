@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "tack_engine.h"
-#include "lxr_host.h"
+#include "lxr_core.h"
 #include "Parameters.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/clockSync.h"

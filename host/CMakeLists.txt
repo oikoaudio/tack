@@ -78,14 +78,14 @@ add_library(lxr_engine STATIC
     ${LXR_CORE}/Src/Preset/initKit.c
     # modTargets: the list of valid modulation targets, used by the kit loader
     ${LXR_CORE}/Src/menu/Cc2Text.c
-    src/lxr_core.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../engine/lxr_core.c
     src/lxr_host.c
     src/lxr_files.c
     src/lxr_params.c
     src/stubs.c
 )
 # shim/ stands in for the STM32 HAL and must come before the firmware headers
-target_include_directories(lxr_engine PUBLIC shim ${LXR_CORE}/Inc src PRIVATE ${LXR_GENERATED})
+target_include_directories(lxr_engine PUBLIC shim ${LXR_CORE}/Inc src ../engine PRIVATE ${LXR_GENERATED})
 # the firmware's headers leave out what only the device needs, such as its memory sections
 target_compile_definitions(lxr_engine PUBLIC LXR_HOST_BUILD)
 # -fcommon: the firmware defines some globals in headers

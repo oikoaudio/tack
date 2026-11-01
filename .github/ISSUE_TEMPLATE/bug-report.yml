@@ -19,7 +19,6 @@ body:
         - Tack Snare
         - Tack Cymbal
         - Tack Hi-hat
-        - Firmware built from this repository
         - Build or test tools
     validations:
       required: true

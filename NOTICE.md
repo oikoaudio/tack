@@ -59,17 +59,12 @@ The GPL-3.0 licence of the firmware does not grant any rights to the hardware.
 
 ## Third-party components
 
-These components are included in source form and are distributed under their own licences. The
-bootloader contains its own copies of the HAL, CMSIS and FatFs files.
+These components are included in source form and are distributed under their own licences.
 
 | Component | Location | Licence |
 |---|---|---|
-| STM32F7 HAL drivers (STMicroelectronics) | `Drivers/STM32F7xx_HAL_Driver/` | BSD-3-Clause, see the `LICENSE.txt` there |
-| CMSIS core (Arm) | `Drivers/CMSIS/Include/` | Apache-2.0 |
-| CMSIS STM32F7 device files, system and startup code (STMicroelectronics) | `Drivers/CMSIS/Device/ST/`, `Core/Src/system_stm32f7xx.c`, `Core/Startup/` | Apache-2.0 / BSD-3-Clause |
-| STM32 USB Device Library, modified into a USB-MIDI class (STMicroelectronics) | `Middlewares/JS/STM32_USB_Device_Library/` | ST SLA0044 |
-| STM32CubeMX-generated code with Erica Synths additions (STMicroelectronics) | `USB_DEVICE_MIDI/`, `FATFS/`, `Core/Src/stm32f7xx_it.c`, `Core/Src/stm32f7xx_hal_msp.c`, bootloader `Core/Src/main.c` | ST SLA0044 or BSD-3-Clause as stated in each file; Erica Synths additions under GPL-3.0 |
+| CMSIS STM32F7 device files, system and startup code (STMicroelectronics) | `Core/Src/system_stm32f7xx.c`, `Core/Startup/` | Apache-2.0 / BSD-3-Clause |
+| STM32CubeMX-generated code with Erica Synths additions (STMicroelectronics) | `Core/Src/stm32f7xx_it.c`, `Core/Src/stm32f7xx_hal_msp.c`, bootloader `Core/Src/main.c` | ST SLA0044 or BSD-3-Clause as stated in each file; Erica Synths additions under GPL-3.0 |
 | newlib system call stubs (STMicroelectronics) | `Core/Src/syscalls.c`, `Core/Src/sysmem.c` | BSD-3-Clause style, as stated in the files |
 | Flash programming helpers, from an STMicroelectronics example (LwIP IAP) | `Core/Src/flash_if.c`, `Core/Inc/flash_if.h` | STMicroelectronics example code, as stated in the files |
-| FatFs R0.12c (ChaN) | `Middlewares/Third_Party/FatFs/` | FatFs licence (BSD-style, 1 clause) |
 | HD44780 LCD routines, based on the mikrocontroller.net AVR-GCC tutorial | `Core/Src/lcd.c`, `Core/Inc/lcd.h` | as published on mikrocontroller.net |

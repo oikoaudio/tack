@@ -13,7 +13,7 @@ CC=${CC:-clang}
 src=(Core/Src/Soundengine/DSPAudio/*.c Core/Src/Soundengine/DSPAudio/FX/*.c Core/Src/Soundengine/DSPAudio/FX/VerbTools/*.c
      Core/Src/Soundengine/FxBus.c Core/Src/Soundengine/MIDI/ParameterArray.c Core/Src/Soundengine/MIDI/MidiVoiceControl.c
      Core/Src/Soundengine/MIDI/MidiMessages.c Core/Src/Soundengine/MIDI/MidiParser.c Core/Src/Parameters.c
-     Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c host/src/lxr_core.c host/src/stubs.c)
+     Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c engine/lxr_core.c host/src/stubs.c)
 fm1=(-include firmware/fm1/shim/fm1_prefix.h -DPLAT_HOST -Ifirmware/fm1/shim -Ithird_party/fm1-base/include
      -Xclang -cl-single-precision-constant)
 desk=(-DLXR_HOST_BUILD -Ihost/shim -fcommon)
@@ -24,7 +24,7 @@ build() {   # NAME FLAGS...
     for s in "${src[@]}"; do
         local o="$out/obj/$name/$(echo "$s" | tr / _).o"
         objs+=("$o")
-        ( "$CC" -O2 -ffp-contract=off -std=gnu11 -Wno-everything -fcommon -ICore/Inc -Ihost/src "$@" -c "$s" -o "$o" ) &
+        ( "$CC" -O2 -ffp-contract=off -std=gnu11 -Wno-everything -fcommon -ICore/Inc -Iengine -Ihost/src "$@" -c "$s" -o "$o" ) &
         while [ "$(jobs -r | wc -l)" -ge 16 ]; do wait -n; done
     done
     wait

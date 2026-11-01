@@ -11,12 +11,12 @@ CC=${CC:-clang}
 src=(Core/Src/Soundengine/DSPAudio/*.c Core/Src/Soundengine/DSPAudio/FX/*.c Core/Src/Soundengine/DSPAudio/FX/VerbTools/*.c
      Core/Src/Soundengine/FxBus.c Core/Src/Soundengine/MIDI/ParameterArray.c Core/Src/Soundengine/MIDI/MidiVoiceControl.c
      Core/Src/Soundengine/MIDI/MidiMessages.c Core/Src/Soundengine/MIDI/MidiParser.c Core/Src/Parameters.c
-     Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c host/src/lxr_core.c Core/Src/Soundengine/Sequencer/sequencer.c
+     Core/Src/Preset/initKit.c Core/Src/menu/Cc2Text.c engine/lxr_core.c Core/Src/Soundengine/Sequencer/sequencer.c
      Core/Src/Soundengine/Sequencer/clockSync.c Core/Src/Soundengine/Sequencer/EuklidGenerator.c
      firmware/fm1/src/tack_engine.c firmware/fm1/src/seq_platform.c firmware/fm1/tests/lock_probe.c)
 for s in "${src[@]}"; do
     "$CC" -O1 -g -ffp-contract=off -std=gnu11 -Wno-everything -Werror=implicit-function-declaration -fcommon -ICore/Inc \
-        -Ihost/src -Ifirmware/fm1/src -include firmware/fm1/shim/fm1_prefix.h -DPLAT_HOST -DNUM_PATTERN=16 \
+        -Iengine -Ihost/src -Ifirmware/fm1/src -include firmware/fm1/shim/fm1_prefix.h -DPLAT_HOST -DNUM_PATTERN=16 \
         '-DREAL_FS=44100.f' -Ifirmware/fm1/shim -Ithird_party/fm1-base/include -Xclang -cl-single-precision-constant \
         -c "$s" -o "$out/obj/$(echo "$s" | tr / _).o" &
     while [ "$(jobs -r | wc -l)" -ge 16 ]; do wait -n; done

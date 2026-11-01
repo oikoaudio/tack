@@ -1,5 +1,5 @@
 # Tack for the M-VAVE FM-1 (third_party/fm1-base's tools/build.py). Build from the repository root: the -I paths
-# below are relative to it. See firmware/fm1/STATUS.md.
+# below are relative to it. See firmware/fm1/README.md.
 name = "TACK"
 id_prefix = "FM-1_47"           # dev builds FM-1_4700
 usb_manufacturer = "oikoaudio"
@@ -18,7 +18,7 @@ credits = "Tack's engine is the LXR firmware by Erica Synths. USB audio's 10 cha
 
 # the engine, unchanged sources: firmware/fm1/shim stands in for the STM32 and libm
 o2_cflags = ["-include", "firmware/fm1/shim/fm1_prefix.h", "-Ifirmware/fm1/shim", "-Ifirmware/fm1/src",
-             "-ICore/Inc", "-Ihost/src", "-Ithird_party/fm1-base/include",
+             "-ICore/Inc", "-Iengine", "-Ithird_party/fm1-base/include",
              "-DNUM_PATTERN=16", "-DREAL_FS=44100.f", "-Xclang", "-cl-single-precision-constant", "-Wno-everything",
              "-Werror=implicit-function-declaration", "-Werror=implicit-int"]
 o2 = ["../../Core/Src/Soundengine/DSPAudio/*.c",
@@ -32,7 +32,7 @@ o2 = ["../../Core/Src/Soundengine/DSPAudio/*.c",
       "../../Core/Src/Parameters.c",
       "../../Core/Src/Preset/initKit.c",
       "../../Core/Src/menu/Cc2Text.c",
-      "../../host/src/lxr_core.c",
+      "../../engine/lxr_core.c",
       "src/tack_engine.c",
       "../../Core/Src/Soundengine/Sequencer/sequencer.c",
       "../../Core/Src/Soundengine/Sequencer/clockSync.c",
