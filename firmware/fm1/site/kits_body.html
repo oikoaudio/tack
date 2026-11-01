@@ -1,0 +1,48 @@
+<div class="tool-column">
+<h1>Kit bank</h1>
+<p class="lede">Put kits on an FM-1 running Tack, or save the ones it has. Connect the FM-1 with a USB cable. This page
+works in Chrome or Edge, and there is nothing to install.</p>
+
+<div class="status" id="statusBox"><p id="status" role="status">Plug the FM-1 running Tack into this computer with a USB cable.</p><p id="alert" role="alert"></p></div>
+<progress id="bar" max="100" value="0" hidden aria-label="Progress"></progress>
+<section class="card" id="portpick" aria-labelledby="ph" hidden>
+  <h2 id="ph">Is the FM-1 under another name?</h2>
+  <p>A computer can show an FM-1's port under another device's name (a Mac remembers names by USB socket). This page asks
+  only the ports with an FM-1's usual names by itself. If your FM-1 is in this list, press Try on it.</p>
+  <ul id="portlist" class="ports"></ul>
+  <p id="pickstatus" role="status"></p>
+</section>
+
+<section class="card" aria-labelledby="fh">
+  <h2 id="fh">Fill the bank</h2>
+  <p>Choose <b>.SND</b> files, a folder of them, or a <b>.zip</b> of them. Kits go in sorted by name, up to 128, and they
+  <b>replace every kit in the bank</b>. Stop Tack first. Saved patterns keep their own copy of their kit, so they sound
+  the same afterwards.</p>
+  <div class="row">
+    <label class="pick">Choose files&hellip;<input type="file" id="files" multiple accept=".snd,.zip" aria-describedby="fileInfo"></label>
+    <label class="pick">Choose a folder&hellip;<input type="file" id="folder" webkitdirectory aria-describedby="fileInfo"></label>
+    <button id="fill" class="primary" type="button" disabled>Replace the bank</button>
+  </div>
+  <p class="file" id="fileInfo" hidden></p>
+  <div class="ask" id="ask" role="group" aria-labelledby="askText" hidden>
+    <p id="askText"></p>
+    <div class="row">
+      <button id="askYes" class="primary" type="button">Replace every kit</button>
+      <button id="askNo" class="quiet" type="button">Cancel</button>
+    </div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="sh">
+  <h2 id="sh">Save the bank</h2>
+  <p>This saves every kit to a <b>.zip</b>, which you can choose above to put them back. Stop Tack first.</p>
+  <div class="row"><button id="save" class="primary" type="button">Save the bank</button></div>
+</section>
+
+<ul class="small">
+  <li>Tack comes with no kits. <a href="https://www.ericasynths.lv/news/fresh-kits-and-patterns-lxr-02-hrtl">Erica Synths publishes kit packs</a> for the LXR-02, and <a href="../../plugin/">the Tack plugin</a> saves kits in the same format.</li>
+  <li>Keep the cable in while the bank fills. If it comes out, plug it back in and press Replace the bank again.</li>
+  <li>The browser asks once for permission to use MIDI with SysEx. Allow it, and close other apps that use the FM-1's MIDI first.</li>
+  <li>From a terminal, <code>fm1 kits FOLDER</code> does the same as Replace the bank, and <code>fm1 backup NAME</code> saves the bank to a folder.</li>
+</ul>
+</div>

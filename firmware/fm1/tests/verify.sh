@@ -41,10 +41,11 @@ run "firmware build" build_firmware
 build_sim() { CC=clang python3 third_party/fm1-base/tools/build.py firmware/fm1 --host 2>&1 | quiet_grep ' error|undefined|did not|^host'; }
 run "simulator build" build_sim
 stop_if_failed "a build failed"
-python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'KITTWO  ' + bytes([50]) * 248)" > "$out/sim/kits.bin"
+python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'KITTWO  ' + bytes([50, 5]) + bytes([50]) * 246)" > "$out/sim/kits.bin"
 python3 -c "import sys; sys.stdout.buffer.write(b''.join(b'KIT%d    ' % i + bytes([40 + i]) * 248 for i in range(4)))" > "$out/sim/kits4.bin"
 python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'\xff' * 768)" > "$out/sim/kits1.bin"
 script() { (cd "$out/sim" && timeout 60 "$sim" "$root/firmware/fm1/tests/$1.txt" . 2>&1 | grep -v -E '^  ok' | tail -3); }
+python3 -c "import sys; sys.stdout.buffer.write((b'SAMPLES ' + bytes([20]) * 248) * 2)" > "$out/sim/kits_samples.bin"
 for t in keys fxswitch sequencer song note kits recur rows voice clock fxdc pages shapes lanes crush morph patkit mutate bars lfosync reverb; do
     run "script $t" script "$t"
 done
@@ -113,7 +114,8 @@ print(f"rate: {off:.3f} of samples repeat at 127, {on:.3f} at 10; bits: {full} l
 sys.exit(0 if on > off + 0.3 and levels < 40 and full > 1000 and max(map(abs, quiet)) == 0 else 1)
 PY
 PYTHONPATH=firmware/fm1/tools python3 - <<'PY' || fail "fm1 picks the wrong port"
-from fm1_port import pick, TACK, LOADER
+from fm1_port import pick, TACK, LOADER, STOCK
+assert pick(["Midi Through:Midi Through Port-0 14:0", "FM-1:FM-1 MIDI 1 20:0"]) == STOCK
 assert pick(["Midi Through:Midi Through Port-0 14:0", "TACK FM-1:TACK FM-1 MIDI 1 20:0"]) == TACK
 assert pick(["Midi Through:Midi Through Port-0 14:0", "Felucca Update:Felucca Update MIDI 1 20:0"]) == LOADER
 assert pick(["TACK FM-1:TACK FM-1 MIDI 1 20:0", "Felucca Update:Felucca Update MIDI 1 24:0"]) == TACK
@@ -138,6 +140,10 @@ names() {
     ${CC:-cc} -std=c11 -O2 -Wall -Wextra -Wno-unused-function -Iengine -o "$out/names_test" firmware/fm1/tests/names_test.c && timeout 60 "$out/names_test" | tail -1
 }
 run "kit names" names
+kits_page() {
+    ${CC:-cc} -std=c11 -O2 -Wall -Wextra -o "$out/kit_wire" firmware/fm1/tests/kit_wire.c && timeout 120 node firmware/fm1/tests/kits_page_test.mjs "$out/kit_wire" | quiet_grep 'FAIL|Error'
+}
+run "kit bank page" kits_page
 locks() { timeout 300 bash firmware/fm1/tests/lock_test.sh "$out/lock" 2>&1 | quiet_grep 'FAIL|failed|passed'; }
 run "lock test" locks
 compare() { timeout 300 bash firmware/fm1/tests/compare_seq.sh "$out/seq" 2>&1 | tail -1; }

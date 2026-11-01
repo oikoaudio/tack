@@ -1,0 +1,31 @@
+# a smaller bank put on the FM-1 leaves PRESET and the morph kit past its end: turning back must lead into it, not say END
+wait 600
+data kits4.bin 770048
+turn PRESET 1
+wait 60
+turn PRESET 1
+wait 60
+turn PRESET 1
+wait 60
+expect param0 43
+key 22 down
+wait 40
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+expect morphkit 4
+data kits1.bin 770048
+wait 20
+turn PRESET -1
+wait 40
+expect morphkit 1
+key 22 up
+wait 40
+turn PRESET -1
+wait 60
+expect param0 40

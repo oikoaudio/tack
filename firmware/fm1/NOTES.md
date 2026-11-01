@@ -47,9 +47,9 @@ JieLi's SDK repository no longer exists at the URL in `get_sdk.sh`. The same rev
 ## The site
 
 `/tack/` introduces both forms, `/tack/plugin/` is the plugins, and `/tack/fm1/` is this firmware, with `install/`,
-`backup/` and `firmware/` under it and the manual at `/manuals/tack-fm1/`. They are on local branch `feat/tack` of
+`backup/`, `kits/` and `firmware/` under it and the manual at `/manuals/tack-fm1/`. They are on local branch `feat/tack` of
 oikoaudio's site, in worktree `~/ws/dev/web/web-oikoaudio-tack`, uncommitted. A push to that repository's `main` deploys, so keep this off `main` until
-the list below is done. `tools/make_web.py VERSION WEB_DIR` writes the installer and backup pages there from a release
+the list below is done. `tools/make_web.py VERSION WEB_DIR` writes the installer, backup and kit bank pages there from a release
 package. It uses fm1-base's page logic, leaves out m-bootloader, and needs no Emscripten. `site/install_app.js` warns a
 unit running V16 before anything is written. `firmware/fm1/.gitignore` ignores `web/`, so own files go in `site/`.
 
@@ -57,7 +57,9 @@ Headless Chromium against a fake FM-1 in the page, no MIDI port opened: the page
 warns on V16, cancels without an update request, and names V15 and V16 and refuses each with a bit flipped in flash.bin or
 the loader. Compiled and simulator-tested only: none of it has run against a unit.
 
-Going back to stock has not been run on a unit. fm1-base's `checkUfw` refused every real M-VAVE package as damaged, as
+Going from Tack to V15 and back has run on a unit, with `fm1 install`, on 2026-11-02: stock booted, keys and sound worked, and Tack came back with its patterns, kits and calibration after `fm1 restore`. Stock takes about 34 s to appear on USB after a restart, so a command in that gap finds no FM-1. The web page's stock section has not run on a unit. `fm1_rescue.py` without `--write` or `--ask` read the whole flash through the chip's update mode, entered with REC held at power-on, and the unit went back to Tack. OCT- with OCT+ at power-on is calibration here, not update mode.
+
+fm1-base's `checkUfw` refused every real M-VAVE package as damaged, as
 parts 50, 52, 161 and 251 use another checksum and its tests only use fm1-base packages, so `make_web.py` checks stock on
 flash.bin and the loader only. Move that into `web/fm1pkg.js` on the fork. `tests/ota_test.c` staged V15 and V16 through
 `chip/ota.c` and refused both with a damaged boot area, so the step before M-VAVE's writer takes over is tested off the unit.
@@ -70,13 +72,15 @@ over. What matters is whether Tack boots on V16's bootloader, which has not been
 
 Before publishing:
 
-1. Go from Tack to V15 and back on the unit, with the local installer, then take `STOCK_NOTE` out of `make_web.py`.
-2. Decide how to meet a V16 unit: test it, or keep the warning.
-3. Make the Tack repository public, or publish its source for that version: the GPL needs it, and the page links it.
-4. Fill the kit bank from the browser. Today it takes a terminal and this repository, and no kits ship. Link to kits, don't
-   host them: none of the three kit archives here has a licence file.
-5. The hour's soak, and a release build from the commit that gets tagged.
-6. Fill in the manual again after any panel changes.
+1. Decide how to meet a V16 unit: test it, or keep the warning.
+2. Make the Tack repository public, or publish its source for that version: the GPL needs it, and the page links it.
+3. A release build from the commit that gets tagged. After a long session on it, `PEAK` and `XRUN` on GLO and a clean `fm1 log`. The firmware allocates nothing, so there is no leak for an hour's soak to find.
+4. Fill in the manual again after any panel changes.
+
+`/tack/fm1/kits/` fills the kit bank and saves it to a `.zip`, from `site/kits_*`. Link to kits, don't host them: none of
+the three kit archives here has a licence file. It picks kits as `tools/fm1_kits.py` does, except that a `.snd` that isn't 255
+or 256 bytes is named and left out, and it reads every kit back, as a write's reply names no slot and a late one can hide a
+kit that never arrived. Both leave out kits named Initkit, an LXR project's unused slots, which differ in their last few bytes, so a pack's 56 can be 16. `tests/kits_page_test.mjs` runs it against `app/kit_sysex.c`. Filling has run on a unit: Hrtl's DLC pack, 56 kits, each read back with `fm1_kits.py --save` and equal to its file. Saving from the page has not run on a unit.
 
 ## How it is tested
 
@@ -175,9 +179,10 @@ Known omissions:
   rendered echoes at 299, 383 and 531 ms. Delay at maximum time and maximum range runs past the buffer and goes silent,
   so the page stops time at 126.
 - The sound pages cover the LXR's voice parameters with sound-design use. Edits apply until a kit loads, and SAVE keeps them as
-  the boot kit. Nothing writes an edited kit back to the bank.
-- A pattern remembers its bank kit, which loads through the LXR's own hook before the pattern's first step. It remembers
-  the slot, not edits made to the kit, and a pattern with no kit leaves the playing kit and its edits alone.
+  the boot kit. SAVE's KIT writes the kit to the bank.
+- A pattern keeps its own copy of its kit, with any edits and its name, and the bank slot it came from, which SEL and HOME
+  held go back to. The kit loads through the LXR's own hook before the pattern's first step, and a pattern with no kit leaves
+  the playing kit and its edits alone.
 - Reverb. The LXR firmware compiles it out, with no reason given. Tack turns it on: see CPU. It shares the FX buffer with the delay. `PRE` is its pre-delay, `DECAY` its feedback, which rings for good at the top, `E/L MIX` the balance of early reflections on the left and late on the right, both full at the middle, and `LOW CUT` and `HIGH CUT` two 24 dB an octave filters on its output, the low one in `PAR_FX_REVERB_TYPE`, which its one type left free. Its output is stereo, from Dattorro's right-hand taps within its shorter lines, wide above about 120 Hz with the lows in the middle, so that is a low and a high cut for each side. Its tilt stays flat, as low drums dropped out of it away from the middle. The two allpasses as long as the loop's delays have a gain of 0.35, and the two short ones move 16 samples each way at 1.3 Hz: without that, late in the tail mids and highs repeated every 46 ms, heard as a growl. 59% of the band from 400 Hz to 4 kHz repeated, and now 24%. `MIX` is its level on top of the dry sound, where the other FX crossfade.
 - No Bluetooth, no second core, no velocity from the keys.
 

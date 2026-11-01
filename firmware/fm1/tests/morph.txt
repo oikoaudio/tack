@@ -1,5 +1,5 @@
 # Morph: firmware/fm1/build/host/tack_host firmware/fm1/tests/morph.txt OUTDIR
-# verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50. Parameter 8 is drum 1's
+# verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50, but for the second's parameter 1, a wave, which is 5. Parameter 8 is drum 1's
 # PITCH, 1 its wave, 149 its velocity's target and 215 its route. The init kit has 31 for parameter 8
 wait 600
 data kits.bin 770048
@@ -51,13 +51,13 @@ turn ALGO -21
 wait 60
 expect morph 64
 expect heard8 41
-expect heard1 25
+expect heard1 3
 expect heard234 50
 turn ALGO -1
 wait 60
 expect morph 61
 expect heard8 40
-expect heard1 24
+expect heard1 2
 expect heard234 0
 
 # a dial turned while morphing moves the kit, and the blend follows at once

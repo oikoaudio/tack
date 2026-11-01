@@ -15,6 +15,7 @@ import mido
 HEAD = [0x7D, ord("K"), ord("T")]
 SLOTS, SLOT, PART = 128, 256, 64
 BANK_FILE = re.compile(r"\d{3}-.*\.snd$", re.IGNORECASE)     # what --save writes
+EMPTY_KIT = b"initkit"                  # an LXR project's unused slot. Their last few bytes differ, so copies don't catch them
 
 
 def named(raw, stem):
@@ -26,16 +27,21 @@ def named(raw, stem):
 
 
 def kits(root):
-    seen, out = set(), []
+    seen, out, empties = set(), [], 0
     for f in sorted(pathlib.Path(root).rglob("*")):
         if f.suffix.lower() != ".snd" or f.name.startswith("._") or "__MACOSX" in f.parts or not f.is_file():
             continue
         raw = f.read_bytes()
+        if not BANK_FILE.match(f.name) and raw[:8].rstrip(b" \0").lower() == EMPTY_KIT:
+            empties += 1
+            continue
         h = hashlib.sha256(raw).digest()
         if h in seen and not BANK_FILE.match(f.name):   # a bank's copies stay: its slot numbers are what patterns refer to
             continue
         seen.add(h)
         out.append((f, named((raw + bytes(SLOT))[:SLOT], f.stem)))
+    if empties:
+        print(f"{empties} empty Initkit slots left out")
     return out
 
 

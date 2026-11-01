@@ -1,0 +1,12 @@
+# a kit can name the LXR-02's user samples, and neither build has them: its waves load as SIN, and other values stay as they are
+wait 600
+data kits_samples.bin 770048
+turn PRESET 1
+wait 60
+expect heard1 0
+expect heard4 0
+expect heard6 0
+expect heard7 0
+expect heard20 0
+expect heard26 0
+expect heard5 20

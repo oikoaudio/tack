@@ -54,7 +54,7 @@ the computer, as a hub can stop it reconnecting during an install.
 |---|---|
 | `fm1 info` | Shows what is on the unit |
 | `fm1 install` | Installs `build/tack.fwsc`, or finishes an install that was cut off |
-| `fm1 kits DIR` | Replaces the kit bank with every `.SND` file under `DIR` |
+| `fm1 kits DIR` | Replaces the kit bank with every `.SND` file under `DIR`. The site's kit bank page does the same from a browser |
 | `fm1 backup NAME` | Writes the patterns and settings to `NAME.tack`, and the bank to `NAME.kits/` |
 | `fm1 restore NAME` | Puts both back, after the FM-1 asks |
 | `fm1 log` | Reads the crash log |

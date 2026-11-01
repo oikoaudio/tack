@@ -59,10 +59,18 @@ static void setModTarget(uint16_t param, uint8_t modTargetIdx)
 }
 //-----------------------------------------------------------
 // Tack's one change to the kit data: the PWM waveform subtracts two copies of a saw offset by the pulse width, so
+static bool isOscWave(uint16_t p)
+{
+	return (p >= PAR_OSC_WAVE_DRUM1 && p <= PAR_OSC_WAVE_SNARE) || p == PAR_WAVE1_CYM || p == PAR_WAVE1_HH
+		|| (p >= PAR_MOD_WAVE_DRUM1 && p <= PAR_WAVE3_HH) || p == PAR_FX_WAVE;
+}
+//-----------------------------------------------------------
 // at width 0 it is silent. Pulse width only matters for PWM, so 1 is its minimum here.
 static uint8_t adjustValue(uint16_t p, uint8_t value)
 {
 	if(value < lxr_param_min(p)) return (uint8_t)lxr_param_min(p);
+	// waves above PWM were the LXR-02's user samples, which neither build has. The factory set's ACID names three
+	if(isOscWave(p) && value >= NUM_OSC_WAVEFORMS) return SINE;
 	// one stereo output: a voice plays there directly or through the FX bus, and the bus returns there. The
 	// device's second pair and mono jacks become that output.
 	if(p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6 && value != MIXER_ROUTING_FX_BUS) return MIXER_ROUTING_DAC1_STEREO;
