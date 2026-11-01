@@ -6,10 +6,6 @@ expect notemode 0
 tap SEQ
 wait 40
 expect stepmode 0
-expect notemode 0
-tap SEQ
-wait 40
-expect stepmode 0
 expect notemode 1
 shot note_empty.png
 

@@ -174,6 +174,66 @@ expect fires0 11
 tap PLAY
 wait 60
 
+# a held step's popups: ALGORITHM nudges, PRESET sets the chance, and each goes when the step is let go
+tapkey 4
+wait 60
+expect step2 1
+key 4 down
+wait 40
+expect popup 0
+turn ALGO 2
+wait 40
+expect popup 1
+expect bpm 120
+shot pop_nudge.png
+turn SELECT 3
+wait 40
+expect popup 2
+expect recurlen2 4
+shot pop_recur.png
+tapkey 5
+wait 40
+expect popup 2
+turn PRESET -25
+wait 40
+expect popup 3
+shot pop_chance.png
+key 4 up
+wait 60
+expect popup 0
+expect step2 1
+expect kit 0
+shot pop_gone.png
+# and on a step that is off, nothing to open
+key 6 down
+wait 40
+turn ALGO 2
+wait 40
+expect popup 0
+key 6 up
+wait 40
+expect step3 0
+tapkey 4
+wait 60
+
+# while it runs a step shows whether it plays on this pass, and stopped it shows as on. This one is on the second slot of
+# two, and a pass of its lane takes a second
+expect skips0 0
+tap PLAY
+wait 300
+expect skips0 1
+shot rest.png
+tap SEL
+wait 60
+shot rest_voice.png
+tap SEL
+wait 60
+wait 900
+expect skips0 0
+tap PLAY
+wait 60
+expect skips0 0
+
 # it is saved with the pattern
 tap SAVE
 wait 200

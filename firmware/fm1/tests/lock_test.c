@@ -53,6 +53,9 @@ int tack_locked(uint8_t voice, uint8_t step);
 int tack_lock_get(uint8_t voice, uint8_t step, uint16_t param, uint8_t *value);
 int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);
 int tack_lock_count(void);
+float probe_lfo_rnd(int voice);
+float probe_cymbal_pwm(void);
+int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel);
 int tack_recur_len(uint8_t voice, uint8_t step);
 uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
 int tack_recur_room(uint8_t voice, uint8_t step);
@@ -695,6 +698,94 @@ static void list_tests(void)
     run(8);
 }
 
+/* velocity cannot be aimed at its own settings, on the way up or down, and a kit that holds one keeps it */
+static void target_tests(void)
+{
+    const TackSlot *t = 0;
+    for (uint32_t i = 0; i < 4 && !t; i++) {
+        const TackSlot *sl = tack_slot(0, 2, 2, i);
+        if (sl && sl->target)
+            t = sl;
+    }
+    check("the velocity row has a target", t != 0, 1, t != 0);
+    if (!t)
+        return;
+    uint8_t v = 0;
+    int stops = 0, self = 0;
+    for (int i = 0; i < 80; i++) {
+        const uint8_t next = tack_slot_step(t, v, 1);
+        if (next == v)
+            break;
+        v = next;
+        stops++;
+        const char *name = tack_slot_text(t, v);
+        self += strstr(name, "VEL ") != 0;
+    }
+    check("turning up passes every target but velocity's own", stops == 35 && !self, 35, stops);
+    int down = 0;
+    for (int i = 0; i < 80; i++) {
+        const uint8_t next = tack_slot_step(t, v, -1);
+        if (next == v)
+            break;
+        v = next;
+        down++;
+        self += strstr(tack_slot_text(t, v), "VEL ") != 0;
+    }
+    check("and so does turning down", down == 35 && v == 0 && !self, 35, down);
+    check("a kit's own still reads", strstr(tack_slot_text(t, 12), "VEL ") != 0, 1, 0);
+}
+
+/* the PULSE dial reaches the voice: the cymbal's, on its page */
+static void pulse_tests(void)
+{
+    const TackSlot *p = tack_slot(4, 1, 0, 2);
+    tack_post_param(p->par, 20);
+    run(2);
+    const float a = probe_cymbal_pwm();
+    tack_post_param(p->par, 110);
+    run(2);
+    const float b = probe_cymbal_pwm();
+    check("PULSE reaches the cymbal's oscillator", b > a + 0.3f, a, b);
+}
+
+/* a random LFO sent by its voice's hit: a new value at each hit, held between them, and only then */
+static void random_lfo_tests(void)
+{
+    const TackSlot *wave = tack_slot(0, 3, 0, 3), *retrig = tack_slot(0, 3, 1, 1);
+    float a, b, c;
+    int changed = 0;
+    tack_post_param(wave->par, 5);
+    tack_post_param(retrig->par, 1);
+    run(2);
+    tack_post_note(0, 60, 100);
+    run(1);
+    a = probe_lfo_rnd(0);
+    run(40);
+    b = probe_lfo_rnd(0);
+    check("a random LFO holds between hits", a == b, a, b);
+    for (int i = 0; i < 8; i++) {
+        const float was = probe_lfo_rnd(0);
+        tack_post_note(0, 60, 100);
+        run(2);
+        changed += probe_lfo_rnd(0) != was;
+    }
+    check("and takes a new value on each hit", changed == 8, 8, changed);
+    tack_post_note(1, 60, 100);
+    run(2);
+    c = probe_lfo_rnd(0);
+    tack_post_note(1, 60, 100);
+    run(2);
+    check("another voice's hit leaves it", c == probe_lfo_rnd(0), c, probe_lfo_rnd(0));
+    tack_post_param(retrig->par, 0);
+    run(2);
+    c = probe_lfo_rnd(0);
+    tack_post_note(0, 60, 100);
+    run(2);
+    check("with no source a hit leaves it", c == probe_lfo_rnd(0), c, probe_lfo_rnd(0));
+    tack_post_param(wave->par, 0);
+    run(2);
+}
+
 /* a voice's eight locks all reach the engine at its step, and go back at the next */
 static void many_locks_play(int fp, float base)
 {
@@ -792,6 +883,9 @@ int main(void)
     run(4);
     many_locks_play(fp, probe_filter(0));
     list_tests();
+    target_tests();
+    random_lfo_tests();
+    pulse_tests();
 
     fx_tests();
     page_sweep();

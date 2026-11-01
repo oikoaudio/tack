@@ -219,31 +219,31 @@ void lfo_recalcSync()
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
 }
 //-------------------------------------------------------------
+#ifdef LXR_FM1_BUILD
+// a random LFO sent by a voice's hit takes a new value with it: the value reaches its target at
+// once, as velocity's does, before the voice starts, and holds until the next hit
+static void lfo_retriggerOne(Lfo *lfo)
+{
+	lfo->phase = lfo->phaseOffset;
+	if(lfo->waveform == LFO_NOISE)
+	{
+		lfo->rnd = GetRngValue() / (float)0xffffffff;
+		modNode_updateValue(&lfo->modTarget, lfo->rnd);
+	}
+}
+#else
+static void lfo_retriggerOne(Lfo *lfo)
+{
+	lfo->phase = lfo->phaseOffset;
+}
+#endif
 void lfo_retrigger(uint8_t voice)
 {
-	if(voiceArray[0].lfo.retrigger == voice+1)
-	{
-		voiceArray[0].lfo.phase = voiceArray[0].lfo.phaseOffset;
-	}
-	if(voiceArray[1].lfo.retrigger == voice+1)
-	{
-		voiceArray[1].lfo.phase = voiceArray[1].lfo.phaseOffset;
-	}
-	if(voiceArray[2].lfo.retrigger == voice+1)
-	{
-		voiceArray[2].lfo.phase = voiceArray[2].lfo.phaseOffset;
-	}
-	if(snareVoice.lfo.retrigger == voice+1)
-	{
-		snareVoice.lfo.phase = snareVoice.lfo.phaseOffset;
-	}
-	if(cymbalVoice.lfo.retrigger == voice+1)
-	{
-		cymbalVoice.lfo.phase = cymbalVoice.lfo.phaseOffset;
-	}
-	if(hatVoice.lfo.retrigger == voice+1)
-	{
-		hatVoice.lfo.phase = hatVoice.lfo.phaseOffset;
-	}
+	if(voiceArray[0].lfo.retrigger == voice+1) lfo_retriggerOne(&voiceArray[0].lfo);
+	if(voiceArray[1].lfo.retrigger == voice+1) lfo_retriggerOne(&voiceArray[1].lfo);
+	if(voiceArray[2].lfo.retrigger == voice+1) lfo_retriggerOne(&voiceArray[2].lfo);
+	if(snareVoice.lfo.retrigger == voice+1) lfo_retriggerOne(&snareVoice.lfo);
+	if(cymbalVoice.lfo.retrigger == voice+1) lfo_retriggerOne(&cymbalVoice.lfo);
+	if(hatVoice.lfo.retrigger == voice+1) lfo_retriggerOne(&hatVoice.lfo);
 }
 //-------------------------------------------------------------

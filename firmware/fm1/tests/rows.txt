@@ -1,0 +1,226 @@
+# The rows of a sound page: firmware/fm1/build/host/tack_host firmware/fm1/tests/rows.txt OUTDIR
+# Pages by voice: drums and snare OSC 0, a modulator 1, FILTER 2, TRANSIENT 3, OUTPUT 4; hats and cymbal with MOD WAVE 2 and
+# the rest one on. ENV: AMP EG 0, MOD EG 1 if any, VELOCITY. LFO: LFO 0, LFO SYNC 1
+wait 600
+
+# the middle row by default, and a held OCT the row above or below for as long as it is held
+tap EDIT
+wait 40
+expect page 10
+expect row 0
+shot edit.png
+press OCT+
+wait 40
+expect row 1
+shot edit_up.png
+release OCT+
+wait 40
+expect row 0
+expect page 10
+# nothing below OSC on a drum: the dials stay on the middle row
+press OCT-
+wait 40
+expect row 0
+release OCT-
+wait 40
+
+# the second screen is the same on every voice: TRANSIENT, FILTER, OUTPUT
+tap EDIT
+wait 40
+expect page 12
+expect row 2
+press OCT+
+wait 40
+expect row 3
+release OCT+
+wait 40
+press OCT-
+wait 40
+expect row 4
+release OCT-
+wait 40
+
+# a voice with more pages keeps the screen: FILTER has moved on one page, and MOD WAVE is on the first screen
+tapkey 13
+wait 40
+expect voice 5
+expect page 13
+expect row 3
+tap EDIT
+wait 40
+expect page 0
+tap EDIT
+wait 40
+expect page 10
+press OCT-
+wait 40
+expect row 2
+release OCT-
+wait 40
+
+# a turn with an OCT held goes to that row only, and a tap of OCT moves nothing
+tapkey 1
+wait 40
+tap HOME
+wait 40
+tap ENV
+wait 40
+expect page 20
+expect sl1 21
+press OCT+
+wait 40
+turn K1 5
+wait 40
+release OCT+
+wait 40
+expect sl1 21
+expect page 20
+tap OCT+
+wait 40
+tap OCT-
+wait 40
+expect page 20
+
+# back to the screen it was left on, and past the last press the main page
+tap HOME
+wait 40
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+expect page 12
+tap HOME
+wait 40
+expect page 0
+tap EDIT
+wait 40
+expect page 12
+tap EDIT
+wait 40
+expect page 0
+tap EDIT
+wait 40
+expect page 10
+tap HOME
+wait 40
+
+# a dial turned shows its parameter large in the header, for a moment
+tap ENV
+wait 40
+turn K2 4
+wait 40
+expect touched 1
+shot touched.png
+wait 1400
+expect touched 0
+shot env.png
+# LEVEL by the envelope, on every voice, and the main page's K4 is the same parameter
+expect param3 >0
+turn K4 -7
+wait 60
+tap HOME
+wait 40
+expect sl3 120
+tap ENV
+wait 40
+turn K4 7
+wait 60
+press OCT+
+wait 40
+shot env_up.png
+release OCT+
+wait 40
+press OCT-
+wait 40
+shot env_down.png
+release OCT-
+wait 40
+tapkey 8
+wait 40
+shot env_snare.png
+tapkey 10
+wait 40
+shot env_cymbal.png
+tapkey 1
+wait 40
+tap HOME
+wait 40
+tap LFO
+wait 40
+shot lfo.png
+tap HOME
+wait 40
+turn K1 1
+wait 40
+expect touched 1
+wait 1400
+expect touched 0
+
+# SELECT and ALGORITHM show tempo and shuffle for a moment, on any page, and the page comes back whole
+turn SELECT 4
+wait 40
+expect popup 4
+expect bpm 124
+shot tempo.png
+turn ALGO 40
+wait 40
+expect popup 4
+shot tempo_swing.png
+wait 1000
+expect popup 4
+wait 700
+expect popup 0
+shot tempo_gone.png
+turn SELECT -4
+wait 1800
+expect popup 0
+turn ALGO -40
+wait 1800
+tap ENV
+wait 40
+turn SELECT 1
+wait 1800
+expect popup 0
+shot tempo_gone_env.png
+turn SELECT -1
+wait 1800
+tap HOME
+wait 40
+
+# back from a sound page the main page's bottom is its own, with nothing changed that would redraw it
+tap LFO
+wait 60
+tap LFO
+wait 60
+expect page 0
+shot back_main.png
+
+# on the main page OCT is the bar, and 16 step lanes have one
+tap OCT+
+wait 40
+expect bar 0
+
+# a step held: an OCT held locks on that row, from its own values
+tapkey 0
+wait 60
+tap ENV
+wait 40
+expect lockcount 0
+key 0 down
+wait 40
+press OCT+
+wait 40
+turn K1 3
+wait 40
+expect lockcount 1
+release OCT+
+wait 40
+turn K2 3
+wait 40
+expect lockcount 2
+key 0 up
+wait 40
+tap HOME
+wait 40
+expect step0 1
+expect dropped 0

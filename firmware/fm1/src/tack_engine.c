@@ -80,6 +80,14 @@ static int32_t enum_pos(const TackEnum *e, uint8_t value)
             return i;
     return 0;
 }
+static int self_target(const char *name)
+{
+    for (; *name; name++)
+        if (name[0] == 'V' && name[1] == 'E' && name[2] == 'L' && name[3] == ' ')
+            return 1;
+    return 0;
+}
+
 uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e)
 {
     int32_t top = s->max, v = value;
@@ -88,9 +96,17 @@ uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e)
         return (uint8_t)(v < 0 ? 0 : v > top ? top : v);
     }
     const TackEnum *en = &TACK_ENUM[s->en - 1];
+    const int32_t from = enum_pos(en, value);
     top = en->count - 1;
-    v = enum_pos(en, value) + e;
+    v = from + e;
     v = v < 0 ? 0 : v > top ? top : v;
+    /* a target past velocity's own settings: a voice's hit would rewrite what its velocity does. A kit may still hold one */
+    while (s->target && self_target(en->names[v]) && v != from) {
+        const int32_t next = v + (e > 0 ? 1 : -1);
+        if (next < 0 || next > top)
+            return value;
+        v = next;
+    }
     return en->fw ? en->fw[v] : (uint8_t)v;
 }
 const char *tack_slot_text(const TackSlot *s, uint8_t value)
@@ -524,6 +540,12 @@ int tack_locked(uint8_t voice, uint8_t step)
 }
 
 int tack_lock_count(void) { return lock_list[seq_activePattern].n; }
+int tack_step_locks(uint8_t voice, uint8_t step)
+{
+    const LockList *p = &lock_list[seq_activePattern];
+    const uint32_t key = step_key(voice, step);
+    return (int)step_locks(p, lock_lower(p, key), key);
+}
 
 /* Recurrence goes where the sequencer's first lock slot was, which is copied and cleared with the step: param1Nr the length,
  * or NO_AUTOMATION for none, and param1Val the mask. Each lane counts its own passes of each pattern, so polymetric lanes
@@ -569,6 +591,18 @@ uint8_t tack_recur_mask(uint8_t voice, uint8_t step)
 {
     const Step *st = &seq_patternSet.seq_subStepPattern[seq_activePattern][voice][step];
     return st->param1Nr == NO_AUTOMATION ? 1u : st->param1Val;
+}
+
+int tack_recur_slot(uint8_t voice, uint8_t step)
+{
+    const int len = tack_recur_len(voice, step);
+    return len > 1 && seq_isRunning() ? (int)(lane_pass[seq_activePattern][voice] % (uint32_t)len) : -1;
+}
+
+int tack_recur_skips(uint8_t voice, uint8_t step)
+{
+    const int slot = tack_recur_slot(voice, step);
+    return slot >= 0 && !((tack_recur_mask(voice, step) >> slot) & 1u);
 }
 
 /* how many of the steps of a pattern have recurrence */

@@ -85,6 +85,7 @@ int tack_lock_get(uint8_t voice, uint8_t step, uint16_t param, uint8_t *value); 
 enum { TACK_LOCK_ROOM, TACK_LOCK_STEP_FULL, TACK_LOCK_PATTERN_FULL };
 int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);
 int tack_lock_count(void);                               /* in the active pattern */
+int tack_step_locks(uint8_t voice, uint8_t step);        /* on one step */
 /* Recurrence: a step plays on some of the slots of a cycle of its lane's passes through the pattern. Length 1 is every pass,
  * and otherwise bit n of the mask is slot n + 1, at least one set */
 #define TACK_RECUR_MAX 8u
@@ -92,6 +93,8 @@ int tack_recur_len(uint8_t voice, uint8_t step);
 uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
 int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 640 */
 int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
+int tack_recur_slot(uint8_t voice, uint8_t step);        /* the slot this pass is on, -1 if it has no cycle or nothing runs */
+int tack_recur_skips(uint8_t voice, uint8_t step);       /* it will not play on this pass */
 int tack_locked(uint8_t voice, uint8_t step);
 uint32_t tack_dropped_events(void);
 

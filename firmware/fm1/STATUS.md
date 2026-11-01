@@ -96,23 +96,27 @@ The panel:
 
 | Control | Action |
 | --- | --- |
-| White keys | STEP mode: the 16 steps of the page, on release. PLAY mode: the first seven play the voices |
+| White keys | the 16 steps of the page, on release |
 | A step held, K1 to K4 | lock those values on the step, two per step. EDIT clears them |
 | SEL held, a white key | that step becomes the lane's last |
-| Black keys, first seven | select a voice; with ARP held, mute it. Lit: the voice. Mid: steps in this pattern. Glow: an empty lane. Dark: muted. Each flashes as its voice fires, the lit one to dark |
+| Black keys, first seven | select a voice and play it, with REC running recording it; with SEQ held, select it silently; with ARP held, mute it. Lit: the voice. Mid: steps in this pattern. Glow: an empty lane. Dark: muted. Each flashes as its voice fires, the lit one to dark |
 | NOTE mode | all 27 keys play the voice from F3 to G5, and OCT moves them up to 3 octaves. REC on writes what they play: stopped, step by step from the marked step, with a tap of SEL going past a step; running, live. REC off only plays. K1 step, K2 its note, K3 velocity, K4 on or off. The roll shows the voice's bar, and the keys light the step's note. SEQ held with a black key picks the voice |
 | MIDI channel 1 | notes 60 to 66 play the voices. Notes 0 to 15 and Program Change 0 to 15 pick a pattern, at the end of the bar when running |
-| A step held | recurrence: SELECT sets the cycle, 1 (every pass) to 8, and the first eight black keys pick the passes it plays on |
+| Recurrence, running | a step that rests on this pass is grey on the screen and its key is at the lowest light. In the one voice view a tall mark shows the slot this pass is on |
+| LFO WAVE RND with RETRIG on a voice | that voice's hit takes a new value, there before the note starts and held until the next hit. FM-1 only: the LXR and desktop Tack keep the value until the LFO's own cycle wraps |
+| A step held | a popup until it is let go. ALGORITHM: nudge, on a ruler. PRESET: chance. SELECT: the recurrence cycle, 1 (every pass) to 8, and the first eight black keys pick the passes it plays on |
 | ARP | tap: SONG page, up to 63 rows of one pattern each. White keys fill the rows. K1 row, K2 pattern or end, K3 stop or loop at the end, K4 on or off. Picking one pattern turns the song off and keeps its rows |
-| SEQ | switch between STEP and PLAY mode |
 | OCT- and OCT+ | bar 1 to 4 |
 | PLAY, REC | start and stop, live recording |
 | Screen | the 7 row grid on the main, Euclidean and STEP pages. EDIT, ENV, LFO, FX, GLO and SONG have the screen below the header, as the keys show the voice's steps |
 | K1 to K4 | what the open page shows: pitch, filter, decay and volume of the voice on the main page |
-| SELECT, ALGORITHM, PRESET | tempo, shuffle, kit |
-| SEQ | tap: STEP, PLAY or NOTE mode. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
-| EDIT, ENV, LFO | the voice's sound pages, 256 parameter slots in all. Each press opens the next page, and past the last returns to the main page |
-| FX | FX type, mix and two settings of that type, then a second page of its others. Black keys send voices to the FX |
+| SELECT, ALGORITHM, PRESET | tempo and shuffle, on a screen of their own for a moment; kit |
+| SEQ | tap: STEP or NOTE mode. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
+| EDIT, ENV, LFO | the Syntakt layout: a top bar and all three rows in four equal columns, with smooth widgets and one picture across the parameters that shape it: the envelope, the filter's shape, the oscillator's wave, the LFO. LEVEL is the fourth dial of AMP EG, and REPEAT the fourth of ENV's last row. The exact value shows in the top bar while a dial turns, and a held step's recurrence there too. Velocity and LFO targets skip velocity's own settings |
+| SEL tapped on the main page | one voice's bar at a larger size, in the white keys' order: velocity as height, nudge as a tick, locks as dots, recurrence as boxes, chance and flam as numbers, and the main dials below. HOME or SEL leaves it |
+| OCT+, OCT- on the main page | the bar, among those the lanes reach. With SEL held OCT+ goes past them, to lengthen a lane with a white key |
+| OCT+, OCT- on a sound page | held: the upper or lower row takes the screen and the dials, and the middle one comes back when let go. Elsewhere OCT is the bar, or in NOTE mode the keys' range |
+| FX | the sends, lit by the black keys, then FX type, mix and two settings of that type. OCT- held reaches its others |
 | GLO | settings: tempo, shuffle, external MIDI clock, roll rate, and the `CPU`, `PEAK` and `XRUN` readings |
 | Black keys 8 to 10 | ROLL while held, the Euclidean page, COPY held with a white key: this pattern onto that one |
 | Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane. Second press: a held step's note |
@@ -182,7 +186,7 @@ Recurrence: a step plays on chosen slots of a cycle of 2 to 8 passes. The length
 lock slot, so they copy and clear with the step, and each takes 3 B of the 640 in the image. Each lane counts its passes of
 each pattern, from the start of play.
 
-Compiled and simulator-tested, not yet on a device: recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
+Compiled and simulator-tested, not yet on a device: the three row pages and voice colours, recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
 
 Known omissions:
 
@@ -216,12 +220,8 @@ as easily as one voice, so the build went straight to the complete kit.
 
 From the user on 2026-11-01, after the sequencing work:
 
-- A second SEQ view of one voice at a larger size: offsets, velocity, locks and recurrence.
-- Whether PLAY mode goes, with the black keys playing their voice (open, 2026-11-01).
-- Sound pages that draw their values better, and two or more rows of parameters on a page, reached with the octave
-  buttons or by holding them, in place of paging with EDIT. Elektron and fors.fm/opal are the references. A tap of SEL is
-  kept free for these views.
 - An eighth voice: two oscillator FM on the user's wavetables, 1D but stepped through by two parameters as if 2D.
+- USB audio, after the interface. Recording from Tack is on already: `usb_audio_in`, seen on Linux as a 16-bit stereo 44.1 kHz capture device, and a one second capture ran on 2026-11-01. A computer playing through the FM-1 is `usb_audio_out`, off in `fm1.toml`. Individual outs are not there: the stream is the master output. github.com/TomPtherapy/moogi lists a 10-channel USB audio mode, so that is the thing to study; its README was read, its code not. Its LICENSE file is GPL-3.0, as Tack's firmware, with no copyright holder filled in.
 
 ## Memory
 
@@ -229,8 +229,8 @@ Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 271,392 B | 581,564 B | 46% |
-| RAM, `.data` and `.bss` | 37,368 B | 98,304 B | 38% |
+| Flash image | 280,512 B | 581,564 B | 46% |
+| RAM, `.data` and `.bss` | 37,416 B | 98,304 B | 38% |
 | Pool | 227,636 B | 344,064 B | 66% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables

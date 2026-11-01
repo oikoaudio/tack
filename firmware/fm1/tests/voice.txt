@@ -1,0 +1,125 @@
+# The one voice view: firmware/fm1/build/host/tack_host firmware/fm1/tests/voice.txt OUTDIR
+wait 600
+expect voiceview 0
+
+# steps with something on each: step 1 plain, 2 nudged and with a lock, 3 chance and flam, 5 recurrence, 9 quiet
+tapkey 0
+wait 60
+tapkey 2
+wait 60
+tapkey 4
+wait 60
+tapkey 7
+wait 60
+tapkey 14
+wait 60
+key 2 down
+wait 40
+turn ALGO 3
+wait 40
+turn K2 -9
+wait 40
+key 2 up
+wait 60
+key 4 down
+wait 40
+turn PRESET -40
+wait 40
+key 4 up
+wait 60
+key 7 down
+wait 40
+turn SELECT 2
+wait 40
+tapkey 5
+wait 40
+key 7 up
+wait 60
+tapkey 25
+wait 40
+key 14 down
+wait 40
+turn K4 -70
+wait 40
+key 14 up
+wait 40
+tap HOME
+wait 40
+
+# a tap of SEL, and held for something else it does not
+tap SEL
+wait 60
+expect voiceview 1
+shot voice.png
+tapkey 3
+wait 40
+expect voice 1
+expect voiceview 1
+tapkey 1
+wait 60
+tap SEL
+wait 60
+expect voiceview 0
+press SEL
+wait 20
+tapkey 19
+wait 40
+release SEL
+wait 60
+expect voiceview 0
+press SEL
+wait 20
+tapkey 26
+wait 40
+release SEL
+wait 60
+expect voiceview 0
+tap SEL
+wait 60
+expect voiceview 1
+
+# white keys are still the steps, a held step's popups work over it, and the playhead shows
+tapkey 21
+wait 60
+expect step12 1
+key 0 down
+wait 40
+turn ALGO -2
+wait 40
+expect popup 1
+key 0 up
+wait 60
+expect popup 0
+expect voiceview 1
+tap PLAY
+wait 700
+shot voice_playing.png
+tap PLAY
+wait 60
+
+# other pages and back, OCT is the bar here, and HOME leaves
+tap ENV
+wait 40
+expect voiceview 0
+tap ENV
+wait 40
+expect voiceview 1
+tap FX
+wait 40
+tap FX
+wait 40
+expect voiceview 1
+tap OCT+
+wait 40
+expect bar 0
+tap HOME
+wait 40
+expect voiceview 0
+tap SEQ
+wait 40
+tap SEL
+wait 40
+expect voiceview 0
+tap SEQ
+wait 40
+expect dropped 0

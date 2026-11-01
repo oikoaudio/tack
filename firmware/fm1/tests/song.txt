@@ -41,15 +41,9 @@ expect pattern 0
 # a voice's triggers are counted from the sequencer and from a key, and its lane shows as used only with steps
 expect used0 0
 expect fires1 0
-tap SEQ
-wait 40
-tapkey 0
+tapkey 1
 wait 200
 expect fires0 2
-tap SEQ
-wait 40
-tap SEQ
-wait 40
 tapkey 0
 wait 60
 expect used0 1

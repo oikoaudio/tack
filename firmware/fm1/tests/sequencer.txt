@@ -64,16 +64,45 @@ wait 40
 release ARP
 wait 20
 expect muted3 0
-# the bars
+# the bars: OCT+ stays on the bars the lanes reach, and with SEL held goes past them to lengthen a lane
+tap OCT+
+wait 30
+expect bar 0
+press SEL
+wait 20
 tap OCT+
 wait 30
 expect bar 1
+release SEL
+wait 40
+expect bar 0
+press SEL
+wait 20
+tap OCT+
+wait 30
+tapkey 0
+wait 40
+release SEL
+wait 40
+expect bar 1
+expect len3 17
 tapkey 0
 wait 40
 expect step16 1
 tap OCT-
 wait 30
 expect bar 0
+press SEL
+wait 20
+tap OCT+
+wait 30
+tapkey 14
+wait 40
+release SEL
+wait 40
+expect len3 25
+tap OCT-
+wait 30
 # the encoders
 turn SELECT 10
 wait 40
@@ -222,24 +251,21 @@ expect fxp3 243
 tap FX
 wait 40
 expect fxpage 0
-# the sound pages: each press the next, and past the last back to the main page
+# the sound pages: three rows a screen, each press the next screen, and past the last back to the main page
 tap EDIT
 wait 40
 expect page 10
 tap EDIT
 wait 40
-expect page 11
+expect page 12
 tap ENV
 wait 40
 expect page 20
 tap ENV
 wait 40
-tap ENV
-wait 40
-expect page 22
-tap ENV
-wait 40
 expect page 0
+tap HOME
+wait 40
 # the snare has no FM page: the page it opens is its noise
 tapkey 8
 wait 40
@@ -247,17 +273,20 @@ tap EDIT
 wait 40
 tap EDIT
 wait 40
+tap EDIT
+wait 40
+expect page 10
 expect voice 3
+press OCT+
+wait 40
+expect row 1
 turn K2 -9
 wait 40
 expect sl1 52
-tap EDIT
+release OCT+
 wait 40
-tap EDIT
-wait 40
-tap EDIT
-wait 40
-tap EDIT
+expect row 0
+tap HOME
 wait 40
 expect page 0
 tap LFO
@@ -268,8 +297,6 @@ expect sl0 2
 turn K2 40
 wait 40
 expect sl1 40
-tap LFO
-wait 40
 tap LFO
 wait 40
 expect page 0
@@ -452,10 +479,11 @@ turn K2 100
 wait 40
 turn K3 49
 wait 40
-tap FX
+press OCT-
 wait 40
-expect fxpage 2
 turn K1 127
+wait 40
+release OCT-
 wait 40
 expect fxv4 127
 expect echo 299

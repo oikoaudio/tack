@@ -4,6 +4,9 @@
 #include "Parameters.h"
 #include "Soundengine/FxBus.h"
 float probe_filter(int voice) { return voiceArray[voice].filter.f; }
+float probe_lfo_rnd(int voice) { return voiceArray[voice].lfo.rnd; }
+#include "Soundengine/DSPAudio/CymbalVoice.h"
+float probe_cymbal_pwm(void) { return cymbalVoice.pwm; }
 int probe_param_filter1(void) { return PAR_FILTER_FREQ_1; }
 int probe_param_decay1(void) { return PAR_VELOD1; }
 
