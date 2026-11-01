@@ -1,0 +1,24 @@
+# picking the reverb starts its dials from a setting for drums. Leaving it puts back what the dials held, and coming back finds the reverb as it was
+wait 600
+tap FX
+wait 40
+turn K1 5 30
+wait 60
+expect fxv0 5
+expect fxv1 25
+expect fxv2 0
+expect fxv3 90
+expect fxv4 55
+expect fxv5 103
+expect fxv6 64
+turn K4 10
+wait 60
+expect fxv3 100
+turn K1 -1
+wait 60
+expect fxv0 4
+expect fxv1 0
+turn K1 1
+wait 60
+expect fxv3 100
+expect fxv4 55

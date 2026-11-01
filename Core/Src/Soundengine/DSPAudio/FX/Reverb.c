@@ -26,16 +26,20 @@ static const float earlyTaps[] =
 		50
 };
 
+#define REVERB_WOBBLE 16.f		// samples, each way
+
 void Reverb_init(Reverb *r)
 {
 
 	TiltEq_init(&r->eq);
 	TiltEq_init(&r->eqFb);
+	TiltEq_init(&r->eqFbRight);
 
 	SineCosine_init(&r->lfo);
 	r->reverbBufferSram = (__fp16*)FX_BUFFER;
 
 	r->earlyVolume = 1.0f;
+	r->lateVolume = 1.0f;
 
 
 	setOnePoleCoef(&r->lpFeedback, 0.5f);
@@ -43,7 +47,7 @@ void Reverb_init(Reverb *r)
 
 		//feedbackShaper.setShape(0.7f);
 	r->lastOut = r->lastOut2 = 0;
-	SineCosine_setFreq(&r->lfo, 1.31f);
+	SineCosine_setFreq(&r->lfo, 1.31f * OUTPUT_DMA_SIZE);	// it steps once a block
 	/*
 	AllpassDelay apDelay[2];
 		AllpassModDelay apModDelay[2];
@@ -193,6 +197,9 @@ void Reverb_init(Reverb *r)
 		AllpassModDelay_setDelay(&r->apModDelay[1], 908);
 #endif
 
+	    // these two are as long as the loop's delays: a higher gain and each echoes at its own length
+	    AllpassDelay_setCoefficient(&r->apDelay[0], 0.35);
+	    AllpassDelay_setCoefficient(&r->apDelay[1], 0.35);
 	    AllpassDelay_setCoefficient(&r->inputAllpass[0], 0.75);
 	    AllpassDelay_setCoefficient(&r->inputAllpass[1], 0.75);
 	    AllpassDelay_setCoefficient(&r->inputAllpass[2], 0.625);
@@ -203,22 +210,74 @@ void Reverb_init(Reverb *r)
 
 
 
+float Reverb_lowCutHz(float v) { return v <= 0.f ? 0.f : 20.f * powf(200.f, v); }
+float Reverb_highCutHz(float v) { return v >= 1.f ? 0.f : 60.f * powf(300.f, v); }
+
+void ReverbCut_setHz(ReverbCut *c, float hz, uint8_t high)
+{
+	static const float DAMP[2] = {1.847759f, 0.7653669f};	// the two stages of a Butterworth filter
+	const float g = tanf(3.14159265f * hz / REAL_FS);
+	c->high = high;
+	if(hz <= 0.f)
+	{
+		c->on = 0;
+		return;
+	}
+	for(int s=0;s<2;s++)
+	{
+		c->k[s] = DAMP[s];
+		c->a1[s] = 1.f / (1.f + g * (g + DAMP[s]));
+		c->a2[s] = g * c->a1[s];
+		c->a3[s] = g * c->a2[s];
+		if(!c->on) c->ic1[s] = c->ic2[s] = 0.f;
+	}
+	c->on = 1;
+}
+
+void Reverb_setLowCut(Reverb *r, float v)
+{
+	const float hz = Reverb_lowCutHz(v);
+	ReverbCut_setHz(&r->lowCut[0], hz, 0);
+	ReverbCut_setHz(&r->lowCut[1], hz, 0);
+}
+
+void Reverb_setHighCut(Reverb *r, float v)
+{
+	const float hz = Reverb_highCutHz(v);
+	ReverbCut_setHz(&r->highCut[0], hz, 1);
+	ReverbCut_setHz(&r->highCut[1], hz, 1);
+}
+
+float ReverbCut_process(ReverbCut *c, float in)
+{
+	for(int s=0;s<2;s++)
+	{
+		const float v3 = in - c->ic2[s];
+		const float v1 = c->a1[s] * c->ic1[s] + c->a2[s] * v3;
+		const float v2 = c->ic2[s] + c->a2[s] * c->ic1[s] + c->a3[s] * v3;
+		c->ic1[s] = 2.f * v1 - c->ic1[s];
+		c->ic2[s] = 2.f * v2 - c->ic2[s];
+		in = c->high ? v2 : in - c->k[s] * v1 - v2;
+	}
+	return in;
+}
+
 //void Reverb_process(Reverb *r, int16_t* input1, int16_t* input2)
 void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, uint16_t size,  uint8_t channels, float dryWet)
 {
 	int32_t x;
 	int32_t* stereoOut = (int32_t*)outL;
 
-#if !HIGH_RES_SINE_COS
+	 // the wobble that keeps the tail from settling on the same paths, which is heard as a growl. Its amplitude is 0.5
 	 SineCosine_calc(&r->lfo);
-#if SPIN_SEMI
-	 AllpassModDelay_setModValue(&r->modDelay[1], SineCosine_getSine(&r->lfo));
-	 AllpassModDelay_setModValue(&r->modDelay[0], SineCosine_getCosine(&r->lfo));
-#else
-	 VerbModDelay_setModValue(&r->apModDelay[1].delay, SineCosine_getSine(&r->lfo));
-	 VerbModDelay_setModValue(&r->apModDelay[0].delay, SineCosine_getCosine(&r->lfo));
-#endif
-#endif
+	 const float wobble[2] = {SineCosine_getCosine(&r->lfo), SineCosine_getSine(&r->lfo)};
+	 for(int m=0;m<2;m++)
+	 {
+		 VerbModDelay *d = &r->apModDelay[m].delay;
+		 const float pos = (float)d->length + REVERB_WOBBLE * 2.f * wobble[m];
+		 d->distance = (uint32_t)pos + 1u;
+		 d->frac = (float)d->distance - pos;
+	 }
 	for(uint8_t i=0; i<size;i++)
 	{
 		const uint8_t idx1 = i*2;
@@ -245,7 +304,7 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 
 		 	 //############## early reverb ####################
 
-		 float early = 0;
+		 float early = 0, earlyRight = 0;
 		 //float vol = 1;//0.25f;
 		 VerbDelay_process(&r->earlyReflectionDelay, monoInput);
 		 /*
@@ -255,10 +314,21 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 		   vol *= 0.5f;
 		 }
 		 */
-		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[0]) ;
-		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[1]) * 0.5f ;
-		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[2]) * 0.125f ;
-		 early += VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[3]) * 0.25f ;
+#ifdef LXR_FM1_BUILD
+		 /* the taps below as samples of the delay's 2000: no percentage to work out each sample */
+		 const float tap0 = VerbDelay_ReadTapSample(&r->earlyReflectionDelay, 240);
+		 const float tap1 = VerbDelay_ReadTapSample(&r->earlyReflectionDelay, 480);
+		 const float tap2 = VerbDelay_ReadTapSample(&r->earlyReflectionDelay, 760);
+		 const float tap3 = VerbDelay_ReadTapSample(&r->earlyReflectionDelay, 1000);
+#else
+		 const float tap0 = VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[0]);
+		 const float tap1 = VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[1]);
+		 const float tap2 = VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[2]);
+		 const float tap3 = VerbDelay_ReadTap(&r->earlyReflectionDelay, earlyTaps[3]);
+#endif
+		 // the same reflections, louder on one side or the other
+		 early = tap0 + tap1 * 0.5f + tap2 * 0.125f + tap3 * 0.25f;
+		 earlyRight = tap0 * 0.5f + tap1 + tap2 * 0.25f + tap3 * 0.125f;
 
 		 monoInput = 0.5 * TiltEq_process(&r->eq, monoInput);//calcOnePole(&r->lpImpulse, monoInput);
 		 in  = AllpassDelay_process(&r->inputAllpass[0], AllpassDelay_process(&r->inputAllpass[1], (monoInput)));
@@ -436,15 +506,33 @@ void Reverb_process(Reverb *r, int16_t *fxBuffer,int16_t* outL, int16_t* outR, u
 			out2 -= VerbDelay_ReadTapSample(&r->apDelay[0].delay, 187) * 0.6;
 			out2 -= VerbDelay_ReadTapSample(&r->delay[1], 1066) * 0.6;
 
-			out= TiltEq_process(&r->eqFb,fmaf(early, r->earlyVolume, out2));
+			out= TiltEq_process(&r->eqFb,fmaf(early, r->earlyVolume, out2 * r->lateVolume));
+
+			// the right output, from Dattorro's taps as the comment above has them, within these shorter lines
+			float right = VerbDelay_ReadTapSample(&r->delay[0], 353) * 0.6;
+			right -= VerbDelay_ReadTapSample(&r->apDelay[0].delay, 1228) * 0.6;
+			right += VerbDelay_ReadTapSample(&r->delay[1], 1673) * 0.6;
+			right -= VerbDelay_ReadTapSample(&r->delay[2], 1111) * 0.6;
+			right -= VerbDelay_ReadTapSample(&r->apDelay[1].delay, 335) * 0.6;
+			right -= VerbDelay_ReadTapSample(&r->delay[3], 121) * 0.6;
+			right = TiltEq_process(&r->eqFbRight, fmaf(earlyRight, r->earlyVolume, right * r->lateVolume));
 
 #endif
-			int16_t wet =  __SSAT(out*32768, 16);
-			//int16_t wet2 =  __SSAT(out*32768, 16);
-			//int16_t dw = fxBuffer[i] + __SSAT((wet - fxBuffer[i]) * dryWet,16);
+			if(r->lowCut[0].on)
+			{
+				out = ReverbCut_process(&r->lowCut[0], out);
+				right = ReverbCut_process(&r->lowCut[1], right);
+			}
+			if(r->highCut[0].on)
+			{
+				out = ReverbCut_process(&r->highCut[0], out);
+				right = ReverbCut_process(&r->highCut[1], right);
+			}
+			const int16_t wet = __SSAT(out*32768, 16);
+			const int16_t wetRight = __SSAT(right*32768, 16);
 
-			x = __PKHBT(fxBuffer[idx1] + __SSAT((wet - fxBuffer[idx1]) * dryWet,16), fxBuffer[idx2] + __SSAT((wet - fxBuffer[idx2]) * dryWet,16), 16);
-			//LERP dryWet
+			// added to the dry sound, which stays as it is: the mix is the reverb's level, so a cut on it thins nothing else
+			x = __PKHBT(__SSAT(fxBuffer[idx1] + (int32_t)(wet * dryWet),16), __SSAT(fxBuffer[idx2] + (int32_t)(wetRight * dryWet),16), 16);
 			*stereoOut = __QADD16(*stereoOut, x);
 			stereoOut++;
 	}
@@ -486,6 +574,7 @@ IN_ITCM_RAM void Reverb_setComposition(Reverb *r, float c)
 {
 	TiltEq_setParameter(&r->eq, -1+2*c);
 	TiltEq_setParameter(&r->eqFb, -1+2*c);
+	TiltEq_setParameter(&r->eqFbRight, -1+2*c);
 	//compositionParameter = c;
 	setOnePoleCoef(&r->lpFeedback, c);
 //	setOnePoleCoef(&r->lpImpulse, c);
@@ -503,7 +592,9 @@ IN_ITCM_RAM void Reverb_setVariation(Reverb *r, float v)
 		//AllpassDelay_setCoefficient(&r->inputAllpass[i], v*0.9*scale);
 	}
 #else
-	r->earlyVolume = v;
+	// early to the left, late to the right, and both in full at the middle
+	r->earlyVolume = v < 0.5f ? 1.f : 2.f * (1.f - v);
+	r->lateVolume = v > 0.5f ? 1.f : 2.f * v;
 #endif
 }
 

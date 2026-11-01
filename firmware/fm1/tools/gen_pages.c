@@ -94,7 +94,7 @@ static const char *const WORD[][2] = {
     {"REC", "SQR"}, {"PWM", "PULSE"}, {"NOI", "NOISE"}, {"SUP", "SAW UP"}, {"SDN", "SAW DN"}, {"XUP", "EXP UP"}, {"XDN", "EXP DN"},
     {"12", "1/12"}, {"16", "1/16"}, {"32", "1/32"}, {"NCH", "NOTCH"}, {"PEK", "PEAK"}, {"SNP", "SNAP"}, {"OFS", "OFFSET"},
     {"CLK", "CLICK"}, {"CK2", "CLICK2"}, {"TIK", "TICK"}, {"KIK", "KICK"}, {"DRP", "DROP"}, {"CLP", "CLAP"}, {"KK2", "KICK2"},
-    {"SNR", "SNARE"}, {"SP2", "SNAP2"}, {"FX DRY/WET", "FX MIX"},
+    {"SNR", "SNARE"}, {"SP2", "SNAP2"}, {"FX DRY/WET", "FX MIX"}, {"FX TONE/THRESHOLD/", "FX TONE/THRESHOLD"},
 };
 
 /* the value that reads as 0, from the text the desktop shows and the LXR's menu: its lowest value reads minus that */

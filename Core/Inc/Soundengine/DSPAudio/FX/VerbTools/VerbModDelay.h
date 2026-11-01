@@ -32,6 +32,7 @@ typedef struct VerbModDelayStruct
   uint32_t writePtr;
   OnePoleFilter lp;
   float frac;
+  uint32_t distance;
   float depth;
   float modVal;
   float roomSz;

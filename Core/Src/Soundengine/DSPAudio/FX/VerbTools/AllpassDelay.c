@@ -25,10 +25,10 @@ void AllpassDelay_init(AllpassDelay *d)
 }
 float AllpassDelay_process(AllpassDelay *d, float input)
 {
-    d->out = VerbDelay_read(&d->delay);
-    d->in = input + d->g*d->out;
-    VerbDelay_write(&d->delay, d->in);
-    return d->out + (-d->g * d->in);
+    const float out = VerbDelay_read(&d->delay);
+    const float in = input + d->g*out;
+    VerbDelay_write(&d->delay, in);
+    return out + (-d->g * in);
 }
 void AllpassDelay_setCoefficient(AllpassDelay *d, float coff)
 {
@@ -59,11 +59,14 @@ void AllpassModDelay_init(AllpassModDelay *d)
 }
 float AllpassModDelay_process(AllpassModDelay *d, float input)
 {
-    VerbModDelay_calcLength(&d->delay);
-    d->out = VerbModDelay_read(&d->delay);
-    d->in = input + d->g*d->out;
-    VerbModDelay_write(&d->delay, d->in);
-    return d->out + (-d->g * d->in);
+    /* Between two samples, as Reverb_process moves the distance. VerbModDelay_calcLength would leave both allpasses at the whole 2048
+     * samples: its filter's coefficient rounds to 0 in single precision, and their equal lengths flutter */
+    const uint32_t at = (d->delay.writePtr - d->delay.distance) & (MAX_ALLPASS_SIZE - 1);
+    const float far = (float)d->delay.ramBuffer[at];
+    const float out = far + d->delay.frac * ((float)d->delay.ramBuffer[(at + 1) & (MAX_ALLPASS_SIZE - 1)] - far);
+    const float in = input + d->g*out;
+    VerbModDelay_write(&d->delay, in);
+    return out + (-d->g * in);
 }
 void AllpassModDelay_setCoefficient(AllpassModDelay *d, float coff)
 {

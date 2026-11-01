@@ -32,6 +32,11 @@ IN_ITCM_RAM float calcOnePole(OnePoleFilter* filter, double input)
 	return filter->b;
 }
 //-------------------------------------------------------------
+int onePole_settled(const OnePoleFilter* filter, double input)
+{
+	return fmaf(filter->r, input - filter->b, filter->b) == filter->b;
+}
+//-------------------------------------------------------------
 float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, double input)
 {
 

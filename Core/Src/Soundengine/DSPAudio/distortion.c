@@ -36,10 +36,13 @@ IN_ITCM_RAM void calcDistBlock(const Distortion *dist, int16_t* buf, const uint8
 void calcDistBlockFiltered(Distortion *dist, int16_t* buf, const uint8_t size)
 {
 	uint8_t i;
+#if SMOOTH_MIXER_VOL_PAN_DRIVE
+	const int settled = onePole_settled(&dist->DriveParamFilter, dist->shape);
+#endif
 	for(i=0;i<size;i++)
 	{
 #if SMOOTH_MIXER_VOL_PAN_DRIVE
-			float shape	= calcOnePole( &dist->DriveParamFilter, dist->shape);
+			float shape	= ONE_POLE_NEXT(&dist->DriveParamFilter, dist->shape, settled);
 #else
 			float shape = dist->shape;
 #endif

@@ -156,6 +156,7 @@ IN_ITCM_RAM void Cymbal_calcAsync()
 //---------------------------------------------------
 void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const int faderSettled = onePole_settled(&cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
 		int16_t mod[size];
 		int16_t mod2[size];
 		//calc next mod osc sample
@@ -202,7 +203,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * ONE_POLE_NEXT(&cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4), faderSettled);
 			}
 #else
 			for(j=0;j<size;j++)
@@ -231,7 +232,7 @@ void Cymbal_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  cymbalVoice.combinedVolume * calcOnePole( &cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4));
+				buf[j] *=  cymbalVoice.combinedVolume * ONE_POLE_NEXT(&cymbalVoice.FaderVolumeFilter, adc_getFaderVolume(4), faderSettled);
 			}
 #else
 			for(j=0;j<size;j++)

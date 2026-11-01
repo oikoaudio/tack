@@ -11,8 +11,12 @@ expect stepmode 0
 expect notemode 1
 shot note_empty.png
 
-# without REC the keys only play
+# SEL held the keys only play
+press SEL
+wait 30
 tapkey 7
+wait 40
+release SEL
 wait 40
 expect fires0 1
 expect used0 0
@@ -139,16 +143,18 @@ turn K3 10
 wait 40
 shot note_steps.png
 
-# REC off again: playing writes nothing
+# REC off again: a key sets the selected step and stays on it
 tap REC
 wait 40
 tapkey 11
 wait 40
 expect notestep 15
 expect step15 1
-expect note15 60
+expect note15 64
 
-# every note-on gets its note-off: a key's on release
+# every note-on gets its note-off: a key's on release. SEL held, so that a key only plays
+press SEL
+wait 30
 out
 key 7 down
 wait 40
@@ -171,6 +177,8 @@ expect_no_out USB 80 3E 00
 key 9 up
 wait 40
 expect_out USB 80 3E 00
+release SEL
+wait 30
 # OCT moved while a key is down
 out
 key 7 down
@@ -367,13 +375,13 @@ tap SEQ
 wait 40
 expect noteview 1
 out
-key 7 down
+key 9 down
 wait 40
-expect_out USB 90 3C 6E
+expect_out USB 90 3E 6E
 tap HOME
 wait 40
 expect notemode 0
-expect_no_out USB 80 3C 00
-key 7 up
+expect_no_out USB 80 3E 00
+key 9 up
 wait 40
-expect_out USB 80 3C 00
+expect_out USB 80 3E 00

@@ -61,6 +61,11 @@ IN_ITCM_RAM void mixer_decimateBlock(const uint8_t voiceNr, int16_t* buffer)
 {
 	uint8_t i;
 	float phaseInc = mixer_decimation_rate[voiceNr]*mixer_decimation_rate[6];
+	if(phaseInc == 1.f && mixer_decimation_cnt[voiceNr] == 0.f)	// full rate, with nothing left over: the block as it is
+	{
+		mixer_voice_samples[voiceNr] = buffer[OUTPUT_DMA_SIZE-1];
+		return;
+	}
 	for(i=0;i<OUTPUT_DMA_SIZE;i++)
 	{
 		mixer_decimation_cnt[voiceNr] += phaseInc;

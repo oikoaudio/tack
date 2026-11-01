@@ -38,6 +38,14 @@
 #define SPIN_SEMI 0
 
 
+// a cut of 24 dB an octave on the reverb's output, as two filters in a row. Plain ones: there are two cuts in every sample
+typedef struct ReverbCutStruct
+{
+	float a1[2], a2[2], a3[2], k[2];
+	float ic1[2], ic2[2];
+	uint8_t on, high;
+} ReverbCut;
+
 typedef struct ReverbStruct
 {
 #if SPIN_SEMI
@@ -62,6 +70,7 @@ typedef struct ReverbStruct
 	float feedback;
 	float delayTime;
 	float earlyVolume;
+	float lateVolume;
 
 	OnePoleFilter lpFeedback;
 	OnePoleFilter lpImpulse;
@@ -70,6 +79,8 @@ typedef struct ReverbStruct
 
 	float lastOut;
 	float lastOut2;
+	ReverbCut lowCut[2], highCut[2];		// left and right
+	TiltEq eqFbRight;
 
 	TiltEq eq;
 	TiltEq eqFb;
@@ -82,6 +93,12 @@ void Reverb_setDelayTime(Reverb *r, float t);
 void Reverb_setFeedback(Reverb *r, float fb);
 void Reverb_setVariation(Reverb *r, float v);
 void Reverb_setComposition(Reverb *r, float c);
+float Reverb_lowCutHz(float v);		// what a dial of 0 to 1 means, 0 for no cut
+float Reverb_highCutHz(float v);
+void ReverbCut_setHz(ReverbCut *c, float hz, uint8_t high);
+void Reverb_setLowCut(Reverb *r, float v);
+void Reverb_setHighCut(Reverb *r, float v);
+float ReverbCut_process(ReverbCut *c, float in);
 
 
 /*

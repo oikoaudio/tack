@@ -184,7 +184,10 @@ static void buildName(LxrParamInfo* info, const Extra* x, uint8_t nameIdx, const
 	longNameOf(nameIdx, name, sizeof name);
 
 	if(x->page == FX_MODE_PAGE) {
-		if(fxNamesJoined) {
+		if(info->param == PAR_FX_REVERB_TYPE) {
+			snprintf(info->name, sizeof info->name, "FX Reverb Low Cut");
+			snprintf(info->module, sizeof info->module, "FX/Reverb");
+		} else if(fxNamesJoined) {
 			snprintf(info->name, sizeof info->name, "FX %s", fxNamesJoined);
 			snprintf(info->module, sizeof info->module, "FX");
 		} else if(x->subPage == 0) {
@@ -228,8 +231,6 @@ static void build(void)
 			{
 				const uint16_t p = bots[i];
 				if(p == PAR_NONE || p >= END_OF_SOUND_PARAMETERS) continue;
-				// the reverb has one type, so there is nothing to choose
-				if(p == PAR_FX_REVERB_TYPE) continue;
 				// the LFO's destination voice only narrows the front panel's target list; the destination
 				// parameter covers every target
 				if((parameter_dtypes[p] & 0xff) == DTYPE_VOICE_LFO) continue;
@@ -238,6 +239,10 @@ static void build(void)
 
 				char name[32];
 				longNameOf(tops[i], name, sizeof name);
+				// the reverb's one type left this byte free, and it has two cuts in place of a tone
+				if(pg == FX_MODE_PAGE && p == PAR_FX_REVERB_TYPE) snprintf(name, sizeof name, "Low Cut");
+				if(pg == FX_MODE_PAGE && sp == 5 && p == PAR_FX_P3) snprintf(name, sizeof name, "High Cut");
+				if(pg == FX_MODE_PAGE && sp == 5 && p == PAR_FX_P4) snprintf(name, sizeof name, "Early/Late");
 				if(pg == FX_MODE_PAGE) {
 					snprintf(fxLabels[p][sp], sizeof fxLabels[p][sp], "%s", name);
 					// a page may add no parameter of its own, as the reverb's four are all shared

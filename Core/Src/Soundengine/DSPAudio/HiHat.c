@@ -164,6 +164,7 @@ IN_ITCM_RAM void HiHat_calcAsync( )
 //---------------------------------------------------
 void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const int faderSettled = onePole_settled(&hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
 	//2 buffers for the mod oscs
 	int16_t mod1[size],mod2[size];
 	//calc next mod osc samples, scaled with mod amount
@@ -210,7 +211,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * ONE_POLE_NEXT(&hatVoice.FaderVolumeFilter, adc_getFaderVolume(5), faderSettled);
 			}
 #else
 		for(j=0;j<size;j++)
@@ -238,7 +239,7 @@ void HiHat_calcSyncBlock(int16_t* buf, const uint8_t size)
 			for(j=0;j<size;j++)
 			{
 				//add volume
-				buf[j] *=  hatVoice.combinedVolume * calcOnePole( &hatVoice.FaderVolumeFilter, adc_getFaderVolume(5));
+				buf[j] *=  hatVoice.combinedVolume * ONE_POLE_NEXT(&hatVoice.FaderVolumeFilter, adc_getFaderVolume(5), faderSettled);
 			}
 #else
 		for(j=0;j<size;j++)

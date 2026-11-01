@@ -1,4 +1,4 @@
-# the delay fills FX_BUFFER, then the reverb is the FX, with TONE at the bottom and nothing playing: what comes out must be silence
+# the delay fills FX_BUFFER, then the reverb is the FX, with HIGH CUT at the bottom and nothing playing: what comes out must be silence
 wait 600
 tap FX
 wait 60
@@ -138,7 +138,7 @@ wait 60
 expect fxv0 5
 press OCT-
 wait 30
-turn K1 -64
+turn K2 -64
 wait 40
 release OCT-
 wait 40

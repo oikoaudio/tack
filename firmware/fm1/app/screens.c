@@ -67,7 +67,7 @@ static void pg_fx_row(uint32_t r, uint32_t *last)
     if (on) {
         uint32_t dials = 0;
         for (uint32_t i = 0; i < n; i++)
-            dials |= (uint32_t)(first + i == TACK_FX_TYPE || tack_fx_max(first + i)) << i;
+            dials |= (uint32_t)((first + i == TACK_FX_TYPE || tack_fx_max(first + i)) && !tack_fx_idle(first + i)) << i;
         row_lines(dials, C_HI);
     }
     for (uint32_t i = 0; i < 4u; i++) {
@@ -85,6 +85,11 @@ static void pg_fx_row(uint32_t r, uint32_t *last)
         {
             const uint8_t v = tack_get_param(tack_fx_param(sl));
             const char *name = sl == TACK_FX_TYPE ? tack_fx_type_name() : tack_fx_text(sl, v);
+            if (tack_fx_idle(sl)) {                /* as PW on a wave with no width: there, and plainly not in use */
+                cv_text(x - text_w(&FONT_B, tack_fx_label(sl)) / 2, PG_PH, &FONT_B, tack_fx_label(sl), C_DIM);
+                wd_value(i, v, tack_fx_max(sl), 0, 1);
+                continue;
+            }
             pg_column(i, tack_fx_label(sl), on);
             if (name)
                 wd_box(x, 0, name, on ? C_HI : C_GRAY);
@@ -411,7 +416,9 @@ static void vv_cell(int s, int32_t x, int len, int head, int low)
         cv_rect(x + VV_W / 2 - 1, VV_H / 2, 2, 3, C_DIM);
         return;
     }
-    cv_rect(x, 2, VV_W, VV_BOX, C_STEP);
+    if (!note_view() || tack_step_on(v, st))   /* NOTE is about the steps there are: an empty one is only a line to land on */
+        cv_rect(x, 2, VV_W, VV_BOX, C_STEP);
+    cv_rect(x, VV_FOOT - 2, VV_W, 2, C_LINE);
     if (tack_step_on(v, st)) {
         const int vel = tack_step_get(v, st, TACK_ST_VEL), nudge = tack_step_get(v, st, TACK_ST_NUDGE);
         const int chance = tack_step_get(v, st, TACK_ST_PROB), flam = tack_step_get(v, st, TACK_ST_FLAM);
@@ -492,6 +499,12 @@ static void vv_dial(uint32_t i, const char *name, const char *word, int lit, int
         value_bar(x + 5, 40, CELL_W - 10, 4, (uint32_t)value, (uint32_t)max, VOICE_COLOUR[ui.voice]);
 }
 
+/* a word under a dial with no bar: the underline is below, so there is room here and nowhere lower */
+static void vv_word(uint32_t i, const char *word, uint16_t c)
+{
+    cv_text(CELL_X(i) + CELL_W / 2 - text_w(&FONT_XS, word) / 2, 40, &FONT_XS, word, c);
+}
+
 static void vv_nudge(uint32_t i, int value)
 {
     const int32_t x = CELL_X(i), mid = x + CELL_W / 2;
@@ -512,7 +525,7 @@ static void pg_vel_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    row_cells(0xFu, 0, 59);
+    row_lines_at(0xFu, 57, C_HI);
     cv_text(CELL_X(0) + CELL_W / 2 - text_w(&FONT_XS, "SHAPE") / 2, 4, &FONT_XS, "SHAPE", PG_TEXT);
     cv_text(CELL_X(0) + CELL_W / 2 - text_w(&FONT_S, name) / 2, 22, &FONT_S, name, on ? C_WHITE : C_GRAY);
     int_text(ui.vs_centre, t);
@@ -537,7 +550,7 @@ static void pg_lane_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    row_cells(0xFu, 0, 59);
+    row_lines_at(0xFu, 57, C_HI);
     int_text(len, t);
     vv_dial(0, "LENGTH", t, 1, len, TACK_BARS * 16);
     vv_dial(1, "DIRECTION", tack_lane_dir_name(dir), 1, 0, 0);
@@ -545,10 +558,9 @@ static void pg_lane_dials(uint32_t *last)
     int_text(start + 1, t);
     vv_dial(3, "START", t, 1, 0, 0);
     if (nudge) {                                 /* ALGORITHM's: most lanes have none */
-        t[0] = nudge < 0 ? '-' : '+';
-        int_text(nudge < 0 ? -nudge : nudge, t + 1);
-        cv_text(5, 47, &FONT_XS, "NUDGE", C_GRAY);
-        cv_text(5 + text_w(&FONT_XS, "NUDGE") + 5, 47, &FONT_XS, t, C_WHITE);
+        char word[12];
+        int_text(nudge < 0 ? -nudge : nudge, text_put(word, nudge < 0 ? "NUDGE -" : "NUDGE +"));
+        vv_word(1, word, C_GRAY);
     }
     cv_blit(0, PG_Y + 2u * (VV_H + 2u));
 }
@@ -567,7 +579,7 @@ static void pg_eu_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    row_cells(0xFu, 0, 59);
+    row_lines_at(0xFu, 57, C_HI);
     for (uint32_t i = 0; i < TACK_EU_SLOTS; i++) {
         int_text(tack_euclid_get(v, i), t);
         vv_dial(i, NAME[i], t, 1, tack_euclid_get(v, i), TACK_EU_MAX);
@@ -590,7 +602,7 @@ static void pg_voice_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    row_cells(0xFu, 0, 59);
+    row_lines_at(0xFu, 57, C_HI);
     for (uint32_t i = 0; i < TACK_NP; i++) {
         const int value = on ? tack_step_get(v, st, VV_SLOT[i]) : 0;
         const char *word = "-";
@@ -613,18 +625,16 @@ static void pg_voice_dials(uint32_t *last)
 static void pg_note_dials(uint32_t *last)
 {
     const uint8_t v = (uint8_t)ui.voice, st = (uint8_t)note_cursor();
-    const int on = tack_step_on(v, st), rec = tack_recording(), run = tack_running();
+    const int on = tack_step_on(v, st);
     const int note = on ? tack_step_get(v, st, TACK_ST_NOTE) : 0, vel = on ? tack_step_get(v, st, TACK_ST_VEL) : 0;
-    const char *const say = rec ? (run ? "RECORDING" : "REC ON") : "REC TO WRITE";
     char t[8];
     uint32_t key = rk(rk(rk(rk(31u, v), st), (uint32_t)on), (uint32_t)note);
     key = rk(rk(rk(key, (uint32_t)vel), ui.note_vel), (uint32_t)(ui.note_oct + 8));
-    key = rk(rk(key, (uint32_t)rec), (uint32_t)run);
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    row_cells(0xFu, 0, 59);
+    row_lines_at(0xFu, 57, C_HI);
     note_text(note, t);
     vv_dial(0, "NOTE", on ? t : "-", on, 0, 0);
     int_text(vel, t);
@@ -632,10 +642,10 @@ static void pg_note_dials(uint32_t *last)
     int_text(ui.note_vel, t);
     vv_dial(2, "KEY VEL", t, 1, ui.note_vel, 127);
     vv_dial(3, "HIT", on ? "ON" : "OFF", on, 0, 0);
-    t[0] = 'O', t[1] = 'C', t[2] = 'T', t[3] = ' ';
-    int_text(ui.note_oct, t + 4);
-    cv_text(5, 47, &FONT_XS, t, C_GRAY);
-    cv_text(240 - EDGE - 3 - text_w(&FONT_XS, say), 47, &FONT_XS, say, rec ? C_HI : C_GRAY);
+    if (ui.note_oct) {
+        int_text(ui.note_oct, text_put(t, "OCT "));
+        vv_word(0, t, C_GRAY);
+    }
     cv_blit(0, PG_Y + 2u * (VV_H + 2u));
 }
 

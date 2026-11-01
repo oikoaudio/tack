@@ -27,12 +27,14 @@ static void row_cells(uint32_t dials, int32_t y, int32_t h)
     }
 }
 
-static void row_lines(uint32_t dials, uint16_t c)
+static void row_lines_at(uint32_t dials, int32_t y, uint16_t c)
 {
     for (int32_t i = 0; i < (int32_t)TACK_NP; i++)
         if (dials >> i & 1u)
-            cv_rect(i * PG_CW + 5, PG_RH - 3, PG_CW - 10, 2, c);
+            cv_rect(i * PG_CW + 5, y, PG_CW - 10, 2, c);
 }
+
+static void row_lines(uint32_t dials, uint16_t c) { row_lines_at(dials, PG_RH - 3, c); }
 
 /* a pixel a fifteenth at a time over what is on the canvas, as cv_text's anti-aliased faces */
 static void cv_mix(int32_t x, int32_t y, uint16_t c, uint32_t a)

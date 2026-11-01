@@ -191,6 +191,8 @@ int app_expect(const char *what, int *got)
         *got = (int)tack_dirty();
     else if (!strcmp(what, "saved"))
         *got = ui.saved;
+    else if (numbered(what, "fxidle"))    /* fxidleN: the FX page's slot N does nothing as it is set */
+        *got = tack_fx_idle((uint32_t)atoi(what + 6));
     else if (numbered(what, "fxv"))       /* fxvN: the FX page's slot N */
         *got = tack_get_param(tack_fx_param((uint32_t)atoi(what + 3)));
     else if (numbered(what, "fxp"))       /* fxpN: the parameter behind it */

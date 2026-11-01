@@ -52,6 +52,7 @@ int tack_post_lock_clear(uint8_t voice, uint8_t step);
 #define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
 int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot);
 int tack_kit_busy(void);
+void tack_view_sync(void);             /* once a frame: tack_get_param follows a kit that went in */
 /* A pattern keeps its own kit with its edits, loaded as the pattern starts, so the bank is where kits come from. One with no steps
  * and no edits has none yet and plays on what is playing */
 const uint8_t *tack_kit_name(void);                      /* the 8 characters of what is playing */
@@ -215,9 +216,13 @@ int tack_lane_nudge_turn(uint8_t voice, int32_t e);
 
 /* The FX pages. Slots 0 and 1 are the FX type and its mix; 2 and 3 follow the type, and 4 to 6 are its second page. A slot
  * with a maximum of 0 has nothing behind it on this type */
+#define FX_TYPE_VERB 5u
 enum { TACK_FX_TYPE, TACK_FX_MIX, TACK_FX_A, TACK_FX_B, TACK_FX_C, TACK_FX_D, TACK_FX_E, TACK_FX_ALL };
 #define TACK_FX_SLOTS 4        /* knobs on a page */
 int tack_fx_pages(void);
+void tack_fx_verb_enter(void);                                         /* picked on the panel: the reverb's dials, from a start for drums */
+void tack_fx_verb_leave(void);                                         /* and what they held before it */
+int tack_fx_idle(uint32_t slot);                                        /* it does nothing as the FX is set now */
 uint8_t tack_fx_turn(uint32_t slot, int32_t e);                         /* what a turn makes of a slot */
 const char *tack_fx_text(uint32_t slot, uint8_t value);
 int tack_fx_delay_ms(void);

@@ -178,7 +178,7 @@ Known omissions:
   the boot kit. Nothing writes an edited kit back to the bank.
 - A pattern remembers its bank kit, which loads through the LXR's own hook before the pattern's first step. It remembers
   the slot, not edits made to the kit, and a pattern with no kit leaves the playing kit and its edits alone.
-- Reverb. The LXR firmware compiles it out, with no reason given. Tack turns it on: on the unit the CPU reading went to 70 to 72 from about 42 while it is the FX, with `PEAK` and `XRUN` on a busy pattern not yet reported. It shares the FX buffer with the delay. If it needs to come down, the second core is the way, with half rate after that. `PRE` is its pre-delay, `DECAY` its feedback, which rings for good at the top, `TONE` its tilt, held to the middle of its range, as further up low drums drop out of it and at the ends all of it does, and `EARLY` its early reflections.
+- Reverb. The LXR firmware compiles it out, with no reason given. Tack turns it on: see CPU. It shares the FX buffer with the delay. `PRE` is its pre-delay, `DECAY` its feedback, which rings for good at the top, `E/L MIX` the balance of early reflections on the left and late on the right, both full at the middle, and `LOW CUT` and `HIGH CUT` two 24 dB an octave filters on its output, the low one in `PAR_FX_REVERB_TYPE`, which its one type left free. Its output is stereo, from Dattorro's right-hand taps within its shorter lines, wide above about 120 Hz with the lows in the middle, so that is a low and a high cut for each side. Its tilt stays flat, as low drums dropped out of it away from the middle. The two allpasses as long as the loop's delays have a gain of 0.35, and the two short ones move 16 samples each way at 1.3 Hz: without that, late in the tail mids and highs repeated every 46 ms, heard as a growl. 59% of the band from 400 Hz to 4 kHz repeated, and now 24%. `MIX` is its level on top of the dry sound, where the other FX crossfade.
 - No Bluetooth, no second core, no velocity from the keys.
 
 The brief's first stage asked for one voice. The mixer computes all voices in one function and the whole engine compiled
@@ -207,6 +207,8 @@ The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16
 The static stack depth of the render path is about 1.3 KB against a 7.9 KB stack. That analysis follows direct calls only.
 
 ## CPU
+
+The reverb read 70 to 72 on the panel when it was first enabled. Built as one unit, with its idle modulation removed, the unit reads 54 with a peak of 55 and no XRUN (user measurement, 2026-11-02). With the voices' savings, then stereo, both cuts and the moving allpasses on top, a busy pattern with every voice sent to a long reverb reads 55. After the refactor of `drain()`, the same pattern reads 54 with the reverb and 38 with the delay.
 
 Hardware-tested on the init kit: the load test (HOME) reads `CPU 42`, `PEAK 42`, `XRUN 0`. All engine code runs from flash,
 on one core. The reading is whole percents, and the platform smooths it over about 16 audio blocks, so a spike shorter

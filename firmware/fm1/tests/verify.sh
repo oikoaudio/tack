@@ -67,6 +67,20 @@ n = w.getnframes()
 a = array.array("h", w.readframes(n))
 sys.exit(max(abs(x) for x in a[n // 2:]) < 200)
 PY
+python3 -I - "$out/sim/verb.wav" <<'PY' || fail "the reverb is not stereo"
+import array, sys, wave
+w = wave.open(sys.argv[1])
+a = array.array("h", w.readframes(w.getnframes()))
+tail = a[len(a) // 2:]
+def edge(s):                                     # the lows stay in the middle, as they should: width is above them
+    return [y - x for x, y in zip(s, s[1:])]
+left, right = edge(tail[::2]), edge(tail[1::2])
+level = sum(x * x for x in left) / len(left)
+share = sum(x * y for x, y in zip(left, right)) / (len(left) * level)
+balance = sum(y * y for y in right) / len(right) / level
+print(f"reverb: right against left {balance:.2f}, shared {share:.2f}")
+sys.exit(abs(share) > 0.8 or not 0.4 < balance < 2.5)   # the same on both sides reads 1
+PY
 python3 -I - "$out/sim/fxswitch.wav" <<'PY' || fail "the reverb played what the delay left"
 import array, sys, wave
 w = wave.open(sys.argv[1])

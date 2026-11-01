@@ -1,0 +1,42 @@
+# NOTE, REC off: SELECT picks a step and a key sets it, staying there. SEL held only plays, and on a sound page the keys only play
+wait 600
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+expect notemode 1
+turn SELECT 3
+wait 40
+expect notestep 3
+tapkey 7
+wait 40
+expect step3 1
+expect note3 60
+expect notestep 3
+tapkey 9
+wait 40
+expect note3 62
+expect notestep 3
+press SEL
+wait 30
+tapkey 11
+wait 40
+release SEL
+wait 40
+expect note3 62
+tap EDIT
+wait 40
+tapkey 12
+wait 40
+expect note3 62
+# back on NOTE, the lit key clears the step, without a sound
+tap SEQ
+wait 40
+expect notemode 1
+expect step3 1
+tapkey 9
+wait 40
+expect step3 0
+tapkey 9
+wait 40
+expect step3 1

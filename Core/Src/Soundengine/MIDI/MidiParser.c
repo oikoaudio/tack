@@ -1416,8 +1416,10 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				Ringmod_setWave(&fxBus.ringmod, value.itg);
 				break;
 
-			case CC2_FX_REVERB_TYPE:
-
+			case CC2_FX_REVERB_TYPE:		// the reverb has one type: this is its low cut
+#if USE_REVERB
+				Reverb_setLowCut(&fxBus.reverb, value.flt);
+#endif
 				break;
 
 			case CC2_FX_DELAY_TYPE:

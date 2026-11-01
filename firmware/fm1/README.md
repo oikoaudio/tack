@@ -12,7 +12,7 @@ plugins are in [host/](../../host), and share the engine with this firmware.
 | Voices | Three drums, a snare, a cymbal, and closed and open hats, each with its own synth parameters |
 | Sequencer | Seven lanes of up to 64 steps, each with its own length, direction, speed and start. Steps have velocity, nudge, flam, chance, recurrence and up to eight parameter locks |
 | Patterns | 16 patterns that keep their own kit, chains that loop, and one song of up to 63 rows |
-| Sound | Morph between two kits, an FX bus, and sample rate and bit crush |
+| Sound | Morph between two kits, an FX bus, and sample rate and bit crush. The LXR's reverb is switched on, in stereo, with low and high cuts |
 | USB | Stereo or 10 channel audio, MIDI notes, and MIDI clock in |
 | Kits | 128 slots for kits in the LXR-02's `.SND` format. None come with Tack |
 

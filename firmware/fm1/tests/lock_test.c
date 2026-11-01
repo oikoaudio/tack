@@ -543,6 +543,46 @@ static void nudge_cross(const char *name, uint8_t early_voice, uint8_t late_voic
           (uint8_t)(b0 - a0) + (early_voice == late_voice ? 0 : (uint8_t)(b1 - a1)));
 }
 
+/* every field a pattern holds: a copy has them all, and a clear leaves none. New per-pattern state belongs in this list */
+static void pattern_state_tests(int filter)
+{
+    static uint8_t one[4096], two[4096], blank[4096];
+    tack_clear_pattern(15);
+    const uint32_t blank_len = tack_pattern_export(15, blank);
+    tack_post_pattern(12);
+    run(4);
+    tack_post_step(3, 5, 1);
+    tack_post_step(3, 9, 1);
+    run(2);
+    tack_step_turn(3, 5, 0, 4);
+    tack_post_lock(3, 5, (uint16_t)filter, 20);
+    tack_post_recur(3, 9, 3, 5);
+    tack_post_length(3, 24);
+    tack_post_lane(3, 2, 1);
+    tack_post_lane_start(3, 4);
+    tack_post_shuffle(40);
+    tack_post_bits(90);
+    tack_post_morph_kit(2);
+    tack_morph_now(30);
+    run(4);
+    const uint32_t one_len = tack_pattern_export(12, one);
+    tack_post_copy(14);
+    run(4);
+    const uint32_t two_len = tack_pattern_export(14, two);
+    check("a copy has everything the pattern holds", one_len == two_len && !memcmp(one, two, one_len), one_len, two_len);
+    tack_clear_pattern(14);
+    const uint32_t cleared_len = tack_pattern_export(14, two);
+    check("a clear leaves nothing of it", cleared_len == blank_len && !memcmp(two, blank, blank_len), cleared_len, blank_len);
+    tack_morph_now(0);
+    tack_post_morph_kit(0);
+    tack_post_shuffle(0);
+    tack_post_bits(127);
+    run(2);
+    tack_clear_pattern(12);
+    tack_post_pattern(0);
+    run(4);
+}
+
 /* a hit nudged early plays its own step's locks, ahead of the step they belong to */
 static void nudged_lock_tests(int filter)
 {
@@ -1227,6 +1267,7 @@ int main(void)
     morph_tests();
     nudge_tests();
     nudged_lock_tests(fp);
+    pattern_state_tests(fp);
     hat_tests();
 
     ul_tests();

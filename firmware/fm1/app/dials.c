@@ -93,7 +93,12 @@ static void fx_turn(uint32_t slot, int32_t e)
     } else if (top) {
         const uint16_t p = tack_fx_param(s);
         mark('F');
-        tack_post_param(p, tack_fx_turn(s, e));
+        const uint8_t was = tack_get_param(p), now = tack_fx_turn(s, e);
+        tack_post_param(p, now);
+        if (s == TACK_FX_TYPE && now == FX_TYPE_VERB && was != now)
+            tack_fx_verb_enter();
+        else if (s == TACK_FX_TYPE && was == FX_TYPE_VERB && was != now)
+            tack_fx_verb_leave();
     }
 }
 
@@ -242,8 +247,9 @@ static void vv_turn(uint32_t slot, int32_t e)
         app_say("NO STEP", "");
 }
 
-/* The keys play the voice. REC on writes them: running, as the LXR records; stopped, step by step */
-static void note_keys(uint32_t down, uint32_t up)
+/* The keys play the voice. On NOTE they also set the selected step, and stay on it to try another, with SEL held to only listen. On
+ * the sound pages they only play, to tune by. REC on writes them: running, as the LXR records; stopped, step by step */
+static void note_keys(uint32_t down, uint32_t up, int listen)
 {
     for (uint32_t k = 0; k < NKEYS; k++) {
         if (up >> k & 1u)
@@ -253,13 +259,25 @@ static void note_keys(uint32_t down, uint32_t up)
         const uint8_t note = (uint8_t)key_note(k);
         ui.key_note[k] = note;                   /* OCT may move before the key comes up, and SEQ pick another voice */
         ui.key_voice[k] = (uint8_t)ui.voice;
-        tack_post_note((uint8_t)ui.voice, note, ui.note_vel);
-        if (tack_recording() && !tack_running()) {
-            const uint32_t s = note_cursor();
-            tack_post_step_note((uint8_t)ui.voice, (uint8_t)s, note, ui.note_vel);
-            note_cursor_to((s + 1u) % (uint32_t)tack_length((uint8_t)ui.voice));
-        }
+        const uint32_t s = note_cursor();
+        const int on = tack_step_on((uint8_t)ui.voice, (uint8_t)s);
+        const int edit = !listen && !tack_recording() && note_view();
         ui.redraw = 1;
+        if (edit && on && tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE) == note) {   /* the lit key: gone, and silently */
+            tack_post_step((uint8_t)ui.voice, (uint8_t)s, 0);
+            continue;
+        }
+        tack_post_note((uint8_t)ui.voice, note, ui.note_vel);
+        if (listen) {
+            ;
+        } else if (tack_recording()) {
+            if (!tack_running()) {
+                tack_post_step_note((uint8_t)ui.voice, (uint8_t)s, note, ui.note_vel);
+                note_cursor_to((s + 1u) % (uint32_t)tack_length((uint8_t)ui.voice));
+            }
+        } else if (edit) {                       /* a step that is on keeps how hard it plays */
+            tack_post_step_note((uint8_t)ui.voice, (uint8_t)s, note, on ? (uint8_t)tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_VEL) : ui.note_vel);
+        }
     }
 }
 

@@ -134,6 +134,28 @@ int main(void)
 		puts("FAIL the editor has no reverb");
 		failed = 1;
 	}
+	// the reverb's cuts: three octaves out is far down, three octaves in is left alone
+	static const struct { float hz; uint8_t high; float low, high_gain; } CUT[2] = {{1000.f, 0, 125.f, 8000.f}, {1000.f, 1, 8000.f, 125.f}};
+	for(int c = 0; c < 2; c++) {
+		float gain[2];
+		for(int side = 0; side < 2; side++) {
+			ReverbCut cut = {0};
+			ReverbCut_setHz(&cut, CUT[c].hz, CUT[c].high);
+			float peak = 0, phase = 0;
+			const float step = 6.2831853f * (side ? CUT[c].high_gain : CUT[c].low) / 44140.f;
+			for(int i = 0; i < 88200; i++) {
+				const float out = ReverbCut_process(&cut, sinf(phase));
+				phase += step;
+				if(phase > 6.2831853f) phase -= 6.2831853f;
+				if(i > 44100 && fabsf(out) > peak) peak = fabsf(out);
+			}
+			gain[side] = peak;
+		}
+		if(gain[0] > 0.001f || gain[1] < 0.95f || gain[1] > 1.05f) {
+			printf("FAIL reverb cut %d: %.5f out of band, %.3f in it\n", c, gain[0], gain[1]);
+			failed = 1;
+		}
+	}
 	puts(failed ? "FAILED" : "lfo passed");
 	return failed;
 }

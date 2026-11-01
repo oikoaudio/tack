@@ -63,6 +63,8 @@ static void draw_sel_help(void)
         help_row(&y, "SELECT", "SHUFFLE");
     if (!saving && ui.over != PAGE_SONG && !keys_notes(ui.btn))
         help_row(&y, "WHITE KEY", "LANE LENGTH");
+    if (note_view())
+        help_row(&y, "KEY", "ONLY LISTEN");
     if (!full_page() || seq_detail() || arp_page())
         help_row(&y, "OCT+ OCT-", "ADD, REMOVE BAR");
     if (!saving) {

@@ -109,6 +109,8 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
 - **Mutating kits:** "Mutate kit" and "Mutate voice" make a small random change to the kit or the open tab's voice, and each click goes
   further. "Back" retraces those steps exactly, and its number says how far you are from where you began, up to 99. Volume, pan, routing,
   modulation targets, filter type and the FX stay. An edit or another kit starts again from there. A voice plugin has one "Mutate" button.
+- **Reverb:** the LXR's code leaves it switched off, and Tack turns it on, in stereo. It has a Low Cut and a High Cut, adds to the
+  dry sound, and has fixes to the flutter and growl of its tail.
 - **Editor:** a tab per voice plus FX. Each tab shows the front panel's sub-pages as boxes of up to 4 x 2 controls,
   three boxes to a row (`clap/gui.cpp`): knobs for amounts (drag, Shift for fine, wheel steps, double-click resets
   to the init kit value) and drop-downs for options, with short labels and the full name as a tooltip. The FX tab

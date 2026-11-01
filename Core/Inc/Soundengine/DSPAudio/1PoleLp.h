@@ -27,6 +27,9 @@ typedef struct OnePoleStruct
 //-------------------------------------------------------------
 void initOnePole(OnePoleFilter* filter);
 float calcOnePole(OnePoleFilter* filter, double input);
+// A filter that has reached its input stays there, so a block need not run it: test once, then use the value it holds
+int onePole_settled(const OnePoleFilter* filter, double input);
+#define ONE_POLE_NEXT(filter, input, settled) ((settled) ? (float)(filter)->b : calcOnePole((filter), (input)))
 float calcOnePoleAdaptiveVolume(OnePoleFilter* filter, double input);
 void calcOnePoleBlock(OnePoleFilter* filter, int16_t* buf, const uint8_t size);
 void calcOnePoleBlockFixedInput(OnePoleFilter* filter, float input,float* output, const uint8_t size);

@@ -147,6 +147,7 @@ IN_ITCM_RAM void Snare_calcAsync()
 //---------------------------------------------------
 void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 {
+	const int faderSettled = onePole_settled(&snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
 	int16_t transBuf[size];
 	int16_t oscBuf[size];
 
@@ -193,7 +194,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			//add transient sample
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
-			buf[j] =   snareVoice.combinedVolume  * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			buf[j] =   snareVoice.combinedVolume  * tmp * ONE_POLE_NEXT(&snareVoice.FaderVolumeFilter, adc_getFaderVolume(3), faderSettled);
 
 #else
 
@@ -218,7 +219,7 @@ void Snare_calcSyncBlock(int16_t* buf, const uint8_t size)
 			//add transient sample
 			//tmp	= __QADD16(transBuf[j],(int16_t)tmp);
 			tmp	+= transBuf[j];
-			buf[j] =  snareVoice.combinedVolume * tmp * calcOnePole( &snareVoice.FaderVolumeFilter, adc_getFaderVolume(3));
+			buf[j] =  snareVoice.combinedVolume * tmp * ONE_POLE_NEXT(&snareVoice.FaderVolumeFilter, adc_getFaderVolume(3), faderSettled);
 #else
 			//add filter to buffer
 			buf[j] *= snareVoice.mix;

@@ -298,6 +298,18 @@ IN_ITCM_RAM void calcDrumVoiceSyncBlock(const uint8_t voiceNr, int16_t* buf, con
 	//channel volume
 	//bufferTool_addGain(buf,voiceArray[voiceNr].combinedVolume  ,size);
 
+#if SMOOTH_MIXER_VOL_PAN_DRIVE
+	// nearly every block: the dials are still, and a loop of one multiply does what the filters would
+	if(onePole_settled(&voiceArray[voiceNr].MixerPageFilter[0], voiceArray[voiceNr].vol) &&
+	   onePole_settled(&voiceArray[voiceNr].FaderVolumeFilter, adc_getFaderVolume(voiceNr)))
+	{
+		const float gain = (float)voiceArray[voiceNr].MixerPageFilter[0].b * (float)voiceArray[voiceNr].FaderVolumeFilter.b;
+		voiceArray[voiceNr].combinedVolume = gain;
+		for(int i=0; i< size; i++)
+			buf[i] *= gain;
+		return;
+	}
+#endif
 	for(int i=0; i< size; i++)
 	{
 #if SMOOTH_MIXER_VOL_PAN_DRIVE

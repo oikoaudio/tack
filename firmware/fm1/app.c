@@ -546,7 +546,7 @@ void app_frame(void)
         ui.redraw = 1;
     }
     save_frame();
-    (void)tack_kit_busy();                     /* a kit that went in shows, whichever way it came */
+    tack_view_sync();                          /* a kit that went in shows, whichever way it came */
     if (tack_kit_now() != ui.kit_seen) {
         ui.kit_seen = tack_kit_now();
         ui.kit = ui.kit_seen ? ui.kit_seen - 1 : 0;

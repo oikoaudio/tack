@@ -219,9 +219,10 @@
 237    0..2   enum  FX Distortion Type                                 = tub
 238    0..127       FX Overdrive/Frequency/Attack/Time/Pre-delay       = 0
 239    0..127       FX Color/Decay/Range                               = 27
-240    0..127       FX Tone/Threshold                                  = 127
-241    0..127       FX Volume/Gain/Feedback/Reflection                 = 121
+240    0..127       FX Tone/Threshold/High Cut                         = 127
+241    0..127       FX Volume/Gain/Feedback/Early/Late                 = 121
 243    0..5   enum  FX Ring Mod Waveform                               = Sin
 242    0..5   enum  FX Compressor Ratio                                = 1:1
 245    0..3   enum  FX Delay Type                                      = Del
-226 parameters
+244    0..127       FX Reverb Low Cut                                  = 0
+227 parameters

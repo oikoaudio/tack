@@ -1,0 +1,20 @@
+# RANGE only scales the delay's free time: in a sync mode it is greyed out, and back in a free mode it is live again
+wait 600
+tap FX
+wait 40
+turn K1 4 30
+wait 60
+expect fxv0 4
+expect fxidle4 0
+press OCT-
+wait 30
+turn K3 2 30
+wait 60
+expect fxv6 2
+expect fxidle4 1
+shot range_idle.png
+turn K3 -1
+wait 60
+expect fxv6 1
+expect fxidle4 0
+release OCT-

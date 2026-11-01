@@ -15,11 +15,11 @@ static void input_keys(uint32_t keys, uint32_t btn)
     const uint32_t ended = up & ui.note_held;
     ui.note_held &= ~up;
     if (ended) {
-        note_keys(0, ended);
+        note_keys(0, ended, 0);
         up &= ~ended;
     }
     if (keys_notes(btn)) {                       /* SEQ or ARP held, or their own page, and the keys do what they always do */
-        note_keys(down, 0);                      /* (what comes up was held for something else: ROLL, a step, a voice, which end below) */
+        note_keys(down, 0, btn >> B_SEL & 1u);   /* (what comes up was held for something else: ROLL, a step, a voice, which end below) */
         ui.note_held |= down;
         down = 0;
     }
