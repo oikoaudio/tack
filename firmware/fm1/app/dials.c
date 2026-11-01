@@ -1,25 +1,31 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* What a dial or key does on each page: steps, locks, kits, the song. app.c includes this: it is one file to the compiler, and shares app.c's state */
 
-/* a step is held: what K1-K4 start from */
-static void hold_step(uint32_t k)
+/* what K1-K4 start from on the page and row showing: the step's locks, or the kit's values when a clear is on its way */
+static void held_read(int locks)
 {
-    uint32_t i;
-    const uint8_t s = (uint8_t)step_of(k);
-    ui.held = (int32_t)k;
-    ui.held_used = 0;
-    if (voice_page())
-        ui.note_step = s;
-    for (i = 0; i < TACK_NP; i++) {
+    for (uint32_t i = 0; i < TACK_NP; i++) {
         const TackSlot *sl = slot(i);
-        if (sl && !tack_lock_get((uint8_t)ui.voice, s, sl->par, &ui.held_val[i]))
+        if (sl && !(locks && tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &ui.held_val[i])))
             ui.held_val[i] = tack_get_param(sl->par);
     }
+    ui.row_seen = (int8_t)row_now();
+}
+
+static void hold_step(uint32_t k)
+{
+    ui.held = (int32_t)k;
+    ui.held_used = 0;
+    ui.held_step = (uint8_t)step_of(k);
+    ui.held_pattern = (uint8_t)tack_pattern();
+    if (voice_page())
+        ui.note_step = ui.held_step;
+    held_read(1);
 }
 
 static void lock_turn(uint32_t i, int32_t e)
 {
-    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+    const uint8_t s = ui.held_step;
     const TackSlot *sl = slot(i);
     ui.held_used = 1;
     if (!sl)
@@ -163,7 +169,7 @@ static void eu_turn(uint32_t slot, int32_t e)
         tack_euclid_turn(v, slot, e);
     } else if (tack_euclid_can_undo(v)) {
         tack_post_euclid_undo(v);
-        app_say("LANE", "PUT BACK");
+        app_say("UNDONE", "");
     }
 }
 
@@ -193,6 +199,15 @@ static void vv_walk(int32_t e)
 {
     const int32_t len = tack_length((uint8_t)ui.voice);
     note_cursor_to((uint32_t)((((int32_t)note_cursor() + e) % len + len) % len));
+    ui.redraw = 1;
+}
+
+/* SEL held: the same place in another of the lane's bars */
+static void vv_bar_jump(int32_t e)
+{
+    const int32_t len = tack_length((uint8_t)ui.voice), bar = clamp(ui.bar + e, 0, (len - 1) / 16);
+    const int32_t s = bar * 16 + (int32_t)note_cursor() % 16;
+    note_cursor_to((uint32_t)(s < len ? s : len - 1));
     ui.redraw = 1;
 }
 
@@ -493,7 +508,7 @@ static void vel_turn(uint32_t slot, int32_t e)
         if (ui.vs_shape == was)
             return;
         if (!ui.vs_shape) {
-            app_say("VELOCITIES", tack_shape_can_undo(v) ? "PUT BACK" : "AS THEY ARE");
+            app_say(tack_shape_can_undo(v) ? "UNDONE" : "NOTHING", tack_shape_can_undo(v) ? "" : "TO UNDO");
             tack_post_shape(v, 0u, 0u, 0u, 0u);
             return;
         }
@@ -680,10 +695,13 @@ static void lane_bar(int32_t bars)
     const int32_t next = clamp(len + bars * 16, len < 16 ? len : 16, TACK_BARS * 16);
     char t[4];
     if (next == len) {
-        app_say(bars > 0 ? "4 BARS" : "ONE BAR", bars > 0 ? "IS THE MOST" : "IS THE LEAST");
+        app_say(bars > 0 ? "MAX 4 BARS" : "MIN 1 BAR", "");
         return;
     }
-    tack_post_length((uint8_t)ui.voice, (uint8_t)next);
+    if (bars > 0)
+        tack_post_extend((uint8_t)ui.voice, (uint8_t)next);
+    else
+        tack_post_length((uint8_t)ui.voice, (uint8_t)next);
     note_cursor_to((uint32_t)(next - 1) / 16u * 16u);
     int_text(next, t);
     app_say("LENGTH", t);

@@ -42,6 +42,40 @@ static void draw_tempo(void)
     cv_blit(0, 52);
 }
 
+/* What SEL does here, each line true of this page: it is the one list of what no page shows */
+static void help_row(int32_t *y, const char *with, const char *does)
+{
+    cv_text(10, *y, &FONT_S, with, C_WHITE);
+    cv_text(104, *y, &FONT_S, does, C_GRAY);
+    *y += 15;                            /* eight rows at most: a step's page has them all */
+}
+
+static void draw_sel_help(void)
+{
+    const int saving = ui.song_page == PAGE_SAVE;
+    int32_t y = 18;
+    cv_begin(240, 140, C_BLACK);
+    cv_rect(0, 0, 240, 1, C_DIM);
+    cv_rect(0, 139, 240, 1, C_DIM);
+    cv_text(10, 3, &FONT_XS, "HOLD SEL AND", C_AMB);
+    if (seq_detail())
+        help_row(&y, "SELECT", "JUMP A BAR");
+    if (!saving && ui.song_page != PAGE_SONG && !keys_notes(ui.btn))
+        help_row(&y, "WHITE KEY", "LANE LENGTH");
+    if (!full_page() || seq_detail() || arp_page())
+        help_row(&y, "OCT+ OCT-", "ADD, REMOVE BAR");
+    if (!saving) {
+        help_row(&y, "PRESET", "MUTATE KIT");
+        help_row(&y, "ALGORITHM", "MUTATE VOICE");
+    }
+    help_row(&y, "SAVE", "WRITE CHANGES");
+    help_row(&y, "EDIT, HOLD", "CLEAR LANE");
+    help_row(&y, "HOME, HOLD", "REVERT KIT");
+    if (on_home())                               /* not SEL's, but the next thing to want on the page a new pattern starts from */
+        cv_text(10, y + 1, &FONT_XS, "HOLD SEQ AND PRESS A KEY: PATTERN", C_AMB);
+    cv_blit(0, 52);
+}
+
 static void draw_popup(void)
 {
     const uint8_t v = (uint8_t)ui.voice, st = (uint8_t)step_of((uint32_t)ui.held);

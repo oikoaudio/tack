@@ -2,6 +2,24 @@
 # another page's button leaves: firmware/fm1/build/host/tack_host firmware/fm1/tests/pages.txt OUTDIR
 wait 600
 
+# a pulse of no width is silence, so the dial stops at 1, where the kit starts
+tap EDIT
+wait 40
+expect kitv228 1
+turn K3 -5
+wait 40
+expect kitv228 1
+turn K3 3
+wait 40
+expect kitv228 4
+turn K3 -3
+wait 40
+expect kitv228 1
+tap LFO
+wait 40
+tap HOME
+wait 40
+
 # one screen: pressed again, nothing
 tap ENV
 wait 40
@@ -141,6 +159,88 @@ shot sel_length.png
 release SEL
 wait 40
 expect keyword 0
+
+# SEL on its own for a second lists what it does here. Anything else touched closes it, and a chord never opens it
+press SEL
+wait 900
+expect selhelp 0
+wait 200
+expect selhelp 1
+shot sel_help.png
+release SEL
+wait 40
+expect selhelp 0
+press SEL
+wait 1200
+expect selhelp 1
+turn K1 1
+wait 40
+expect selhelp 0
+wait 1200
+expect selhelp 0
+release SEL
+wait 40
+press SEL
+wait 100
+tapkey 19
+wait 1200
+expect selhelp 0
+release SEL
+wait 40
+expect len0 12
+
+# past the lane's end a step stays, and its key stays dark
+tapkey 16
+wait 40
+tapkey 23
+wait 40
+expect step13 1
+expect steplight9 2
+expect steplight13 0
+tapkey 16
+wait 40
+tapkey 23
+wait 40
+expect step13 0
+
+# a voice's key held a moment does the same for that lane. Quick, a white key is still a step, and recording the key only plays
+key 3 down
+wait 30
+tapkey 12
+wait 30
+expect step7 1
+expect lanekey 0
+wait 300
+expect lanekey 1
+expect keyword 4
+tapkey 12
+wait 40
+expect len1 8
+expect step7 1
+key 3 up
+wait 40
+expect lanekey 0
+tap REC
+wait 40
+key 3 down
+wait 320
+expect lanekey 0
+key 3 up
+wait 40
+tap REC
+wait 40
+tapkey 12
+wait 40
+expect step7 0
+press SEL
+wait 30
+tapkey 26
+wait 40
+release SEL
+wait 40
+expect len1 16
+tapkey 1
+wait 40
 tap SEL
 wait 40
 expect keyword 0

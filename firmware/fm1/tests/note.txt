@@ -36,6 +36,34 @@ expect voice 0
 expect notestep 3
 expect st_3 110
 
+# SEL with SELECT jumps a bar and keeps the place in it, and stops at the lane's bars
+press SEL
+wait 30
+turn SELECT 1
+wait 40
+expect bar 0
+expect notestep 3
+tap OCT+
+wait 40
+expect bar 1
+expect notestep 16
+turn SELECT -1
+wait 40
+expect bar 0
+expect notestep 0
+turn SELECT 1
+wait 40
+expect bar 1
+expect notestep 16
+tap OCT-
+wait 40
+expect bar 0
+release SEL
+wait 60
+turn SELECT 3
+wait 40
+expect notestep 3
+
 # OCT is the keys' range, and leaves the bar alone
 tap OCT+
 wait 40

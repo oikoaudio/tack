@@ -1,0 +1,85 @@
+# A lane grows by a copy of its last bar: firmware/fm1/build/host/tack_host firmware/fm1/tests/bars.txt OUTDIR
+wait 600
+
+# a step with a lock and recurrence, and one without
+tapkey 0
+wait 40
+key 0 down
+wait 40
+turn K1 3
+wait 40
+turn SELECT 1
+wait 40
+key 0 up
+wait 40
+tapkey 4
+wait 40
+expect step0 1
+expect locks0 1
+expect recurlen0 2
+expect lockcount 1
+
+press SEL
+wait 30
+tap OCT+
+wait 40
+release SEL
+wait 60
+expect len0 32
+expect bar 1
+expect step16 1
+expect step18 1
+expect step17 0
+expect locks16 1
+expect locks18 0
+expect recurlen16 2
+expect recurmask16 1
+expect lockcount 2
+
+# a bar changed in the copy: shorter and back again, the bar that was there stays
+tapkey 2
+wait 40
+expect step17 1
+press SEL
+wait 30
+tap OCT-
+wait 40
+expect len0 16
+tap OCT+
+wait 40
+release SEL
+wait 60
+expect len0 32
+expect step17 1
+expect lockcount 2
+
+# another lane's bars are its own, and a bar with nothing in it copies nothing
+tapkey 3
+wait 40
+expect len1 16
+press SEL
+wait 30
+tap OCT+
+wait 40
+release SEL
+wait 60
+expect len1 32
+expect step16 0
+
+# it saves as any pattern does: the locks in the order a load wants them
+tapkey 1
+wait 40
+press SEL
+wait 20
+tap SAVE
+wait 20
+release SEL
+wait 200
+reboot
+wait 800
+expect badpatterns 0
+expect len0 32
+expect locks16 1
+expect recurlen16 2
+expect lockcount 2
+expect dropped 0

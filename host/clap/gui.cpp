@@ -879,7 +879,7 @@ static void drawSaveDialog(TackGui* g)
 		ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_EnterReturnsTrue, kitNameFilter);
 	if(ImGui::IsItemEdited()) g->saveExists = g->saveFailed = false;
 	ImGui::SameLine();
-	if(ImGui::Button("Make one up")) {
+	if(ImGui::Button("Random")) {
 		static uint32_t rolls;
 		char made[9] = {0};
 		kit_name_make_up((uint32_t)time(NULL) * 2654435761u + ++rolls * 40503u, made);

@@ -42,8 +42,11 @@ static void input(void)
                 ui.seq_voice |= (uint8_t)(btn >> B_SEQ & 1u);
                 if (ui.group != TACK_G_MAIN)
                     ui.sub = screen_page(screen, 1);
-                if (!(btn >> B_SEQ & 1u))
+                if (!(btn >> B_SEQ & 1u)) {
                     tack_post_note((uint8_t)k, 60, 110);
+                    ui.lane_key = (uint8_t)(k + 1u);
+                    ui.lane_at = plat_ms();
+                }
             }
             ui.redraw = 1;
         }
@@ -91,7 +94,7 @@ static void input(void)
             } else if (ui.song_page == PAGE_SAVE) {     /* the keys are the slots, for a pattern */
                 if (ui.ks_what == SAVE_PATTERN)
                     ui.ks_pat = (uint8_t)k;
-            } else if (btn >> B_SEL & 1u) {      /* SEL held: the lane ends here */
+            } else if ((btn >> B_SEL & 1u) || lane_key_held()) {   /* SEL or the lane's key held: the lane ends here */
                 tack_post_length((uint8_t)ui.voice, (uint8_t)(step_of(k) + 1));
                 app_say("LENGTH", "");
             } else if (ui.held >= 0) {           /* a second key: a step at once */
@@ -161,7 +164,7 @@ static void input(void)
     if ((btn >> B_SEL & 1u) && ((btn & ~(1u << B_SEL)) || keys))
         ui.sel_used = 1;
     if (((ui.btn & ~btn) >> B_SEL & 1u) && !ui.sel_used) {
-        if (seq_detail())                        /* the next step */
+        if (seq_detail() && plat_ms() - ui.sel_at < SEL_HELP_MS)   /* the next step; a hold was to read the list */
             vv_walk(1);
     }
     if (ui.song_page == PAGE_SAVE) {             /* no page, so nothing to lose: the name's two shortcuts */
@@ -188,7 +191,7 @@ static void input(void)
             ui.bar++;
             ui.redraw = 1;
         } else if (ui.bar < (int32_t)TACK_BARS - 1) {
-            app_say("SEL OCT+", "ADDS A BAR");
+            app_say("SEL OCT+", "COPY BAR");
         }
     }
     if (!(btn >> B_SEL & 1u) && !ui.note_mode && ui.bar >= bars_used()) {   /* a shorter lane, or nothing set past the end; SEL held, a new length is on its way */
@@ -304,10 +307,13 @@ static void input(void)
             ui.redraw = 1;
         }
     if ((e = plat_enc(EN_SELECT)) != 0) {
+        ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
         if (ui.song_page >= PAGE_SAVE)
             save_slot(e);
         else if (ui.held >= 0)
             recur_turn(e);
+        else if (seq_detail() && (btn >> B_SEL & 1u))
+            vv_bar_jump(e);
         else if (seq_detail())
             vv_walk(e);
         else {
@@ -324,6 +330,7 @@ static void input(void)
         step_turn(TACK_ST_NUDGE, POP_NUDGE, e);
         ui.redraw = 1;
     } else if ((e = plat_enc(EN_ALGO)) != 0) {
+        ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
         if (ui.song_page >= PAGE_SAVE) {
             ;
         } else if (btn >> B_SEL & 1u) {
@@ -340,6 +347,7 @@ static void input(void)
         ui.redraw = 1;
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {
+        ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
         if (ui.song_page >= PAGE_SAVE)
             ;
         else if (ui.held >= 0)

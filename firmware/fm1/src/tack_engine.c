@@ -205,7 +205,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -335,6 +335,7 @@ int tack_post_ext_sync(uint8_t on)
 }
 int tack_post_stress(uint8_t on) { return post(EV_STRESS, on, 0, 0); }
 int tack_post_length(uint8_t voice, uint8_t length) { return post(EV_LENGTH, voice, length, 0); }
+int tack_post_extend(uint8_t voice, uint8_t length) { return post(EV_EXTEND, voice, length, 0); }
 int tack_post_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value)
 {
     return post5(EV_LOCK, voice, step, (uint8_t)param, value);
@@ -1197,7 +1198,7 @@ uint32_t tack_lane_dir(uint8_t voice) { return LANE_DIR(seq_laneMode[seq_activeP
 uint32_t tack_lane_speed(uint8_t voice) { return LANE_SPEED(seq_laneMode[seq_activePattern][voice]); }
 const char *tack_lane_dir_name(uint32_t dir)
 {
-    static const char *const NAME[LANE_DIRECTIONS] = {"FWD", "REV", "PONG", "BNCE", "RAND"};
+    static const char *const NAME[LANE_DIRECTIONS] = {"FWD", "REV", "PONG", "BOUNCE", "RND"};
     return NAME[dir < LANE_DIRECTIONS ? dir : 0];
 }
 const char *tack_lane_speed_name(uint32_t speed)
@@ -1374,6 +1375,45 @@ static void drop_locks(uint32_t key_lo, uint32_t key_hi)
     p->n = (uint16_t)(p->n - (b - a));
 }
 
+/* A lane grows into the next bar with a copy of its last one, as a beat grows by varying what is there: the steps with their recurrence,
+ * then their locks. A bar with steps in it, left from when the lane was longer, stays. What the pattern's room for locks can't take is
+ * left out. The locks move as a block, as this can run with the pattern playing */
+static void lane_extend(uint8_t v, uint8_t length)
+{
+    const uint8_t pat = seq_activePattern;
+    const uint32_t old = seq_patternSet.length[pat][v], from = (old - 1u) / 16u * 16u, to = from + 16u;
+    LockList *p = &lock_list[pat];
+    seq_patternSet.length[pat][v] = length;
+    if (to < NUM_STEPS && !seq_patternSet.seq_mainSteps[to / 16u][pat][v]) {
+        const uint32_t end = old - from < 16u ? old : from + 16u;
+        uint32_t used, a, m, at;
+        drop_locks(step_key(v, (uint8_t)to), step_key(v, (uint8_t)to) + 16u);
+        used = p->n + recur_count(pat);
+        for (uint32_t s = from; s < end; s++) {
+            Step st = seq_patternSet.seq_subStepPattern[pat][v][s];
+            if (st.param1Nr != NO_AUTOMATION && used >= TACK_LOCKS_MAX)
+                st.param1Nr = NO_AUTOMATION;
+            used += st.param1Nr != NO_AUTOMATION;
+            seq_patternSet.seq_subStepPattern[pat][v][s + 16u] = st;
+            seq_patternSet.seq_stepTiming[pat][v][s + 16u] = seq_patternSet.seq_stepTiming[pat][v][s];
+            seq_setMainStep(pat, v, (uint8_t)(s + 16u), (uint8_t)tack_step_on(v, (uint8_t)s));
+        }
+        a = lock_lower(p, step_key(v, (uint8_t)from));
+        m = lock_lower(p, step_key(v, (uint8_t)end)) - a;
+        m = m < TACK_LOCKS_MAX - used ? m : TACK_LOCKS_MAX - used;
+        at = lock_lower(p, step_key(v, (uint8_t)to));
+        for (uint32_t k = p->n; k > at; k--)
+            p->l[k - 1u + m] = p->l[k - 1u];
+        for (uint32_t i = 0; i < m; i++) {
+            const Lock l = p->l[a + i];
+            const uint32_t key = lock_key(&l) + 16u;
+            p->l[at + i] = (Lock){(uint8_t)key, l.dest, (uint8_t)((l.b & 0x7Fu) | (key >> 8) << 7)};
+        }
+        p->n = (uint16_t)(p->n + m);
+    }
+    commit_active();
+}
+
 static void clear_locks(uint8_t voice, uint8_t step)
 {
     drop_locks(step_key(voice, step), step_key(voice, step) + 1u);
@@ -1522,6 +1562,10 @@ static void drain(void)
                 seq_patternSet.length[seq_activePattern][e.a] = e.b;
                 commit_active();
             }
+            break;
+        case EV_EXTEND:
+            if (e.a < NUM_TRACKS && e.b >= 1u && e.b <= NUM_STEPS)
+                lane_extend(e.a, e.b);
             break;
         case EV_LOCK:
             if (e.a < NUM_TRACKS && e.b < NUM_STEPS)

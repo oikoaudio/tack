@@ -56,6 +56,10 @@ int main(void)
 			}
 		for(uint8_t v = 0; v < 6; v++) {
 			const int before = peak(start, v);
+			if(!kit[PAR_PWM_1 + v] && start[PAR_PWM_1 + v]) {
+				puts("FAIL a walk took a pulse width to 0");
+				failed = 1;
+			}
 			if(before < 200) continue;
 			voices++;
 			silent += peak(kit, v) < before / 50;

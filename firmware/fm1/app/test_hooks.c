@@ -97,6 +97,10 @@ int app_expect(const char *what, int *got)
         *got = tack_morph_kit();
     else if (!strcmp(what, "morphdiff"))     /* the parameters heard that are not the kit's */
         *got = tack_morph_differs();
+    else if (!strcmp(what, "lanekey"))
+        *got = lane_key_held();
+    else if (!strcmp(what, "selhelp"))
+        *got = ui.help_on;
     else if (!strcmp(what, "mutmoved"))
         *got = tack_mutate_moved(0);
     else if (!strcmp(what, "mutwide"))        /* a step moves many parameters; how many depends on when the turn came */
@@ -133,6 +137,8 @@ int app_expect(const char *what, int *got)
         *got = ui.msg_until && !strncmp(ui.msg, "KIT ", 4) ? ui.msg[4] : 0;
     else if (!strcmp(what, "msgext"))         /* the top bar is saying the clock is external */
         *got = ui.msg_until && !strncmp(ui.msg, "EXT", 3);
+    else if (!strncmp(what, "steplight", 9))  /* steplightN: white key N as a step, stopped */
+        *got = step_light((uint32_t)atoi(what + 9), -1);
     else if (!strncmp(what, "sellight", 8))   /* sellightN: white key N with SEL held */
         *got = sel_light((uint32_t)atoi(what + 8));
     else if (!strncmp(what, "st", 2) && what[2] == '_')   /* st_N: step 0's slot N on the selected voice */

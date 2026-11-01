@@ -41,6 +41,7 @@ int tack_post_mute(uint8_t voice, uint8_t muted);
 int tack_post_record(uint8_t on);
 int tack_post_ext_sync(uint8_t on);
 int tack_post_stress(uint8_t on);
+int tack_post_extend(uint8_t voice, uint8_t length);     /* longer, with its last bar copied into the new one */
 int tack_post_length(uint8_t voice, uint8_t length);     /* the lane's length, 1-64, in the active pattern */
 /* A parameter lock: the step sets param to value for itself, through the step's two automation slots, and the kit's
  * value returns at the lane's next step without one. Returns 0 if the queue is full */

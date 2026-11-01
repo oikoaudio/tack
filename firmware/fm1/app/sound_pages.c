@@ -107,7 +107,13 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, on ? tint(VOICE_COLOUR[voice]) : C_BLACK);
+    cv_begin(240, PG_RH, C_BLACK);
+    if (on) {
+        uint32_t dials = 0;
+        for (uint32_t i = 0; i < TACK_NP; i++)
+            dials |= (uint32_t)(page_slot(page, i) != 0 && !pulse_idle(page, i)) << i;
+        row_lines(dials, VOICE_COLOUR[voice]);
+    }
     if (picture)
         pg_draw_picture(page, picture, first, span, on ? VOICE_COLOUR[voice] : C_GRAY);
     for (uint32_t i = 0; i < TACK_NP; i++) {
@@ -131,7 +137,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
             wd_target(x, 0, name, lit ? C_HI : c);
         else if (sl->en == EN_OSC_WAVE || sl->en == EN_LFO_WAVE)
             wd_wave(x, 0, sl->en, value, lit ? C_HI : c);
-        else if (sl->max == 1u && name && (name[0] == 'O' || name[0] == 'F'))
+        else if (sl->max == 1u && name && name[0] == 'O')   /* OFF, ON. FM and MIX say which */
             wd_toggle(x, 0, value != 0u, lit ? C_HI : c);
         else if (name)
             wd_box(x, 0, name, lit ? C_HI : c);
@@ -152,19 +158,19 @@ static void pg_top(void)
     cv_begin(240, 20, C_BLACK);
     cv_rect(0, 19, 240, 1, C_DIM);
     if (ui.msg_until) {
-        cv_text(5, 2, &FONT_B, ui.msg, C_WHITE);
+        cv_text(EDGE, 2, &FONT_B, ui.msg, C_WHITE);
     } else if (key_word()) {
-        cv_text(5, 2, &FONT_B, key_word(), C_HI);
+        cv_text(EDGE, 2, &FONT_B, key_word(), C_HI);
     } else if (ui.touched_until && ui.touched) {     /* the exact value, while it turns */
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
-        cv_text(5, 2, &FONT_B, page_label(row_now(), sl), C_WHITE);
+        cv_text(EDGE, 2, &FONT_B, page_label(row_now(), sl), C_WHITE);
         if (name && v && same(sl->label, "RETRIG"))  /* the box has room for D1, and here there is for the voice */
             name = RETRIG_NAME[(v - 1u) % 6u];
         if (!name)
             value_text(sl, v, t);
-        cv_text(235 - text_w(&FONT_B, name ? name : t), 2, &FONT_B, name ? name : t, C_WHITE);
+        cv_text(240 - EDGE - text_w(&FONT_B, name ? name : t), 2, &FONT_B, name ? name : t, C_WHITE);
         if (!name && is_pan(sl))
             slot_bar(0, 18, 240, 2, sl, v, VOICE_COLOUR[ui.voice]);
         else if (!name && sl->max)
@@ -174,14 +180,14 @@ static void pg_top(void)
         const int len = tack_recur_len((uint8_t)ui.voice, st), mask = tack_recur_mask((uint8_t)ui.voice, st);
         t[0] = 'S';
         int_text(st + 1, t + 1);
-        cv_text(5, 2, &FONT_B, t, C_WHITE);
+        cv_text(EDGE, 2, &FONT_B, t, C_WHITE);
         for (int k = 0; k < len; k++)
             cv_rect(240 - (8 - k) * 16, 4, 12, 11, mask >> k & 1 ? C_HI : C_DIM);
     } else {
         if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG || ui.song_page == PAGE_SAVE)
-            cv_text(5, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_SAVE ? "SAVE" : "SONG", C_HI);
+            cv_text(EDGE, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_SAVE ? "SAVE" : "SONG", C_HI);
         else
-            cv_text(5, 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
+            cv_text(EDGE, 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
         t[0] = 'P';
         int_text(tack_pattern() + 1, t + 1);
         cv_text(92, 2, &FONT_B, t, tack_running() ? C_HI : C_WHITE);
@@ -189,7 +195,7 @@ static void pg_top(void)
             cv_text(122, 2, &FONT_B, vel_page() ? "VEL SHAPE" : ui.song_page == PAGE_EUCLID ? "EUCLID" : "LANE", C_HI);
         if (seq_detail()) {
             if (tack_song_mode())                  /* what picks the pattern: the steps show whichever is playing */
-                cv_text(9 + text_w(&FONT_B, VOICE_NAME[ui.voice]), 5, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
+                cv_text(EDGE + 4 + text_w(&FONT_B, VOICE_NAME[ui.voice]), 5, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
             cv_text(122, 2, &FONT_B, ui.note_mode ? "NOTE" : "STEP", ui.note_mode ? C_HI : C_WHITE);
             t[0] = 'B';
             int_text(ui.bar + 1, t + 1);
@@ -199,7 +205,7 @@ static void pg_top(void)
             cv_text(182, 5, &FONT_XS, t, C_WHITE);
         }
         int_text(tack_bpm(), t);
-        cv_text(235 - text_w(&FONT_B, t), 2, &FONT_B, t, C_HI);
+        cv_text(240 - EDGE - text_w(&FONT_B, t), 2, &FONT_B, t, C_HI);
     }
     {                                                /* a page with more than one mode: the line under the bar in as many parts */
         const int n = arp_page() ? 3 : seq_detail() || (sound_page() && screens() > 1) ? 2 : 0;

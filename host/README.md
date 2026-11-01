@@ -96,7 +96,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   once. A `*` after the name means the kit was edited in the editor since it was loaded or saved; loading another kit
   replaces those edits without asking, as on the device. Tack tells the host which preset it loaded, and the
   project keeps the kit file's path, so the arrows carry on from there when the project is opened again.
-- **Saving kits:** "Make one up" in the save box suggests a name. The editor's "Save kit" button writes the kit as it is now to the "User" pack,
+- **Saving kits:** "Random" in the save box picks a name. The editor's "Save kit" button writes the kit as it is now to the "User" pack,
   `Kits/User/<name>.SND`, where the preset browser lists it with the others. The file is what the device writes:
   a name of up to 8 characters from the device's character set, then the kit's parameters. The device finds kits by
   slot number, so on its SD card a kit needs a file name such as `05-NAME.SND`. Saving under the name of a kit

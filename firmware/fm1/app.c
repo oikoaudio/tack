@@ -53,6 +53,10 @@ static const char *const SEND_NAME[TACK_FX_SENDS] = {"D1", "D2", "D3", "SN", "CY
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 /* each kind of voice has a colour, as in the desktop editor: red drums, orange snare, yellow cymbal, cream hi-hats.
  * It always means which voice; grey is structure, and the theme's colour is for values */
+#define EDGE 4                                   /* the screen's margin, both sides */
+#define CELL_W 55                                /* the dials' four cells, EDGE to EDGE with gaps of 4 */
+#define CELL_X(i) (EDGE + (int32_t)(i) * (CELL_W + 4))
+#define C_ROW RGB(52, 54, 64)                    /* what marks the dials: row_cells */
 static const uint16_t VOICE_COLOUR[TACK_VOICES] = {RGB(224, 66, 52), RGB(224, 66, 52), RGB(224, 66, 52), RGB(240, 125, 36),
                                                      RGB(242, 194, 61), RGB(237, 230, 212), RGB(237, 230, 212)};
 enum { KEY_ROLL = TACK_VOICES, KEY_MORPH = TACK_VOICES + 2, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices */
@@ -136,13 +140,19 @@ static struct {
     uint32_t tempo_until;                /* the tempo screen goes then */
     const TackSlot *touched;           /* the parameter last turned, large in the header until touched_until */
     uint32_t touched_at, touched_until;
+    int8_t touched_row;                  /* the row it was on: an OCT since shows another */
     uint8_t last_row[4];                 /* each group's middle row when it was left */
     int8_t row_seen;                     /* the row a held step's knobs started from */
     uint8_t sel_used;                    /* so was SEL */
     uint8_t sel_was;                     /* the lane's length was showing */
     uint32_t sel_at;                     /* when SEL went down */
+    uint32_t lane_at;                    /* and the voice key below */
+    uint8_t lane_key;                    /* the voice key that picked the voice last, + 1: held, it is the lane */
+    uint8_t help_on;                     /* the list of what SEL does is on screen */
     int32_t held;                        /* the white key held (0-15), -1 none */
     uint8_t held_used;                   /* it did something else: no toggle on release */
+    uint8_t held_step;                   /* the step it holds, which stays it when the bar moves */
+    uint8_t held_pattern;                /* and in which pattern: another one ends the hold */
     uint8_t held_val[TACK_NP];
     int32_t kit;
     char kit_name[9];
@@ -347,8 +357,13 @@ static void draw(void)
     uint32_t i;
     const int locking = ui.held >= 0;
     static int on_grid;
-    if (on_grid && (ui.popup || !full_page()))   /* a grid page covered the bottom strip, unchanged as its values may be */
+    if (on_grid && (ui.popup || ui.help_on || !full_page()))   /* a grid page covered the bottom strip, unchanged as its values may be */
         bottom_key = 0;
+    if (ui.help_on) {
+        on_grid = 0;
+        draw_sel_help();
+        return;
+    }
     if (ui.popup) {                              /* the page waits behind it */
         on_grid = 0;
         if (ui.popup == POP_TEMPO)
@@ -368,12 +383,12 @@ static void draw(void)
         char to[9];
         const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
         morph_name(to);
-        cv_text(10, 0, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);
-        cv_text(112 - text_w(&FONT_XS, to), 0, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
-        cv_rect(10, 16, 102, 2, C_LINE);
-        cv_rect(10 + tack_morph() * 96 / 127, 14, 6, 6, C_HI);
+        cv_text(EDGE, 0, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);
+        cv_text(110 - text_w(&FONT_XS, to), 0, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
+        cv_rect(EDGE, 16, 106, 2, C_LINE);
+        cv_rect(EDGE + tack_morph() * 100 / 127, 14, 6, 6, C_HI);
     } else {
-        cv_text(10, 4, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
+        cv_text(EDGE, 4, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
     }
     t[0] = 'P';
     int_text(tack_pattern() + 1, t + 1);
@@ -385,48 +400,49 @@ static void draw(void)
     if (tack_recording())
         cv_text(114, 7, &FONT_XS, "REC", REC_RED);
     int_text(tack_bpm(), t);
-    cv_text(196, 4, &FONT_B, t, C_HI);
+    cv_text(240 - EDGE - text_w(&FONT_B, t), 4, &FONT_B, t, C_HI);
+    if (tack_shuffle()) {                      /* none is nothing to say */
+        shuffle_glyph(172, 9, C_GRAY);
+        int_text(tack_shuffle(), t);
+        cv_text(184, 7, &FONT_XS, t, C_WHITE);
+    }
     if (tack_ext_sync())
-        cv_text(174, 7, &FONT_XS, "EXT", C_GRAY);
+        cv_text(92, 7, &FONT_XS, "EXT", C_GRAY);
     if (ui.touched_until && ui.touched) {        /* the parameter in hand, large */
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
-        cv_text(10, 22, &FONT_M, sl->label, VOICE_COLOUR[ui.voice]);
+        cv_text(EDGE, 22, &FONT_M, sl->label, VOICE_COLOUR[ui.voice]);
         if (name) {
             cv_text(112, 27, &FONT_S, name, C_WHITE);
         } else {
             value_text(sl, v, t);
-            cv_text(176, 22, &FONT_M, t, C_WHITE);
-            slot_bar(10, 47, 220, 4, sl, v, VOICE_COLOUR[ui.voice]);
+            cv_text(240 - EDGE - text_w(&FONT_M, t), 22, &FONT_M, t, C_WHITE);
+            slot_bar(EDGE, 44, 240 - 2 * EDGE, 4, sl, v, VOICE_COLOUR[ui.voice]);
         }
         cv_blit(0, 0);
         goto header_done;
     }
-    cv_text(10, 22, &FONT_M, VOICE_NAME[ui.voice], tack_muted((uint8_t)ui.voice) ? C_GRAY : VOICE_COLOUR[ui.voice]);
-    if (tack_song_mode())
-        cv_text(86, 28, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
-    {                                        /* the selected lane: its length, how it plays, and the bars there are */
-        const uint8_t lane = (uint8_t)ui.voice;
-        const int bars = bars_used();
-        t[0] = 'L';
-        int_text(tack_length(lane), t + 1);
-        cv_text(118, 28, &FONT_XS, t, C_GRAY);
-        dir_glyph(144, 31, tack_lane_dir(lane), tack_lane_dir(lane) ? C_WHITE : C_GRAY);
-        if (tack_lane_speed(lane))
-            cv_text(156, 28, &FONT_XS, tack_lane_speed_name(tack_lane_speed(lane)), C_WHITE);
-        for (int b = 0; bars > 1 && b < bars; b++)
-            cv_rect(230 - (bars - b) * 11 + 2, 32, 9, 5, b == ui.bar ? C_WHITE : C_LINE);
-    }
+    cv_text(EDGE, 22, &FONT_M, VOICE_NAME[ui.voice], tack_muted((uint8_t)ui.voice) ? C_GRAY : VOICE_COLOUR[ui.voice]);
+    if (tack_fx_send((uint32_t)ui.voice))
+        cv_text(240 - EDGE - text_w(&FONT_XS, "FX"), 30, &FONT_XS, "FX", C_HI);
+    for (int b = 0; b < (int)TACK_BARS; b++)   /* just over the grid, all of them: the one it shows, those in use, and the room for more */
+        cv_rect(240 - EDGE - ((int)TACK_BARS - b) * 14 + 2, 46, 12, 3, b == ui.bar ? C_WHITE : b < bars_used() ? C_GRAY : C_LINE);
     cv_blit(0, 0);
 header_done:
     draw_grid();
     if (ui.fx_page || ui.set_page || ui.song_page)
         goto strip_done;
     cv_begin(240, KNOBS_H, C_BLACK);
+    {
+        uint32_t dials = 0;
+        for (i = 0; i < TACK_NP; i++)
+            dials |= (uint32_t)(slot(i) != 0) << i;
+        row_cells(dials, 0, KNOBS_H);
+    }
     for (i = 0; i < TACK_NP; i++) {
         const TackSlot *sl = slot(i);
-        const int32_t x = 10 + (int32_t)i * 56;
+        const int32_t x = CELL_X(i) + 5;
         const char *name;
         uint8_t v;
         int lit = 0;
@@ -435,11 +451,11 @@ header_done:
         v = tack_get_param(sl->par);
         if (locking) {
             v = ui.held_val[i];
-            lit = tack_lock_get((uint8_t)ui.voice, (uint8_t)step_of((uint32_t)ui.held), sl->par, &v);
+            lit = tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &v);
             if (lit)
                 v = ui.held_val[i];
         }
-        cv_text(x, 2, &FONT_XS, sl->label, C_GRAY);
+        cv_text(x, 2, &FONT_XS, sl->label, PG_TEXT);
         name = tack_slot_text(sl, v);
         if (sl->target) {                    /* too long for a column: draw_bottom */
             knob_word(x, "BELOW", C_GRAY);
@@ -450,7 +466,7 @@ header_done:
             knob_num(x, t, lit ? C_HI : C_WHITE);
         }
         if (!sl->en && !sl->target)
-            slot_bar(x, 33, 50, 3, sl, v, lit ? C_HI : VOICE_COLOUR[ui.voice]);
+            slot_bar(x, 31, CELL_W - 10, 3, sl, v, lit ? C_HI : VOICE_COLOUR[ui.voice]);
     }
     cv_blit(0, KNOBS_Y);
 strip_done:
@@ -475,34 +491,39 @@ void app_ui_init(void)
 void app_frame(void)
 {
     static uint32_t last, seen;
-    static int head;
+    static uint32_t head;
     uint32_t now = plat_ms(), pct = plat_cpu_pct(), v, x = plat_xruns();
-    int h = 0;
+    uint32_t h = 0;
     if (x != ui.xrun_seen) {
         ui.xrun_seen = x;
         ui.xrun_act = now - ui.act_ms < 500u && ui.act ? ui.act : '?';
         ui.redraw = 1;
     }
     for (v = 0; v < TACK_VOICES; v++)          /* any lane's playhead moved */
-        h = h * 67 + tack_playhead((uint8_t)v);
-    h = h * 67 + tack_song_mode() * 256 + tack_song_pos();
-    h = h * 67 + tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384;
-    h = h * 67 + tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64;
-    h = h * 67 + tack_length((uint8_t)ui.voice) * 64 + (int)tack_lane_dir((uint8_t)ui.voice) * 4 + (int)tack_lane_speed((uint8_t)ui.voice);
+        h = h * 67u + (uint32_t)tack_playhead((uint8_t)v);
+    h = h * 67u + (uint32_t)(tack_song_mode() * 256 + tack_song_pos());
+    h = h * 67u + (uint32_t)(tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384);
+    h = h * 67u + (uint32_t)(tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64);
+    h = h * 67u + (uint32_t)(tack_length((uint8_t)ui.voice) * 64) + tack_lane_dir((uint8_t)ui.voice) * 4u + tack_lane_speed((uint8_t)ui.voice);
     if (sel_length() != ui.sel_was) {
         ui.sel_was = (uint8_t)sel_length();
         ui.redraw = 1;
     }
     if (ui.note_mode || ui.held >= 0) {          /* a step's edit too */
-        const uint8_t s = (uint8_t)(ui.held >= 0 ? step_of((uint32_t)ui.held) : (int)note_cursor());
+        const uint8_t s = (uint8_t)(ui.held >= 0 ? (int)ui.held_step : (int)note_cursor());
         for (v = 0; v < TACK_ST_SLOTS; v++)
-            h = h * 67 + tack_step_get((uint8_t)ui.voice, s, v);
-        h = h * 67 + tack_step_on((uint8_t)ui.voice, s) + tack_recur_len((uint8_t)ui.voice, s) * 2 +
-            tack_recur_mask((uint8_t)ui.voice, s) * 32;
+            h = h * 67u + (uint32_t)tack_step_get((uint8_t)ui.voice, s, v);
+        h = h * 67u + (uint32_t)(tack_step_on((uint8_t)ui.voice, s) + tack_recur_len((uint8_t)ui.voice, s) * 2 +
+                                 tack_recur_mask((uint8_t)ui.voice, s) * 32);
     }
     if (ui.song_page)                            /* a row turned reaches the engine after the frame that drew it */
-        h = h * 67 + (int)song_len() * 256 + tack_song_get(song_len()) + tack_song_get(ui.song_row) * 4;
+        h = h * 67u + song_len() * 256u + tack_song_get(song_len()) + tack_song_get(ui.song_row) * 4u;
     input();
+    if (sel_help() != ui.help_on) {
+        ui.help_on = (uint8_t)sel_help();
+        bottom_key = 0;                          /* it covers the main page as a popup does */
+        ui.redraw = 1;
+    }
     save_frame();
     (void)tack_kit_busy();                     /* a kit that went in shows, whichever way it came */
     if (tack_kit_now() != ui.kit_seen) {

@@ -14,6 +14,18 @@ static uint32_t flashing(uint32_t v, uint32_t now)
     return at[v] && now - at[v] < FLASH_MS;
 }
 
+/* A white key as a step: 2 lit, 1 dim, 0 dark. Past the lane's end it is dark: a shorter lane keeps the steps there, and they don't play */
+static int step_light(uint32_t k, int head)
+{
+    const uint32_t s = (uint32_t)ui.bar * 16u + k;
+    const int on = tack_step_on((uint8_t)ui.voice, (uint8_t)s);
+    if ((int)s >= tack_length((uint8_t)ui.voice))
+        return 0;
+    if (on && (int)s != head && tack_recur_skips((uint8_t)ui.voice, (uint8_t)s))
+        return 1;                                /* not this pass */
+    return on != ((int)s == head) ? 2 : 0;
+}
+
 /* the keys light the page's steps of the voice, the playhead dim-to-bright against them. The black keys: the voice lit, a
  * voice with steps in this pattern between that and the low glow of an empty lane, a muted one dark */
 static void lights(void)
@@ -83,12 +95,11 @@ static void lights(void)
         }
     } else {
         for (k = 0; k < 16u; k++) {
-            const uint32_t s = (uint32_t)ui.bar * 16u + k;
-            const int on = tack_step_on((uint8_t)ui.voice, (uint8_t)s);
-            if (on && (int)s != head && tack_recur_skips((uint8_t)ui.voice, (uint8_t)s))
-                dim |= 1u << WK[k];              /* not this pass */
-            else if (on != ((int)s == head))
+            const int light = step_light(k, head);
+            if (light == 2)
                 keys |= 1u << WK[k];
+            else if (light)
+                dim |= 1u << WK[k];
         }
     }
     if (seq_in_view())

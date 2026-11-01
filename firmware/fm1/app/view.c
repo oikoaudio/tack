@@ -79,11 +79,23 @@ static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.k
 /* SEL held a moment where it can set the lane's end: what the end is now. Not at once, or it would flash on each tap that walks
  * the steps */
 #define SEL_SHOW_MS 250u
+#define SEL_HELP_MS 1000u
+
+/* A voice's key held a moment does as SEL does, once the lane shows on the keys: a quick voice key and a step can overlap, and that
+ * must stay a step. Recording, the key is writing the part */
+static int lane_key_held(void)
+{
+    return ui.lane_key && (ui.keys >> BK[ui.lane_key - 1u] & 1u) && ui.held < 0 && !tack_recording() && !keys_notes(ui.btn)
+           && (seq_in_view() || arp_page()) && plat_ms() - ui.lane_at >= SEL_SHOW_MS;
+}
 
 static int sel_length(void)
 {
-    return (ui.btn >> B_SEL & 1u) && ui.held < 0 && (seq_in_view() || arp_page()) && plat_ms() - ui.sel_at >= SEL_SHOW_MS;
+    return lane_key_held() || ((ui.btn >> B_SEL & 1u) && ui.held < 0 && (seq_in_view() || arp_page()) && plat_ms() - ui.sel_at >= SEL_SHOW_MS);
 }
+
+/* SEL held on its own: anything touched with it is a chord being played, and the list stays away */
+static int sel_help(void) { return (ui.btn >> B_SEL & 1u) && !ui.sel_used && ui.held < 0 && plat_ms() - ui.sel_at >= SEL_HELP_MS; }
 
 /* a white key while it shows: 0 past the lane's end, 1 in the lane, 2 the last step */
 static int sel_light(uint32_t k)
@@ -176,7 +188,7 @@ static const char *page_label(int page, const TackSlot *sl)
             return "VEL AMT";
     }
     if (page == PITCH_ROW && sl != tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 0))
-        return same(sl->label, "PITCH") ? "MOD AMT" : same(sl->label, "DECAY") ? "MOD DEC" : "MOD SLP";
+        return same(sl->label, "PITCH") ? "SWP AMT" : same(sl->label, "DECAY") ? "SWP DEC" : "SWP CRV";
     if (ui.group == TACK_G_EDIT && same(tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)page), "FM")) {
         /* the second oscillator: it modulates the first, or MODE MIX crossfades the two and AMOUNT is that crossfade */
         const TackSlot *mode = tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 3);

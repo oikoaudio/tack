@@ -4,10 +4,10 @@
 #define REC_RED RGB(232, 58, 46)
 static void outline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, uint16_t c);
 
-#define GRID_X 12
+#define GRID_X 14                         /* the last step ends where the last knob's cell does */
 #define GRID_CELL 14
 #define GRID_ROW 11
-#define GRID_H 82                         /* to the knobs: it clears what a full page left there */
+#define GRID_H 80                         /* to the knobs: it clears what a full page left there */
 
 #define GRID_FLOOR 3                      /* the height of a step at the lowest velocity */
 #define C_HEAD RGB(96, 98, 108)           /* the playhead's cell, with a hit white on it at its velocity */
@@ -24,7 +24,7 @@ static void draw_grid(void)
         const int muted = tack_muted((uint8_t)v);
         const int head = tack_running() ? tack_playhead((uint8_t)v) : -1;
         const int len = tack_length((uint8_t)v);
-        cv_rect(2, y + 1, (int32_t)v == ui.voice ? 7 : 2, GRID_ROW - 3, muted ? C_GRAY : VOICE_COLOUR[v]);
+        cv_rect(EDGE, y + 1, (int32_t)v == ui.voice ? 6 : 2, GRID_ROW - 3, muted ? C_GRAY : VOICE_COLOUR[v]);
         for (i = 0; i < 16u; i++) {
             const int s = ui.bar * 16 + (int)i;
             const int32_t x = GRID_X + (int32_t)i * GRID_CELL;
@@ -51,15 +51,16 @@ static void draw_grid(void)
 /* The screen under the grid: the knobs' strip, then the bottom. There the envelope or wave of the page, and a last row with
  * the page's name on the left and its place among the group's pages on the right. The curves are the engine's: SlopeEg2.c's
  * slope and rates */
-#define KNOBS_Y 134
+#define HOME_GAP 5                       /* above the knobs, below them, and under the bottom strip */
+#define KNOBS_Y (52 + 7 * 11 - 2 + HOME_GAP)
 #define KNOBS_H 36
 #define BOTTOM_Y (KNOBS_Y + KNOBS_H)
 #define BOTTOM_H (240 - BOTTOM_Y)
-#define GRAPH_X 10
-#define GRAPH_TOP 2
+#define GRAPH_X EDGE
+#define GRAPH_TOP HOME_GAP
 #define GRAPH_H 50
-#define GRAPH_W 220
-#define ROW_Y 54                         /* the name */
+#define GRAPH_W (240 - 2 * EDGE)
+#define ROW_Y 56                         /* the name */
 #define BAR_W 14
 #define BAR_PITCH 18
 
@@ -168,23 +169,28 @@ static float eg_time(uint8_t param, float k)
 }
 
 static int32_t graph_w = GRAPH_W;        /* beside what the overview keeps there, narrower */
+static int32_t graph_h = GRAPH_H;        /* and with no name under it, taller */
+static int32_t graph_top = GRAPH_TOP;
 
-static int32_t log2_px(float t)          /* a width that grows with the log of the time */
+#define EG_OCTAVES 17.6f                  /* the doublings in the longest stages, eg_time's limit in both */
+
+static int32_t log2_px(float t, int32_t w)   /* a width that grows with the log of the time, all of the dial's range in w */
 {
     int32_t n = 0;
+    float px;
     while (t >= 2.0f) {
         t *= 0.5f;
         n++;
     }
-    n = 12 + (int32_t)(12.0f * ((float)n + t - 1.0f));
-    return n > graph_w ? graph_w : n;
+    px = 12.0f + (float)(w - 12) * ((float)n + t - 1.0f) / EG_OCTAVES;
+    return px > (float)w ? w : (int32_t)px;
 }
 
 static void graph_column(int32_t x, float y)    /* y 0-1 */
 {
-    const int32_t h = 1 + (int32_t)(y * (float)(GRAPH_H - 1));
-    cv_rect(GRAPH_X + x, GRAPH_TOP + GRAPH_H - h, 1, h, (uint16_t)((VOICE_COLOUR[ui.voice] >> 2) & 0x39E7u));
-    cv_rect(GRAPH_X + x, GRAPH_TOP + GRAPH_H - h, 1, 2, VOICE_COLOUR[ui.voice]);
+    const int32_t h = 1 + (int32_t)(y * (float)(graph_h - 1));
+    cv_rect(GRAPH_X + x, graph_top + graph_h - h, 1, h, (uint16_t)((VOICE_COLOUR[ui.voice] >> 2) & 0x39E7u));
+    cv_rect(GRAPH_X + x, graph_top + graph_h - h, 1, 2, VOICE_COLOUR[ui.voice]);
 }
 
 static uint8_t graph_value(int graph, uint32_t slot, uint8_t none)
@@ -200,7 +206,7 @@ static void draw_env(int graph)
     const uint8_t decay = graph_value(graph, amp ? 1 : 0, 0), slope = graph_value(graph, amp ? 2 : 1, 63);
     const float ta = amp && attack ? eg_time(attack, 198.0f) : 0.0f, td = eg_time(decay, 1998.0f);
     const float s = eg_slope(slope), inv = eg_slope((uint8_t)(127u - slope));
-    const int32_t w = log2_px(ta + td);
+    const int32_t w = log2_px(ta + td, graph_w);
     int32_t up = (int32_t)((float)w * ta / (ta + td)), x;
     if (attack && up < 2)
         up = 2;
@@ -297,25 +303,29 @@ static const TackSlot *target_slot(void)
 static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS; }
 
 /* The overview's bottom right, beside the envelope: the sixteen patterns as two rows of the white keys, and what picks the next */
-#define HOME_X 128
+#define HOME_X 122                       /* the third knob's cell: the envelope is under the first two, this under the last two */
 #define HOME_CELL 11
-#define HOME_PITCH 13
-#define HOME_ENV_W 108
+#define HOME_CELL_H 20
+#define HOME_ENV_W (HOME_X - 4 - EDGE)
+#define HOME_TOP 8                        /* the map's title sits on the map, and the envelope starts level with it */
+#define HOME_ENV_H (BOTTOM_H - HOME_TOP - HOME_GAP)
+#define HOME_MAP_Y (GRAPH_TOP + 18)       /* under its title, and ending where the envelope does */
 
 static int home_info(void) { return ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page && ui.held < 0; }
 
 static void draw_home_info(uint32_t used)
 {
     const int now = tack_pattern(), next = tack_pattern_next(), mode = tack_song_mode();
-    char t[12];
+    char t[16];
     uint32_t n = 0;
     for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
-        const int32_t x = HOME_X + (int32_t)(p % 8u) * HOME_PITCH, y = 3 + (int32_t)(p / 8u) * HOME_PITCH;
-        cv_rect(x, y, HOME_CELL, HOME_CELL, (int)p == now ? C_HI : used >> p & 1u ? C_GRAY : C_LINE);
+        const int32_t x = HOME_X + (int32_t)(p % 8u) * (240 - EDGE - HOME_X - HOME_CELL) / 7, y = HOME_MAP_Y + (int32_t)(p / 8u) * (HOME_CELL_H + 4);
+        cv_rect(x, y, HOME_CELL, HOME_CELL_H, (int)p == now ? C_HI : used >> p & 1u ? C_GRAY : C_LINE);
         if ((int)p == next)
-            outline(x, y, HOME_CELL, HOME_CELL, 1, C_WHITE);
+            outline(x, y, HOME_CELL, HOME_CELL_H, 1, C_WHITE);
     }
-    if (mode) {                                  /* the row playing of how many */
+    /* the title: what plays on the left, and on the right which pattern it has reached or the one queued */
+    if (mode) {
         memcpy(t, mode == TACK_SONG_ON ? "SONG " : "CHAIN ", 7u);
         n = mode == TACK_SONG_ON ? 5u : 6u;
         int_text(tack_song_pos() + 1, t + n);
@@ -323,16 +333,23 @@ static void draw_home_info(uint32_t used)
             n++;
         t[n++] = '/';
         int_text(mode == TACK_SONG_ON ? (int32_t)song_len() : (int32_t)tack_chain_len(), t + n);
-        cv_text(HOME_X, 32, &FONT_XS, t, C_HI);
+        cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_HI);
     } else {
-        memcpy(t, next >= 0 ? "NEXT P" : "LOOP P", 7u);
-        int_text((next >= 0 ? next : now) + 1, t + 6);
-        cv_text(HOME_X, 32, &FONT_XS, t, next >= 0 ? C_WHITE : C_GRAY);
+        memcpy(t, "PATTERN ", 9u);
+        int_text(now + 1, t + 8);
+        cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_WHITE);
     }
-    memcpy(t, "SHUF ", 6u);
-    int_text(tack_shuffle(), t + 5);
-    cv_text(HOME_X, 48, &FONT_XS, t, tack_shuffle() ? C_WHITE : C_GRAY);
-    cv_text(230 - text_w(&FONT_XS, "FX"), 48, &FONT_XS, "FX", tack_fx_send((uint32_t)ui.voice) ? C_HI : C_LINE);
+    if (next >= 0) {
+        memcpy(t, "NEXT ", 6u);
+        int_text(next + 1, t + 5);
+    } else {
+        t[0] = 0;
+        if (mode) {
+            t[0] = 'P';
+            int_text(now + 1, t + 1);
+        }
+    }
+    cv_text(240 - EDGE - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, next >= 0 ? C_WHITE : C_GRAY);
 }
 
 /* a lane's direction, 9 wide and 7 high */
@@ -342,19 +359,12 @@ static void dir_arrow(int32_t x, int32_t y, int back, uint16_t c)
         cv_rect(back ? x + 3 - i : x + i, y + i, 1, 7 - 2 * i, c);
 }
 
-static void dir_glyph(int32_t x, int32_t y, uint32_t dir, uint16_t c)
+/* shuffle: three beats, the middle one late. 9 wide and 7 high */
+static void shuffle_glyph(int32_t x, int32_t y, uint16_t c)
 {
-    if (dir == 4u) {                             /* random: a die's four */
-        cv_rect(x, y, 3, 3, c);
-        cv_rect(x + 5, y, 3, 3, c);
-        cv_rect(x, y + 4, 3, 3, c);
-        cv_rect(x + 5, y + 4, 3, 3, c);
-    } else {
-        if (dir != 0u)
-            dir_arrow(x, y, 1, c);
-        if (dir != 1u)
-            dir_arrow(dir == 2u ? x + 5 : dir == 3u ? x + 3 : x, y, 0, c);
-    }
+    cv_rect(x, y, 1, 7, c);
+    cv_rect(x + 5, y, 1, 7, c);
+    cv_rect(x + 8, y, 1, 7, c);
 }
 
 /* drawn only when it would change: it is the largest strip on a screen that redraws on every step */
@@ -438,6 +448,8 @@ static void draw_bottom(void)
 
     cv_begin(240, BOTTOM_H, C_BLACK);
     graph_w = home_info() ? HOME_ENV_W : GRAPH_W;
+    graph_h = home_info() ? HOME_ENV_H : GRAPH_H;
+    graph_top = home_info() ? HOME_TOP : GRAPH_TOP;
     if (0) {
     } else if (graph == TACK_GRAPH_LFO) {
         draw_lfo();
@@ -448,15 +460,15 @@ static void draw_bottom(void)
     }
     if (home_info())
         draw_home_info(used);
-    cv_text(10, ROW_Y, &FONT_XS, page_name(), C_GRAY);
+    cv_text(EDGE, ROW_Y, &FONT_XS, page_name(), C_GRAY);
     if (ui.held >= 0) {          /* the step's recurrence, where the keys show it */
         const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
         const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
         for (i = 0; i < len; i++)
-            cv_rect(230 - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
+            cv_rect(240 - EDGE - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
     } else {
         for (i = 0; i < pages; i++)
-            cv_rect(230 - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
+            cv_rect(240 - EDGE - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
     }
     if (xruns && !ui.set_page) {                 /* never hidden: a soak test reads this from any page */
         char t[8];

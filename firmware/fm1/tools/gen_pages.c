@@ -18,17 +18,17 @@ static const Page PAGE[] = {
     {MAIN, "", {{"PITCH", "Oscillator Coarse"}, {"FILTER", "Filter Frequency"}, {"DECAY", "Amp EG Decay"}, {"VOLUME", "Volume"}}, G_AMP},
     {EDIT, "OSC", {{"FINE", "Oscillator Fine"}, {"WAVE", "Oscillator Waveform"}, {"PW", "Oscillator Pulse Width"}, {"MODE", "Oscillator Mode"}}, G_OSC},
     {EDIT, "FM", {{"AMOUNT", "FM Amount"}, {"FREQ", "FM Frequency"}, {"WAVE", "FM Waveform"}, {0, 0}}, G_FM},
-    {EDIT, "NOISE", {{"FREQ", "Noise Frequency"}, {"MIX", "Noise/Osc Mix"}, {0, 0}, {0, 0}}},
+    {EDIT, "NOISE", {{"NOISE", "Noise Frequency"}, {"N MIX", "Noise/Osc Mix"}, {0, 0}, {0, 0}}},
     {EDIT, "MOD OSC", {{"FREQ 1", "Mod Osc Frequency 1"}, {"FREQ 2", "Mod Osc Frequency 2"}, {"GAIN 1", "Mod Osc Gain 1"}, {"GAIN 2", "Mod Osc Gain 2"}}},
     {EDIT, "MOD WAVE", {{"WAVE 1", "Mod Osc Waveform 1"}, {"WAVE 2", "Mod Osc Waveform 2"}, {0, 0}, {0, 0}}, G_MODWAVE},
-    {EDIT, "FILTER", {{"FREQ", "Filter Frequency"}, {"RES", "Filter Resonance"}, {"TYPE", "Filter Type"}, {"DRIVE", "Filter Overdrive"}}},
-    {EDIT, "TRANSIENT", {{"VOLUME", "Transient Volume"}, {"WAVE", "Transient Waveform"}, {"FREQ", "Transient Frequency"}, {0, 0}}},
-    {EDIT, "OUTPUT", {{"PAN", "Panning"}, {"DRIVE", "Overdrive"}, {"CRUSH", "Sample Rate"}, {0, 0}}},
-    {ENV, "AMP EG", {{"ATTACK", "Amp EG Attack"}, {"DECAY", "Amp EG Decay"}, {"SLOPE", "Amp EG Slope"}, {"REPEAT", "Amp EG Repeat Count"}}, G_AMP},
-    {ENV, "MOD EG", {{"DECAY", "Mod EG Decay"}, {"SLOPE", "Mod EG Slope"}, {"PITCH", "Pitch Mod Amount"}, {0, 0}}, G_MOD},
+    {EDIT, "FILTER", {{"FILTER", "Filter Frequency"}, {"RES", "Filter Resonance"}, {"TYPE", "Filter Type"}, {"DRIVE", "Filter Overdrive"}}},
+    {EDIT, "TRANSIENT", {{"VOLUME", "Transient Volume"}, {"SAMPLE", "Transient Waveform"}, {"PITCH", "Transient Frequency"}, {0, 0}}},
+    {EDIT, "OUTPUT", {{"PAN", "Panning"}, {"DRIVE", "Overdrive"}, {"RATE", "Sample Rate"}, {0, 0}}},
+    {ENV, "AMP EG", {{"ATTACK", "Amp EG Attack"}, {"DECAY", "Amp EG Decay"}, {"CURVE", "Amp EG Slope"}, {"REPEAT", "Amp EG Repeat Count"}}, G_AMP},
+    {ENV, "MOD EG", {{"DECAY", "Mod EG Decay"}, {"CURVE", "Mod EG Slope"}, {"PITCH", "Pitch Mod Amount"}, {0, 0}}, G_MOD},
     {ENV, "VELOCITY", {{"TARGET", "Velocity Destination"}, {"AMOUNT", "Velocity Amount"}, {"VOLUME", "Velocity Volume Mod"}, {0, 0}}},
     {LFO, "LFO", {{"TARGET", "LFO Destination"}, {"AMOUNT", "LFO Amount"}, {"FREQ", "LFO Frequency"}, {"WAVE", "LFO Waveform"}}, G_LFO},
-    {LFO, "LFO SYNC", {{"SYNC", "LFO Clock Sync"}, {"RETRIG", "LFO Retrigger"}, {"OFFSET", "LFO Offset"}, {0, 0}}, G_LFO},
+    {LFO, "LFO SYNC", {{"SYNC", "LFO Clock Sync"}, {"RETRIG", "LFO Retrigger"}, {"PHASE", "LFO Offset"}, {0, 0}}, G_LFO},
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 static const char *const VOICE[7] = {"Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Hi-hat"};
@@ -71,6 +71,14 @@ static void shorten(char *t)
 }
 static int enums;
 
+/* the panel's words for the LXR's three letters, where a box has room for them */
+static const char *const WORD[][2] = {
+    {"REC", "SQR"}, {"PWM", "PULSE"}, {"NOI", "NOISE"}, {"SUP", "SAW UP"}, {"SDN", "SAW DN"}, {"XUP", "EXP UP"}, {"XDN", "EXP DN"},
+    {"12", "1/12"}, {"16", "1/16"}, {"32", "1/32"}, {"NCH", "NOTCH"}, {"PEK", "PEAK"}, {"SNP", "SNAP"}, {"OFS", "OFFSET"},
+    {"CLK", "CLICK"}, {"CK2", "CLICK2"}, {"TIK", "TICK"}, {"KIK", "KICK"}, {"DRP", "DROP"}, {"CLP", "CLAP"}, {"KK2", "KICK2"},
+    {"SNR", "SNARE"}, {"SP2", "SNAP2"},
+};
+
 /* the value that reads as 0, from the text the desktop shows and the LXR's menu: its lowest value reads minus that */
 static int centre_of(const LxrParamInfo *p)
 {
@@ -105,11 +113,12 @@ static int enum_of(const LxrParamInfo *p)
         for (char *c = t; *c; c++)
             *c = *c == '"' || *c == '\\' ? ' ' : (char)toupper((unsigned char)*c);
         t[18] = 0;
-        if (!strcmp(t, "REC"))                  /* the panel's words for the LXR's two square waves */
-            strcpy(t, "SQR");
-        else if (!strcmp(t, "PWM"))
-            strcpy(t, "PULSE");
-        else if (t[0] == 'V' && t[1] >= '1' && t[1] <= '6' && !t[2])   /* the voice an LFO restarts with: lfo_retrigger() */
+        for (size_t w = 0; w < sizeof WORD / sizeof WORD[0]; w++)
+            if (!strcmp(t, WORD[w][0])) {
+                strcpy(t, WORD[w][1]);
+                break;
+            }
+        if (t[0] == 'V' && t[1] >= '1' && t[1] <= '6' && !t[2])   /* the voice an LFO restarts with: lfo_retrigger() */
             strcpy(t, (const char *const[]){"D1", "D2", "D3", "SN", "CY", "HH"}[t[1] - '1']);
         printf("\"%s\",", t);
     }

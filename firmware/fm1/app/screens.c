@@ -63,7 +63,13 @@ static void pg_fx_row(uint32_t r, uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, on ? tint(C_HI) : C_BLACK);
+    cv_begin(240, PG_RH, C_BLACK);
+    if (on) {
+        uint32_t dials = 0;
+        for (uint32_t i = 0; i < n; i++)
+            dials |= (uint32_t)(first + i == TACK_FX_TYPE || tack_fx_max(first + i)) << i;
+        row_lines(dials, C_HI);
+    }
     for (uint32_t i = 0; i < 4u; i++) {
         const uint32_t sl = first + i;
         const int32_t x = PG_CW / 2 + (int32_t)i * PG_CW;
@@ -118,7 +124,8 @@ static void pg_set_row(uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, ui.btn >> B_OCTDN & 1u ? C_BLACK : tint(C_HI));
+    cv_begin(240, PG_RH, C_BLACK);
+    row_lines(ui.btn >> B_OCTDN & 1u ? 0u : 0xFu, C_HI);
     wd_value(0, tack_bpm(), 0, 1, 0);
     pg_column(0, "TEMPO", 1);
     wd_value(1, tack_shuffle(), 127, 1, 1);
@@ -141,7 +148,8 @@ static void pg_set_usb(uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, on ? tint(C_HI) : C_BLACK);
+    cv_begin(240, PG_RH, C_BLACK);
+    row_lines(on ? 0x7u : 0u, C_HI);
     wd_box(PG_CW / 2, 0, ui.usb10 ? "10 CH" : "STEREO", on ? C_HI : C_GRAY);
     pg_column(0, "USB AUDIO", on);
     if (diag) {                                  /* OCT+ held: what USB audio has been doing */
@@ -183,7 +191,8 @@ static void pg_song_top(uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, tint(C_HI));
+    cv_begin(240, PG_RH, C_BLACK);
+    row_lines(0xFu, C_HI);
     wd_value(0, ui.song_row + 1u, 0, 1, 0);
     pg_column(0, "ROW", 1);
     if (v < TACK_PATTERNS)
@@ -215,7 +224,8 @@ static void pg_save_top(uint32_t *last)
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, tint(C_HI));
+    cv_begin(240, PG_RH, C_BLACK);
+    row_lines(pattern ? 0x9u : 0xFu, C_HI);
     wd_value(0, (pattern ? ui.ks_pat : ui.ks_slot) + 1u, 0, 1, 0);
     pg_column(0, "SLOT", 1);
     if (!pattern) {
@@ -224,6 +234,9 @@ static void pg_save_top(uint32_t *last)
         pg_column(1, "CURSOR", 1);
         wd_box(PG_CW * 2 + PG_CW / 2, 0, t[0] == ' ' ? "SPACE" : t, C_HI);
         pg_column(2, "LETTER", 1);
+    } else {                                     /* the empty slot, as a dial with nothing to do looks anywhere else */
+        wd_empty(PG_CW + PG_CW / 2, 0);
+        wd_empty(PG_CW * 2 + PG_CW / 2, 0);
     }
     wd_box(PG_CW * 3 + PG_CW / 2, 0, save_word(), C_HI);
     pg_column(3, "SAVING", 1);
@@ -240,7 +253,7 @@ static void pg_save_slots(uint32_t *last)
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
     for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
-        const int32_t x = 6 + (int32_t)(p % 8u) * 29, y = 2 + (int32_t)(p / 8u) * 34;
+        const int32_t x = EDGE + 1 + (int32_t)(p % 8u) * 29, y = 2 + (int32_t)(p / 8u) * 34;
         const int on = p == ui.ks_pat;
         char t[4];
         cv_rect(x, y, 26, 30, on ? C_HI : C_LINE);
@@ -262,8 +275,8 @@ static void pg_save_name(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
-    cv_text(6, 2, &FONT_XS, "NAME", C_GRAY);
-    cv_text(234 - text_w(&FONT_XS, "OCT- CLEARS  OCT+ MAKES ONE UP"), 2, &FONT_XS, "OCT- CLEARS  OCT+ MAKES ONE UP", C_GRAY);
+    cv_text(EDGE, 2, &FONT_XS, "NAME", C_GRAY);
+    cv_text(240 - EDGE - text_w(&FONT_XS, "OCT- CLEAR  OCT+ RND"), 2, &FONT_XS, "OCT- CLEAR  OCT+ RND", C_GRAY);
     for (uint32_t i = 0; i < 8u; i++) {
         const int32_t x = 120 - 4 * PG_NAME_W + (int32_t)i * PG_NAME_W;
         const char t[2] = {ui.ks_name[i], 0};
@@ -276,33 +289,19 @@ static void pg_save_name(uint32_t *last)
     cv_blit(0, PG_Y + PG_RH);
 }
 
-static void save_note_pattern(char *a, char *b, uint32_t todo)
+static void save_note_pattern(char *a, uint32_t todo)
 {
-    const int now = tack_pattern() + 1;
     uint32_t n = 0;
-    if (ui.ks_pat + 1 == now) {
+    if ((int)ui.ks_pat == tack_pattern()) {
         for (uint32_t p = 0; p < TACK_PATTERNS; p++)
             n += todo >> p & 1u;
-        int_text((int32_t)n, a);
-        n = 0;
-        while (a[n])
-            n++;
-        memcpy(a + n, n == 1u && a[0] == '1' ? " CHANGED PATTERN" : " CHANGED PATTERNS", 18u);
-        memcpy(b, "PICK ANOTHER SLOT TO COPY THIS ONE", 35u);
+        memcpy(a, "SAVE ", 5u);
+        int_text((int32_t)n, a + 5);
+        memcpy(a + (n >= 10u ? 7 : 6), n == 1u ? " PATTERN" : " PATTERNS", 10u);
     } else {
-        memcpy(a, "COPY P", 7u);
-        int_text(now, a + 6);
-        n = 6;
-        while (a[n])
-            n++;
-        memcpy(a + n, " TO P", 6u);
-        int_text(ui.ks_pat + 1, a + n + 5);
-        n += 5;
-        while (a[n])
-            n++;
-        if (tack_patterns_used() >> ui.ks_pat & 1u)
-            memcpy(a + n, ", REPLACING IT", 15u);
-        memcpy(b, "AND CARRY ON THERE", 19u);
+        const int used = tack_patterns_used() >> ui.ks_pat & 1u;
+        memcpy(a, used ? "OVERWRITE P" : "SAVE AS P", used ? 12u : 10u);
+        int_text(ui.ks_pat + 1, a + (used ? 11 : 9));
     }
 }
 
@@ -312,10 +311,10 @@ static void save_note_kit(char *a, char *b, const uint8_t *now)
     char t[9];
     if (now) {
         kit_name_of(now, t);
-        memcpy(a, "REPLACES ", 9u);
-        memcpy(a + 9, t, 9u);
+        memcpy(a, "OVERWRITE ", 10u);
+        memcpy(a + 10, t, 9u);
     } else {
-        memcpy(a, "EMPTY SLOT", 11u);
+        memcpy(a, "SAVE AS NEW KIT", 16u);
     }
     if (ui.ks_what == SAVE_BLEND) {
         memcpy(b, "MORPH ", 7u);
@@ -331,7 +330,7 @@ static void save_note_kit(char *a, char *b, const uint8_t *now)
         memcpy(b + n, " > ", 4u);
         morph_name(b + n + 3);
     } else {
-        memcpy(b, "THE KIT PLAYING NOW, WITH ITS EDITS", 36u);
+        memcpy(b, "AS IT SOUNDS NOW", 17u);
     }
 }
 
@@ -348,18 +347,16 @@ static void pg_save_note(uint32_t *last)
     *last = key;
     a[0] = b[0] = 0;
     if (ui.ks_what == SAVE_PATTERN)
-        save_note_pattern(a, b, todo);
+        save_note_pattern(a, todo);
     else
         save_note_kit(a, b, now);
     cv_begin(240, PG_RH, C_BLACK);
-    cv_text(120 - text_w(&FONT_B, a) / 2, 2, &FONT_B, a, now || (ui.ks_what == SAVE_PATTERN && (int)ui.ks_pat != tack_pattern()) ? C_HI : C_WHITE);
+    cv_text(120 - text_w(&FONT_B, a) / 2, 2, &FONT_B, a, now || a[0] == 'O' ? C_HI : C_WHITE);
     cv_text(120 - text_w(&FONT_XS, b) / 2, 22, &FONT_XS, b, C_WHITE);
     {
         const int nameless = ui.ks_what != SAVE_PATTERN && save_name_empty();
-        const char *const c = nameless ? "IT NEEDS A NAME" : run ? "STOP FIRST, IT PAUSES THE SOUND" : "PRESS SAVE TO WRITE IT";
-        const char *const d = ui.ks_what == SAVE_PATTERN ? "K4 FOR A KIT. ANY PAGE BUTTON LEAVES" : "ANY PAGE BUTTON LEAVES";
-        cv_text(120 - text_w(&FONT_XS, c) / 2, 38, &FONT_XS, c, run || nameless ? C_HI : C_WHITE);
-        cv_text(120 - text_w(&FONT_XS, d) / 2, 54, &FONT_XS, d, C_GRAY);
+        const char *const c = nameless ? "NAME IT FIRST" : run ? "STOP PLAY FIRST" : "PRESS SAVE";
+        cv_text(120 - text_w(&FONT_XS, c) / 2, b[0] ? 38 : 22, &FONT_XS, c, run || nameless ? C_HI : C_WHITE);
     }
     cv_blit(0, PG_Y + 2u * PG_RH);
 }
@@ -495,27 +492,27 @@ static void pg_voice_line(uint32_t line, uint32_t *last)
     *last = key;
     cv_begin(240, VV_H + 2, C_BLACK);
     for (uint32_t i = 0; i < 8u; i++)
-        vv_cell(ui.bar * 16 + (int)(line * 8u + i), 5 + (int32_t)i * 28 + (i >= 4u ? 6 : 0), len, head, low);
+        vv_cell(ui.bar * 16 + (int)(line * 8u + i), EDGE + (int32_t)i * 28 + (i >= 4u ? 10 : 0), len, head, low);
     cv_blit(0, PG_Y + line * (VV_H + 2u));
 }
 
 /* one column of what is under the steps; a max of 0 has no bar */
 static void vv_dial(uint32_t i, const char *name, const char *word, int lit, int value, int max)
 {
-    const int32_t x = (int32_t)i * PG_CW;
-    cv_text(x + PG_CW / 2 - text_w(&FONT_XS, name) / 2, 4, &FONT_XS, name, C_GRAY);
-    cv_text(x + PG_CW / 2 - text_w(&FONT_B, word) / 2, 20, &FONT_B, word, lit ? C_WHITE : C_GRAY);
+    const int32_t x = CELL_X(i), mid = x + CELL_W / 2;
+    cv_text(mid - text_w(&FONT_XS, name) / 2, 4, &FONT_XS, name, PG_TEXT);
+    cv_text(mid - text_w(&FONT_B, word) / 2, 20, &FONT_B, word, lit ? C_WHITE : C_GRAY);
     if (max)
-        value_bar(x + 5, 40, 50, 4, (uint32_t)value, (uint32_t)max, VOICE_COLOUR[ui.voice]);
+        value_bar(x + 5, 40, CELL_W - 10, 4, (uint32_t)value, (uint32_t)max, VOICE_COLOUR[ui.voice]);
 }
 
 static void vv_nudge(uint32_t i, int value)
 {
-    const int32_t x = (int32_t)i * PG_CW;
-    cv_rect(x + 5, 41, 50, 2, C_LINE);
-    cv_rect(x + 29, 38, 2, 8, C_GRAY);
+    const int32_t x = CELL_X(i), mid = x + CELL_W / 2;
+    cv_rect(x + 5, 41, CELL_W - 10, 2, C_LINE);
+    cv_rect(mid - 1, 38, 2, 8, C_GRAY);
     if (value)
-        cv_rect(x + 28 + (value * 25 + (value < 0 ? -20 : 20)) / 21, 38, 4, 8, VOICE_COLOUR[ui.voice]);
+        cv_rect(mid - 2 + (value * 22 + (value < 0 ? -20 : 20)) / 21, 38, 4, 8, VOICE_COLOUR[ui.voice]);
 }
 
 /* the velocity page: the same bars, and what will be written into them */
@@ -529,8 +526,9 @@ static void pg_vel_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
-    cv_text(PG_CW / 2 - text_w(&FONT_XS, "SHAPE") / 2, 4, &FONT_XS, "SHAPE", C_GRAY);
-    cv_text(PG_CW / 2 - text_w(&FONT_S, name) / 2, 22, &FONT_S, name, on ? C_WHITE : C_GRAY);
+    row_cells(0xFu, 0, 59);
+    cv_text(CELL_X(0) + CELL_W / 2 - text_w(&FONT_XS, "SHAPE") / 2, 4, &FONT_XS, "SHAPE", PG_TEXT);
+    cv_text(CELL_X(0) + CELL_W / 2 - text_w(&FONT_S, name) / 2, 22, &FONT_S, name, on ? C_WHITE : C_GRAY);
     int_text(ui.vs_centre, t);
     vv_dial(1u, "CENTRE", t, on, ui.vs_centre, 127);
     int_text(ui.vs_amount, t);
@@ -553,6 +551,7 @@ static void pg_lane_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
+    row_cells(0xFu, 0, 59);
     int_text(len, t);
     vv_dial(0, "LENGTH", t, 1, len, TACK_BARS * 16);
     vv_dial(1, "DIRECTION", tack_lane_dir_name(dir), 1, 0, 0);
@@ -582,6 +581,7 @@ static void pg_eu_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
+    row_cells(0xFu, 0, 59);
     for (uint32_t i = 0; i < TACK_EU_SLOTS; i++) {
         int_text(tack_euclid_get(v, i), t);
         vv_dial(i, NAME[i], t, 1, tack_euclid_get(v, i), TACK_EU_MAX);
@@ -604,6 +604,7 @@ static void pg_voice_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
+    row_cells(0xFu, 0, 59);
     for (uint32_t i = 0; i < TACK_NP; i++) {
         const int value = on ? tack_step_get(v, st, VV_SLOT[i]) : 0;
         const char *word = "-";
@@ -628,7 +629,7 @@ static void pg_note_dials(uint32_t *last)
     const uint8_t v = (uint8_t)ui.voice, st = (uint8_t)note_cursor();
     const int on = tack_step_on(v, st), rec = tack_recording(), run = tack_running();
     const int note = on ? tack_step_get(v, st, TACK_ST_NOTE) : 0, vel = on ? tack_step_get(v, st, TACK_ST_VEL) : 0;
-    const char *const say = rec ? (run ? "RECORDING" : "KEYS WRITE THE STEPS") : "REC TO WRITE";
+    const char *const say = rec ? (run ? "RECORDING" : "REC ON") : "REC TO WRITE";
     char t[8];
     uint32_t key = rk(rk(rk(rk(31u, v), st), (uint32_t)on), (uint32_t)note);
     key = rk(rk(rk(key, (uint32_t)vel), ui.note_vel), (uint32_t)(ui.note_oct + 8));
@@ -637,6 +638,7 @@ static void pg_note_dials(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, 59, C_BLACK);
+    row_cells(0xFu, 0, 59);
     note_text(note, t);
     vv_dial(0, "NOTE", on ? t : "-", on, 0, 0);
     int_text(vel, t);
@@ -647,7 +649,7 @@ static void pg_note_dials(uint32_t *last)
     t[0] = 'O', t[1] = 'C', t[2] = 'T', t[3] = ' ';
     int_text(ui.note_oct, t + 4);
     cv_text(5, 47, &FONT_XS, t, C_GRAY);
-    cv_text(235 - text_w(&FONT_XS, say), 47, &FONT_XS, say, rec ? C_HI : C_GRAY);
+    cv_text(240 - EDGE - 3 - text_w(&FONT_XS, say), 47, &FONT_XS, say, rec ? C_HI : C_GRAY);
     cv_blit(0, PG_Y + 2u * (VV_H + 2u));
 }
 

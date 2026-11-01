@@ -13,7 +13,28 @@
 #define EN_OSC_WAVE 1                    /* a slot's en for the oscillators' waves and the LFOs', from tack_pages.h */
 #define EN_LFO_WAVE 8
 
-static uint16_t tint(uint16_t c) { return (uint16_t)((c >> 3) & 0x18E3u); }
+/* What marks the dials, one to a dial and left to right. Bit i is dial i, and a dial with nothing to do has none. A row of words has a
+ * cell around each. A row of pictures has a line under each label, as a picture may belong to more than one dial */
+static void row_cells(uint32_t dials, int32_t y, int32_t h)
+{
+    for (int32_t i = 0; i < (int32_t)TACK_NP; i++) {
+        const int32_t x = CELL_X(i), w = CELL_W;
+        if (!(dials >> i & 1u))
+            continue;
+        cv_rect(x + 2, y, w - 4, 1, C_ROW);
+        cv_rect(x + 1, y + 1, w - 2, 1, C_ROW);
+        cv_rect(x, y + 2, w, h - 4, C_ROW);
+        cv_rect(x + 1, y + h - 2, w - 2, 1, C_ROW);
+        cv_rect(x + 2, y + h - 1, w - 4, 1, C_ROW);
+    }
+}
+
+static void row_lines(uint32_t dials, uint16_t c)
+{
+    for (int32_t i = 0; i < (int32_t)TACK_NP; i++)
+        if (dials >> i & 1u)
+            cv_rect(i * PG_CW + 5, PG_RH - 3, PG_CW - 10, 2, c);
+}
 
 /* a pixel a fifteenth at a time over what is on the canvas, as cv_text's anti-aliased faces */
 static void cv_mix(int32_t x, int32_t y, uint16_t c, uint32_t a)
@@ -163,7 +184,7 @@ static void wd_env(int32_t x, int32_t y, int32_t w, int graph, uint16_t c)
     const float ta = amp && attack ? eg_time(attack, 198.0f) : 0.0f, td = eg_time(decay, 1998.0f);
     const float s = eg_slope(slope), inv = eg_slope((uint8_t)(127u - slope));
     const float top = (float)y + 6.0f, h = (float)PG_PH - 10.0f;
-    int32_t span = log2_px(ta + td) * w / GRAPH_W, up;
+    int32_t span = log2_px(ta + td, w), up;
     float lx = (float)x + 1.0f, ly = top + h;
     span = span < 24 ? 24 : span;
     up = (int32_t)((float)span * ta / (ta + td));
