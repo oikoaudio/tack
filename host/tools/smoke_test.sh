@@ -30,6 +30,15 @@ for rate in 44100 48000 96000; do
 	tool timing_test $rate
 done
 
+step "mutate, LFO and individual outputs"
+tool mutate_test >/dev/null
+tool lfo_test >/dev/null
+tool outputs_test >/dev/null
+
+# what a host and a saved project see: an id or a range that moves should be a decision
+step "parameter list"
+tool list_params | tr -d '\r' | diff "$(dirname "$0")/params.snapshot" -
+
 step "kits for the tests"
 tool make_kit "$out/a.snd" KITA 37=60 8=40
 tool make_kit "$out/b.snd" KITB 43=100 74=90

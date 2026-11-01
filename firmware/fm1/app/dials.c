@@ -36,6 +36,8 @@ static void lock_turn(uint32_t i, int32_t e)
         app_say("NO LOCK", "ON THE SEND");
     } else if (sl->target) {
         app_say("NO LOCK", "ON TARGETS");
+    } else if (tack_slot_no_lock(sl)) {
+        app_say("NO LOCK", tack_slot_no_lock(sl));
     } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_STEP_FULL) {
         app_say("STEP FULL", "8 LOCKS");
     } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_PATTERN_FULL) {
@@ -56,9 +58,18 @@ static void kit_load(int32_t i)
         mark('K');
 }
 
+/* the nearest kit at or below slot i, -1 none: a smaller bank can leave a kit number past its end, and turning back
+ * must still lead into the bank */
+static int32_t kit_at_or_below(int32_t i)
+{
+    while (i >= 0 && !kit_slot((uint32_t)i))
+        i--;
+    return i;
+}
+
 static void kit_step(int32_t e)
 {
-    int32_t i = ui.kit + (e > 0 ? 1 : -1);
+    const int32_t i = e > 0 ? ui.kit + 1 : kit_at_or_below(ui.kit - 1);
     if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i)) {
         kit_load(i);
         if (!on_home()) {                        /* HOME has the name */
@@ -82,7 +93,7 @@ static void fx_turn(uint32_t slot, int32_t e)
     } else if (top) {
         const uint16_t p = tack_fx_param(s);
         mark('F');
-        tack_post_param(p, (uint8_t)clamp((int32_t)tack_get_param(p) + e * tack_fx_step(s), 0, top));
+        tack_post_param(p, tack_fx_turn(s, e));
     }
 }
 
@@ -115,7 +126,7 @@ static void set_turn(uint32_t slot, int32_t e)
 /* the kit to morph to, with the POLY key held: the bank in order, from none */
 static void morph_kit_step(int32_t e)
 {
-    const int32_t next = tack_morph_kit() + (e > 0 ? 1 : -1);
+    const int32_t next = e > 0 ? tack_morph_kit() + 1 : kit_at_or_below(tack_morph_kit() - 2) + 1;
     if (next < 0)
         return;
     if (next && (next > (int32_t)KIT_SLOTS || !kit_slot((uint32_t)next - 1u)))
@@ -142,21 +153,30 @@ static void morph_turn(int32_t e)
     }
 }
 
+/* a lane's length, which the EUCLID page follows */
+static void lane_length(uint8_t v, int32_t len)
+{
+    tack_post_length(v, (uint8_t)len);
+    tack_euclid_length(v, (uint32_t)len);
+}
+
+/* START, as played: a lane cut short since it was set starts this far in */
+static int32_t lane_start_now(uint8_t v) { return tack_lane_start(v) % tack_length(v); }
+
 /* ARP's first screen: how the lane plays. Nothing here rewrites a step */
 static void lane_turn(uint32_t slot, int32_t e)
 {
     const uint8_t v = (uint8_t)ui.voice;
     const int32_t dir = (int32_t)tack_lane_dir(v), speed = (int32_t)tack_lane_speed(v);
+    ui.held_used = 1;
     if (slot == 0u) {
-        const int32_t len = clamp(tack_length(v) + e, 1, TACK_BARS * 16);
-        tack_post_length(v, (uint8_t)len);
-        tack_euclid_length(v, (uint32_t)len);
+        lane_length(v, clamp(tack_length(v) + e, 1, TACK_BARS * 16));
     } else if (slot == 1u) {
         tack_post_lane(v, (uint32_t)clamp(dir + e, 0, TACK_LANE_DIRS - 1), (uint32_t)speed);
     } else if (slot == 2u) {                     /* clockwise is faster: 1X is the first of the speeds */
         tack_post_lane(v, (uint32_t)dir, (uint32_t)clamp(speed - e, 0, TACK_LANE_SPEEDS - 1));
     } else {
-        tack_post_lane_start(v, (uint8_t)clamp(tack_lane_start(v) + e, 0, tack_length(v) - 1));
+        tack_post_lane_start(v, (uint8_t)clamp(lane_start_now(v) + e, 0, tack_length(v) - 1));
     }
 }
 
@@ -164,6 +184,7 @@ static void lane_turn(uint32_t slot, int32_t e)
 static void eu_turn(uint32_t slot, int32_t e)
 {
     const uint8_t v = (uint8_t)ui.voice;
+    ui.held_used = 1;
     if (slot < TACK_EU_SLOTS) {
         mark('E');
         tack_euclid_turn(v, slot, e);
@@ -213,7 +234,7 @@ static void vv_bar_jump(int32_t e)
 
 static void vv_turn(uint32_t slot, int32_t e)
 {
-    const uint8_t s = (uint8_t)(ui.held >= 0 ? (uint32_t)step_of((uint32_t)ui.held) : note_cursor());
+    const uint8_t s = (uint8_t)(ui.held >= 0 ? (uint32_t)ui.held_step : note_cursor());
     ui.held_used = 1;
     if (tack_step_on((uint8_t)ui.voice, s))
         tack_step_turn((uint8_t)ui.voice, s, VV_SLOT[slot], e);
@@ -226,11 +247,12 @@ static void note_keys(uint32_t down, uint32_t up)
 {
     for (uint32_t k = 0; k < NKEYS; k++) {
         if (up >> k & 1u)
-            tack_post_note_off((uint8_t)ui.voice, ui.key_note[k]);
+            tack_post_note_off(ui.key_voice[k], ui.key_note[k]);
         if (!(down >> k & 1u))
             continue;
         const uint8_t note = (uint8_t)key_note(k);
-        ui.key_note[k] = note;                   /* OCT may move before the key comes up */
+        ui.key_note[k] = note;                   /* OCT may move before the key comes up, and SEQ pick another voice */
+        ui.key_voice[k] = (uint8_t)ui.voice;
         tack_post_note((uint8_t)ui.voice, note, ui.note_vel);
         if (tack_recording() && !tack_running()) {
             const uint32_t s = note_cursor();
@@ -365,14 +387,16 @@ static void save_kit_setup(int blend)
     const int own = tack_kit_now();
     ui.ks_morph = (uint8_t)blend;                /* a sound between two kits: named after both, for a start */
     /* a kit from the bank goes back where it came from, and the page says it replaces it. A blend is a new kit */
-    ui.ks_slot = (uint8_t)(own && !blend ? own - 1 : free < KIT_SLOTS ? (int)free : (int)KIT_SLOTS - 1);
-    save_name_load();
+    ui.ks_slot = (uint8_t)(own && !blend && (uint32_t)own - 1u <= free ? own - 1 : free < KIT_SLOTS ? (int)free : (int)KIT_SLOTS - 1);
+    if (!ui.ks_typed)
+        save_name_load();
 }
 
 static void save_open(void)
 {
     ui.ks_what = SAVE_PATTERN;
     ui.ks_pat = (uint8_t)tack_pattern();
+    ui.ks_typed = 0;
     ui.song_page = PAGE_SAVE;
     ui.fx_page = ui.set_page = 0;
 }
@@ -452,6 +476,7 @@ static void kit_bank_save(void)
         app_say("KIT SAVE", "FAILED");
         return;
     }
+    tack_morph_kit_changed();
     if (!ui.ks_morph) {                          /* a blend is a new kit: this pattern stays on its two */
         tack_set_kit_name((const uint8_t *)ui.ks_name);
         tack_post_kit_home((uint8_t)slot);
@@ -502,6 +527,7 @@ static void chain_write(void)
 static void vel_turn(uint32_t slot, int32_t e)
 {
     const uint8_t v = (uint8_t)ui.voice;
+    ui.held_used = 1;
     if (slot == 0u) {
         const uint8_t was = ui.vs_shape;
         ui.vs_shape = (uint8_t)clamp((int32_t)ui.vs_shape + e, 0, TACK_SHAPE_N);
@@ -551,7 +577,7 @@ enum { POP_NONE, POP_NUDGE, POP_RECUR, POP_CHANCE, POP_TEMPO };
 
 static void step_turn(uint32_t slot, int popup, int32_t e)
 {
-    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+    const uint8_t s = ui.held_step;
     ui.held_used = 1;
     if (tack_step_on((uint8_t)ui.voice, s)) {
         tack_step_turn((uint8_t)ui.voice, s, slot, e);
@@ -564,7 +590,7 @@ static void step_turn(uint32_t slot, int popup, int32_t e)
 /* a step held: the first eight black keys are the slots of its recurrence, and SELECT how many there are */
 static void recur_key(uint32_t k)
 {
-    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held), v = (uint8_t)ui.voice;
+    const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
     const int len = tack_recur_len(v, s);
     uint8_t mask = tack_recur_mask(v, s);
     ui.held_used = 1;
@@ -582,7 +608,7 @@ static void recur_key(uint32_t k)
 
 static void recur_turn(int32_t e)
 {
-    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held), v = (uint8_t)ui.voice;
+    const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
     const int32_t n = clamp(tack_recur_len(v, s) + e, 1, TACK_RECUR_MAX);
     uint8_t mask = (uint8_t)(tack_recur_mask(v, s) & ((1u << n) - 1u));
     ui.held_used = 1;
@@ -648,6 +674,7 @@ static void pattern_pick(uint32_t k)
 {
     char t[4];
     mark('P');
+    ui.held_used = 1;
     tack_post_pattern((uint8_t)k);     /* stopped: now; running: at the end of the bar */
     int_text((int32_t)k + 1, t);
     app_say("PATTERN", t);
@@ -656,7 +683,6 @@ static void pattern_pick(uint32_t k)
 /* EDIT, ENV, LFO: this group's first page, then its next, then the main page */
 static void page_press(uint8_t group)
 {
-    const uint8_t used = ui.held_used;
     const int covered = ui.song_page || ui.fx_page || ui.set_page;
     ui.song_page = ui.fx_page = ui.set_page = 0;
     if (covered && ui.group == group) {  /* back on the screen it covered */
@@ -670,10 +696,8 @@ static void page_press(uint8_t group)
     } else if (screens() > 1) {          /* a page's button goes through its screens, and with one does nothing */
         ui.sub = screen_page(!screen_now(), 1);
     }
-    if (ui.held >= 0) {                  /* a step held: the knobs start from the new page's values */
-        hold_step((uint32_t)ui.held);
-        ui.held_used = used;
-    }
+    if (ui.held >= 0)                    /* a step held: the knobs start from the new page's values */
+        held_read(1);
     ui.redraw = 1;
 }
 
@@ -688,6 +712,9 @@ static int bars_used(void)
     return n;
 }
 
+/* the bars OCT walks: a detail view shows the selected lane, and the overview them all */
+static int bars_shown(void) { return seq_detail() ? (tack_length((uint8_t)ui.voice) + 15) / 16 : bars_used(); }
+
 /* SEL held with OCT: a bar more or less on the selected lane, and on to its last bar. Steps past the end are kept */
 static void lane_bar(int32_t bars)
 {
@@ -698,10 +725,12 @@ static void lane_bar(int32_t bars)
         app_say(bars > 0 ? "MAX 4 BARS" : "MIN 1 BAR", "");
         return;
     }
-    if (bars > 0)
+    if (bars > 0) {
         tack_post_extend((uint8_t)ui.voice, (uint8_t)next);
-    else
-        tack_post_length((uint8_t)ui.voice, (uint8_t)next);
+        tack_euclid_length((uint8_t)ui.voice, (uint32_t)next);
+    } else {
+        lane_length((uint8_t)ui.voice, next);
+    }
     note_cursor_to((uint32_t)(next - 1) / 16u * 16u);
     int_text(next, t);
     app_say("LENGTH", t);
@@ -717,6 +746,7 @@ static void touch(uint32_t k)
 {
     ui.touched = slot(k);
     ui.touched_at = k;
+    ui.touched_row = (int8_t)row_now();
     ui.touched_until = plat_ms() + 1200u;
 }
 

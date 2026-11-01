@@ -383,12 +383,12 @@ void Delay_setMode(Delay* d, uint8_t mode)
 {
 	Delay_setType(d, mode & 1);
 	d->sync = (mode >> 1) & 1;
-	Delay_setDelayTime(d, d->delayTime);
+	Delay_setDelayTime(d, wantedTime(d));
 }
 
 void Delay_tempoChanged(Delay* d)
 {
-	if(d->sync) Delay_setDelayTime(d, d->delayTime);
+	if(d->sync) Delay_setDelayTime(d, wantedTime(d));
 }
 
 void Delay_setFeedback(Delay* d, float fb)
@@ -398,7 +398,7 @@ void Delay_setFeedback(Delay* d, float fb)
 void Delay_setRange(Delay* d, float r)
 {
 	d->range = r;
-	Delay_setDelayTime(d, d->delayTime);
+	Delay_setDelayTime(d, wantedTime(d));
 
 }
 void Delay_setFilter(Delay* d, float f)

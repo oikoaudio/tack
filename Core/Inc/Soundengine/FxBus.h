@@ -67,7 +67,7 @@ void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2
 void FxBus_setParameter(uint8_t idx, float value);
 void FxBus_updateParameter();
 //to prevent NaN pollution from delay
-void FxBus_prepareFxChange();
+void FxBus_prepareFxChange(uint8_t type);
 
 
 #endif /* INC_SOUNDENGINE_FXBUS_H_ */

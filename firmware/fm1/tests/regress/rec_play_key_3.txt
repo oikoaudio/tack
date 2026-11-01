@@ -1,0 +1,10 @@
+# internal clock, REC on: PLAY and a voice key together, 3 ms apart in the phase of the render
+wait 603
+tap REC
+wait 40
+press PLAY
+key b0 down
+wait 40
+key b0 up
+release PLAY
+wait 200

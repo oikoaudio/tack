@@ -1,0 +1,20 @@
+# lane of 2 bars, step 3 on in bar 1; held, OCT+ moves the bar, released: step 3 must go off or stay, step 19 must be left alone
+wait 600
+press SEL
+wait 20
+tap OCT+
+release SEL
+wait 40
+tap OCT-
+wait 40
+expect bar 0
+expect len0 32
+key w3 down
+wait 40
+tap OCT+
+wait 40
+expect bar 1
+key w3 up
+wait 100
+expect step3 0
+expect step19 0

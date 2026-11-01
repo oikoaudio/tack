@@ -1,0 +1,14 @@
+# step 0 held in pattern 1 and never turned; SEQ and a key go to pattern 2; SEQ up, step up: pattern 2 must not gain a step
+wait 600
+key w0 down
+wait 40
+press SEQ
+wait 20
+tapkey w1
+wait 20
+release SEQ
+wait 60
+expect pattern 1
+key w0 up
+wait 100
+expect step0 0

@@ -14,6 +14,7 @@
 
 
 #include "Soundengine/FxBus.h"
+#include <string.h>
 #include "Soundengine/DSPAudio/BufferTools.h"
 #include "Soundengine/DSPAudio/mixer.h"
 INDTCMZ FxBus fxBus;
@@ -68,6 +69,20 @@ static void fxBus_distortionNoRest(int16_t *fxBuffer, int16_t *out, int16_t *out
 }
 #endif
 
+// The delay and the reverb share FX_BUFFER, and each would read what the other left as sound of its own. All of it at once
+// is too long for the audio interrupt, so a piece a block, and until it is clean the FX is off.
+#define FX_CLEAR_WORDS 2048u
+static uint8_t fxBus_bufferUser = FX_OFF;
+static uint32_t fxBus_clearAt = FX_BUFFER_SIZE + 1u;
+
+static uint8_t fxBus_typeNow(void)
+{
+	if(fxBus_clearAt > FX_BUFFER_SIZE) return fxBus.fxType;
+	memset(&FX_BUFFER[fxBus_clearAt], 0, FX_CLEAR_WORDS * sizeof(FX_BUFFER[0]));
+	fxBus_clearAt += FX_CLEAR_WORDS;
+	return FX_OFF;
+}
+
 IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size)
 {
 	int16_t* out;
@@ -100,7 +115,7 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 
 	}
 
-	switch(fxBus.fxType)
+	switch(fxBus_typeNow())
 	{
 	default:
 	case FX_OFF:
@@ -168,10 +183,17 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 
 }
 
-void FxBus_prepareFxChange()
+// A kit load turns the FX off before it sets the type, so this also runs for a type that has not changed: only another
+// one's leftovers are cleared, and tails carry over a pattern change.
+void FxBus_prepareFxChange(uint8_t type)
 {
-	//memset(FX_BUFFER, 0, FX_BUFFER_SIZE*sizeof(__fp16) );
-//	Ringmod_resetPhase(&fxBus.ringmod);
+#if USE_REVERB
+	if(type != FX_DELAY && type != FX_REVERB) return;
+	if(fxBus_bufferUser != FX_OFF && fxBus_bufferUser != type) fxBus_clearAt = 0;
+	fxBus_bufferUser = type;
+#else
+	(void)type;
+#endif
 }
 
 IN_ITCM_RAM void FxBus_updateParameter()

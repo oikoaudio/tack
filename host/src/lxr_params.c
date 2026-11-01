@@ -22,7 +22,7 @@
 
 static const char* const pageNames[] = { "Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Hi-hat" };
 // FX sub-page n shows the parameters of FX type n
-static const char* const fxTypeNames[] = { "", "Distortion", "Ring Mod", "Compressor", "Delay" };
+static const char* const fxTypeNames[] = { "", "Distortion", "Ring Mod", "Compressor", "Delay", "Reverb" };
 // see adjustValue() in lxr_host.c: a voice plays directly or through the FX bus
 static const char* const audioOutNames[] = { "Direct", "FX" };
 
@@ -215,7 +215,7 @@ static void build(void)
 	for(int pg = 0; pg < NUM_PAGES; pg++)
 		for(int sp = 0; sp < NUM_SUB_PAGES; sp++)
 		{
-			// the FX page has a sub-page per FX type; types past the menu's list (reverb) are compiled out
+			// the FX page has a sub-page per FX type
 			if(pg == FX_MODE_PAGE && sp >= fxNames[0][0]) continue;
 
 			const Page* page = &menuPages[pg][sp];
@@ -225,6 +225,8 @@ static void build(void)
 			{
 				const uint16_t p = bots[i];
 				if(p == PAR_NONE || p >= END_OF_SOUND_PARAMETERS) continue;
+				// the reverb has one type, so there is nothing to choose
+				if(p == PAR_FX_REVERB_TYPE) continue;
 				// the LFO's destination voice only narrows the front panel's target list; the destination
 				// parameter covers every target
 				if((parameter_dtypes[p] & 0xff) == DTYPE_VOICE_LFO) continue;
@@ -233,7 +235,11 @@ static void build(void)
 
 				char name[32];
 				longNameOf(tops[i], name, sizeof name);
-				if(pg == FX_MODE_PAGE) snprintf(fxLabels[p][sp], sizeof fxLabels[p][sp], "%s", name);
+				if(pg == FX_MODE_PAGE) {
+					snprintf(fxLabels[p][sp], sizeof fxLabels[p][sp], "%s", name);
+					// a page may add no parameter of its own, as the reverb's four are all shared
+					if(sp) snprintf(groupNames[LXR_PARAMS_FX_VOICE][sp], sizeof groupNames[0][0], "%s", fxTypeNames[sp]);
+				}
 				if(indexOfParam[p] >= 0) {
 					// the FX parameters 1-4 mean something different for each FX type
 					if(pg == FX_MODE_PAGE && !strstr(fxJoined[p], name)) {
@@ -379,7 +385,7 @@ const char* lxr_params_groupName(uint8_t voice, uint8_t group)
 const char* lxr_params_fxLabel(uint16_t param, uint8_t fxType)
 {
 	lxr_params_count();
-	if(param >= END_OF_SOUND_PARAMETERS || fxType < 1 || fxType > 4) return NULL;
+	if(param >= END_OF_SOUND_PARAMETERS || fxType < 1 || fxType > 5) return NULL;
 	return fxLabels[param][fxType][0] ? fxLabels[param][fxType] : NULL;
 }
 uint16_t lxr_params_default(uint16_t param)

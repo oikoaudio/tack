@@ -1,0 +1,22 @@
+# STEP view, ROLL held, SEQ tapped to NOTE, ROLL let go: ROLL must end
+wait 600
+tap SEQ
+wait 40
+expect voiceview 1
+key b7 down
+wait 40
+expect keyword 1
+tap SEQ
+wait 40
+expect notemode 1
+key b7 up
+wait 60
+expect rollon 0
+expect keyword 0
+shot 03_roll_stuck.png
+tap PLAY
+wait 2000
+tap PLAY
+wait 40
+# no step set, so the voice fired once, on the press
+expect fires0 1

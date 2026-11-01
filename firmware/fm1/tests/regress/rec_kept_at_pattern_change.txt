@@ -1,0 +1,34 @@
+wait 600
+expect pattern 0
+expect used0 0
+# a step on pattern 1 (index 1), so that both have something
+tap PLAY
+wait 100
+tap REC
+wait 50
+expect record 1
+tapkey b0
+wait 100
+tapkey b0
+wait 300
+expect used0 1
+# ask for pattern 2 while running: it changes at the end of the bar
+press SEQ
+wait 30
+tapkey w1
+wait 30
+release SEQ
+wait 2500
+expect pattern 1
+tap PLAY
+wait 100
+tap REC
+wait 50
+press SEQ
+wait 30
+tapkey w0
+wait 30
+release SEQ
+wait 100
+expect pattern 0
+expect used0 1

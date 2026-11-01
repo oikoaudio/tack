@@ -9,7 +9,22 @@ int tack_mutate_moved(int outside);
 
 int app_expect(const char *what, int *got)
 {
-    if (!strcmp(what, "voice"))
+    if (!strcmp(what, "held"))
+        *got = ui.held;
+    else if (!strcmp(what, "heldused"))
+        *got = ui.held_used;
+    else if (!strncmp(what, "heldval", 7))
+        *got = ui.held_val[atoi(what + 7)];
+    else if (!strncmp(what, "slotlock", 8)) {    /* slotlockS_K: what step S locks slot K of the page to, -1 for nothing */
+        uint8_t val = 0;
+        const TackSlot *sl = slot((uint32_t)atoi(strchr(what, '_') + 1));
+        *got = sl && tack_lock_get((uint8_t)ui.voice, (uint8_t)atoi(what + 8), sl->par, &val) ? val : -1;
+    }
+    else if (!strcmp(what, "rollon"))
+        *got = ui.roll_on;
+    else if (!strcmp(what, "row"))
+        *got = row_now();
+    else if (!strcmp(what, "voice"))
         *got = ui.voice;
     else if (!strcmp(what, "setpage"))
         *got = ui.set_page;

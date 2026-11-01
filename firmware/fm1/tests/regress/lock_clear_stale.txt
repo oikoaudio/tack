@@ -1,0 +1,24 @@
+# step locked to kit-20 on FILTER (kit 127); EDIT clears the locks with the step still held
+wait 600
+tapkey w0
+wait 60
+key w0 down
+wait 40
+expect sl1 127
+turn K2 -20
+wait 40
+expect locks0 1
+expect slotlock0_1 107
+tap EDIT
+wait 80
+expect locks0 0
+expect slotlock0_1 -1
+# the knob must read the kit again
+expect heldval1 127
+shot 06_after_clear.png
+turn K2 -1
+wait 40
+# one click from the kit's 127 is 126
+expect slotlock0_1 126
+key w0 up
+wait 100

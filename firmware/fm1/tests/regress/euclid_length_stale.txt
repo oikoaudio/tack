@@ -1,0 +1,19 @@
+# SEL and a white key cut the lane to 8; the EUCLID page's LENGTH must follow, as it does when LANE's K1 does the cut
+wait 600
+press SEL
+wait 20
+tapkey w7
+wait 20
+release SEL
+wait 60
+expect len0 8
+tap ARP
+wait 40
+tap ARP
+wait 40
+expect eupage 1
+expect eu0 8
+shot 17_euclid.png
+turn K2 1
+wait 80
+expect len0 8

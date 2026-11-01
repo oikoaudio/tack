@@ -1217,8 +1217,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_RETRIGGER_LFO3:
 				if(isFloatModulator)
 				{
-					uint8_t voice = 7 * value.flt;
-					voiceArray[msg.data1-CC2_RETRIGGER_LFO1].lfo.retrigger = voice;
+					lfo_modRetrigger(&voiceArray[msg.data1-CC2_RETRIGGER_LFO1].lfo, value.flt);
 				}
 				else
 				{
@@ -1228,8 +1227,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_RETRIGGER_LFO4:
 				if(isFloatModulator)
 				{
-					uint8_t voice = 7 * value.flt;
-					snareVoice.lfo.retrigger = voice;
+					lfo_modRetrigger(&snareVoice.lfo, value.flt);
 				}
 				else
 				{
@@ -1240,8 +1238,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_RETRIGGER_LFO5:
 				if(isFloatModulator)
 				{
-					uint8_t voice = 7 * value.flt;
-					cymbalVoice.lfo.retrigger = voice;
+					lfo_modRetrigger(&cymbalVoice.lfo, value.flt);
 				}
 				else
 				{
@@ -1252,8 +1249,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 			case CC2_RETRIGGER_LFO6:
 				if(isFloatModulator)
 				{
-					uint8_t voice = 7 * value.flt;
-					hatVoice.lfo.retrigger = voice;
+					lfo_modRetrigger(&hatVoice.lfo, value.flt);
 				}
 				else
 				{
@@ -1370,7 +1366,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 			case CC2_FX_TYPE:
 #if 1
-				if( fxBus.fxType != value.itg) FxBus_prepareFxChange();
+				if( fxBus.fxType != value.itg) FxBus_prepareFxChange(value.itg);
 				fxBus.fxType = value.itg;
 				FxBus_updateParameter();
 				//change visible parameters to selected FX type

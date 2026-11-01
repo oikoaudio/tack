@@ -1,0 +1,22 @@
+# LANE page: a step held while K2 turns; the turn was the job, so no toggle
+wait 600
+tap ARP
+wait 40
+expect lanepage 1
+key w0 down
+wait 40
+turn K2 1
+wait 40
+expect lanedir 1
+key w0 up
+wait 100
+expect step0 0
+tap ARP
+wait 40
+expect eupage 1
+key w1 down
+wait 40
+turn K2 1
+wait 40
+key w1 up
+wait 100

@@ -114,7 +114,7 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 	return 0;
 }
 //-------------------------------------------------------------
-// where a wave ends: a sine at its middle, and random has no end to speak of
+// where a wave ends: the sine table starts and ends at its bottom, and random has no end to speak of
 static float lfo_endValue(const Lfo* lfo)
 {
 	switch(lfo->waveform)
@@ -123,6 +123,7 @@ static float lfo_endValue(const Lfo* lfo)
 		case LFO_REC:
 		case LFO_EXP_UP:
 			return 1.f;
+		case LFO_SINE:
 		case LFO_TRI:
 		case LFO_SAW_DOWN:
 		case LFO_EXP_DOWN:
@@ -147,6 +148,13 @@ void lfo_setRetrigger(Lfo* lfo, uint8_t value)
 	lfo->once = value > 6;
 	lfo->ended = lfo->once;
 	lfo->retrigger = lfo->once ? value - 6 : value;
+}
+//-------------------------------------------------------------
+// another LFO aimed at RETRIG: which voice starts this one, and ONCE stays as it was set
+void lfo_modRetrigger(Lfo* lfo, float value)
+{
+	const uint8_t v = value * 127.f;
+	lfo->retrigger = v > 12 ? 6 : v > 6 ? v - 6 : v;
 }
 //-------------------------------------------------------------
 IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
@@ -268,7 +276,7 @@ static void lfo_retriggerOne(Lfo *lfo)
 	if(lfo->waveform == LFO_NOISE)
 	{
 		lfo->rnd = GetRngValue() / (float)0xffffffff;
-		modNode_updateValue(&lfo->modTarget, lfo->rnd);
+		modNode_updateValue(&lfo->modTarget, lfo->once ? lfo->rnd * 0.5f + 0.25f : lfo->rnd);	/* as lfo_dispatchNextValue will send it */
 	}
 }
 #else

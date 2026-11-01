@@ -35,9 +35,11 @@ static void save(void)
 
 static int save_one(uint32_t i)
 {
-    if (plat_store_save(OBJ_PAT0 + i, pat_buf, tack_pattern_export((uint8_t)i, pat_buf)) != 0)
+    tack_clean((uint8_t)i);                    /* first: an edit landing during the write marks it again, and the next SAVE takes it */
+    if (plat_store_save(OBJ_PAT0 + i, pat_buf, tack_pattern_export((uint8_t)i, pat_buf)) != 0) {
+        tack_mark_dirty((uint8_t)i);
         return -1;
-    tack_clean((uint8_t)i);
+    }
     return 0;
 }
 
@@ -103,4 +105,10 @@ void app_backup_flush(void)              /* the backup holds what is saved: so s
     if (bad)
         app_say("SAVE", "FAILED");
 }
-void app_backup_restored(void) { load_saved(1); }
+void app_backup_restored(void)
+{
+    ui.bad_patterns = 0;
+    load_saved(1);
+    if (ui.bad_patterns)                         /* (fm1 restore checks first: this is for another way in) */
+        app_say("PATTERNS", "REFUSED");
+}

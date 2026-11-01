@@ -13,7 +13,7 @@ typedef struct { int dummy; } RNG_HandleTypeDef;
 static inline uint32_t HAL_RNG_GetRandomNumber(RNG_HandleTypeDef* h){(void)h; static uint32_t s=2463534242u; s^=s<<13; s^=s>>17; s^=s<<5; return s;}
 #define __STATIC_INLINE static inline
 typedef struct { volatile uint32_t CYCCNT; } DWT_Type;
-static DWT_Type dwt_stub; 
+static DWT_Type dwt_stub __attribute__((unused)); 
 #define DWT (&dwt_stub)
 static inline uint32_t HAL_RCC_GetHCLKFreq(void){return 216000000u;}
 #define __PKHBT(a,b,s) ((((uint32_t)(a)) & 0x0000FFFFu) | ((((uint32_t)(b)) << (s)) & 0xFFFF0000u))

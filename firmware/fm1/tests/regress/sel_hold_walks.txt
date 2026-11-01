@@ -1,0 +1,11 @@
+# STEP view: SEL held 600 ms reads the lane's length; letting go must not move the step
+wait 600
+tap SEQ
+wait 40
+expect selstep 0
+press SEL
+wait 600
+expect keyword 4
+release SEL
+wait 40
+expect selstep 0

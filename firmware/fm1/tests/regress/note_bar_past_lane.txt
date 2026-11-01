@@ -1,0 +1,24 @@
+# NOTE on a 2-bar lane at bar 2; pattern 2 has lanes of 16: the view must come back to a bar that exists
+wait 600
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+expect notemode 1
+press SEL
+wait 20
+tap OCT+
+release SEL
+wait 40
+expect bar 1
+press SEQ
+wait 20
+tapkey w1
+wait 20
+release SEQ
+wait 100
+expect pattern 1
+expect len0 16
+expect selstep 0
+shot 11_note_bar.png
+expect bar 0

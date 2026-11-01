@@ -1,0 +1,28 @@
+# external clock, REC on; Start arrives, no clock yet; a voice key is hit: step index is -1, and the hit goes to step 255
+wait 600
+tap GLO
+wait 40
+turn K3 1
+wait 40
+tap HOME
+wait 40
+expect ext 1
+tap REC
+wait 40
+expect record 1
+tapkey b3
+wait 40
+midi USB FA
+wait 40
+expect running 1
+expect head 255
+tapkey b0
+wait 60
+expect used0 1
+expect used3 0
+# voice 1's hit is on voice 4's lane, step 63 (index 255 = 3*64 + 63)
+expect step63 0
+tapkey b3
+wait 40
+expect step63 0
+shot 25a.png

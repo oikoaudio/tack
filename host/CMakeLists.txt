@@ -92,8 +92,18 @@ target_include_directories(lxr_engine PUBLIC shim ${LXR_CORE}/Inc src ../engine 
 # the firmware's headers leave out what only the device needs, such as its memory sections
 target_compile_definitions(lxr_engine PUBLIC LXR_HOST_BUILD)
 # -fcommon: the firmware defines some globals in headers
-# -w: the firmware isn't warning-clean and the noise would bury host-side warnings
-target_compile_options(lxr_engine PRIVATE -fcommon -w)
+# -w on Core alone: the firmware isn't warning-clean and the noise would bury warnings in Tack's own code
+target_compile_options(lxr_engine PRIVATE -fcommon)
+# callbacks take what their API passes, and a long name cut short is a choice
+set(TACK_WARNINGS -Wall -Wextra -Wno-unused-parameter -Wno-format-truncation)
+get_target_property(lxr_engine_sources lxr_engine SOURCES)
+foreach(source IN LISTS lxr_engine_sources)
+    if(source MATCHES "/Core/")
+        set_property(SOURCE ${source} APPEND PROPERTY COMPILE_OPTIONS -w)
+    else()
+        set_property(SOURCE ${source} APPEND PROPERTY COMPILE_OPTIONS ${TACK_WARNINGS})
+    endif()
+endforeach()
 target_link_libraries(lxr_engine PUBLIC m PRIVATE SampleRate::samplerate)
 
 if(MINGW)
@@ -120,6 +130,9 @@ target_link_libraries(mutate_test PRIVATE lxr_engine)
 
 add_executable(lfo_test tools/lfo_test.c)
 target_link_libraries(lfo_test PRIVATE lxr_engine)
+
+add_executable(outputs_test tools/outputs_test.c)
+target_link_libraries(outputs_test PRIVATE lxr_engine)
 
 add_executable(make_kit tools/make_kit.c)
 target_link_libraries(make_kit PRIVATE lxr_engine)
@@ -217,6 +230,7 @@ if(LXR_HOST_CLAP)
 
     # Tack's own code, linked into every format
     add_library(tack_plugin OBJECT clap/tack.c clap/presets.c clap/engine.c clap/gui.cpp clap/wrapper_info.cpp)
+    target_compile_options(tack_plugin PRIVATE ${TACK_WARNINGS})
     target_link_libraries(tack_plugin PUBLIC lxr_engine clap tack_gui_deps clap-wrapper-extensions)
     target_compile_definitions(tack_plugin PRIVATE TACK_VERSION="${PROJECT_VERSION}")
     if(WIN32)

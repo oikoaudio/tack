@@ -95,7 +95,7 @@ expect fxv6 2
 expect echo 63
 turn K3 3
 wait 40
-expect fxv2 39
+expect fxv2 44
 expect echo 250
 shot delay_sync.png
 tap GLO

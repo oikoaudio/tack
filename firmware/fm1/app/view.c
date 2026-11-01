@@ -5,9 +5,8 @@ static uint32_t pressed(uint32_t now, uint32_t b) { return (now & ~ui.btn) >> b 
 
 static int step_of(uint32_t k) { return ui.bar * 16 + (int)k; }
 
-static void toggle_step(uint32_t k)
+static void toggle_step(uint8_t s)
 {
-    const uint8_t s = (uint8_t)step_of(k);
     tack_post_step((uint8_t)ui.voice, s, (uint8_t)!tack_step_on((uint8_t)ui.voice, s));
 }
 

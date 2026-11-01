@@ -126,6 +126,15 @@ static int lfo_once_slot(const TackSlot *s) { return lfo_retrig_par(s) && s->lab
 
 int tack_slot_toggles(const TackSlot *s) { return s->max == 1u || lfo_sync_slot(s) || lfo_once_slot(s); }
 
+const char *tack_slot_no_lock(const TackSlot *s)
+{
+    if (lfo_retrig_par(s))
+        return "ON RETRIG";
+    if (lfo_sync_slot(s) || (lfo_freq_slot(s) && shadow[PAR_SYNC_LFO1 + (s->par - PAR_FREQ_LFO1)]))
+        return "IN SYNC";
+    return 0;
+}
+
 int tack_slot_turn(const TackSlot *s, int32_t e)
 {
     if (lfo_freq_slot(s)) {
@@ -183,8 +192,7 @@ const char *tack_slot_text(const TackSlot *s, uint8_t value)
     return en->names[p < en->count ? p : en->count - 1];
 }
 
-/* the LXR's FX types, FxBus.h: their settings, the two that change the sound most on the first page. Reverb is compiled
- * out, so a kit that asks for it (type 5) plays dry and reads as such. Slots 2 and 3 are the first page's, 4 to 6 the second's.
+/* the LXR's FX types, FxBus.h: their settings, the two that change the sound most on the first page. Slots 2 and 3 are the first page's, 4 to 6 the second's.
  * The delay's time stops at 126: with range at 127 too it reaches the buffer's length, and that is silence */
 #define NO {"-", 0, 0}
 typedef struct { const char *label; uint16_t par; uint8_t max; } FxSetting;
@@ -229,7 +237,18 @@ static int fx_time_sync(uint32_t slot)
     return fx_kind() == FX_DELAY && tack_get_param(PAR_FX_DELAY_TYPE) >= 2u && tack_fx_param(slot) == PAR_FX_P1;
 }
 
-int tack_fx_step(uint32_t slot) { return fx_time_sync(slot) ? 13 : 1; }
+/* a turn from where a dial is. In sync, TIME goes a fraction at a time, to the middle of the next one's values */
+uint8_t tack_fx_turn(uint32_t slot, int32_t e)
+{
+    const int32_t now = tack_get_param(tack_fx_param(slot)), top = tack_fx_max(slot);
+    if (!fx_time_sync(slot)) {
+        const int32_t v = now + e;
+        return (uint8_t)(v < 0 ? 0 : v > top ? top : v);
+    }
+    const int32_t at = now * DELAY_FRACTIONS / 127 + e;
+    const int32_t band = at < 0 ? 0 : at >= DELAY_FRACTIONS ? DELAY_FRACTIONS - 1 : at;
+    return (uint8_t)((2 * band + 1) * 127 / (2 * DELAY_FRACTIONS));
+}
 
 const char *tack_fx_text(uint32_t slot, uint8_t value)
 {
@@ -300,7 +319,7 @@ static int post(uint8_t kind, uint8_t a, uint8_t b, uint8_t c) { return post5(ki
 /* the main loop's view of the kit: a value posted reads back at once, before the audio interrupt has applied it, so
  * the screen is never a step behind and a fast encoder's detents build on each other. The other values likewise */
 static uint16_t ui_bpm = 120;
-static uint8_t ui_shuffle, ui_record, ui_ext;
+static uint8_t ui_record, ui_ext;
 static uint8_t ui_roll = 5;              /* the sequencer's default, 1/16 */
 static uint8_t ui_eu[TACK_VOICES][TACK_EU_SLOTS];
 static volatile uint8_t mute_mask;
@@ -380,7 +399,6 @@ int tack_post_shuffle(uint8_t amount)
 {
     if (!post(EV_SHUFFLE, amount, 0, 0))
         return 0;
-    ui_shuffle = amount;
     return 1;
 }
 int tack_post_pattern(uint8_t pattern) { return post(EV_PATTERN, pattern, 0, 0); }
@@ -582,7 +600,7 @@ int tack_kit_busy(void)
 uint8_t tack_get_param(uint16_t param) { return param < LXR_HOST_NUM_PARAMS ? shadow[param] : 0; }
 uint32_t tack_dropped_events(void) { return ev_dropped; }
 uint16_t tack_bpm(void) { return ui_ext ? seq_getBpm() : ui_bpm; }   /* on external clock, the clock's */
-uint8_t tack_shuffle(void) { return ui_shuffle; }
+uint8_t tack_shuffle(void) { return seq_patternSet.shuffle[seq_activePattern]; }
 int tack_recording(void) { return ui_record; }
 int tack_ext_sync(void) { return ui_ext; }
 int tack_running(void) { return seq_isRunning(); }
@@ -786,6 +804,9 @@ int tack_step_on(uint8_t voice, uint8_t step)
 const uint8_t *tack_kit(void) { return shadow; }
 uint32_t tack_kit_size(void) { return sizeof shadow; }
 
+/* the sequencer's shuffle is the playing pattern's, which a load may just have changed */
+static void shuffle_follow(void) { seq_setShuffle((float)seq_patternSet.shuffle[seq_activePattern] / 127.0f); }
+
 /* A pattern as the store holds it, little-endian: the magic, u16 the count of locks, then for each track and step volume,
  * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes and starts, BITS, morph and its kit, the pattern's own kit, the locks, and in what is left the steps
  * with recurrence, 3 bytes each: the key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as
@@ -966,6 +987,7 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
         st->param1Nr = (uint8_t)((in[2] & 0x7Fu) + 1u);
         st->param1Val = in[1];
     }
+    shuffle_follow();
     seq_copyPatternToBackupBuffer(seq_activePattern);
     return 0;
 }
@@ -974,17 +996,20 @@ void tack_clear_pattern(uint8_t pattern)
 {
     seq_clearPattern(pattern);
     seq_patternSet.kitNr[pattern] = 0;
+    seq_patternSet.shuffle[pattern] = 0;
     memset(seq_laneMode[pattern], 0, NUM_TRACKS);
     memset(seq_laneStart[pattern], 0, NUM_TRACKS);
     bits_of[pattern] = morph_of[pattern] = morph_kit_of[pattern] = 0;
     kit_has = (uint16_t)(kit_has & ~(1u << pattern));
     memset(&kit_of[pattern], 0, sizeof(PatternKit));
     lock_list[pattern].n = 0;
+    shuffle_follow();
     seq_copyPatternToBackupBuffer(seq_activePattern);
 }
 
 uint32_t tack_dirty(void) { return dirty; }
 void tack_clean(uint8_t pattern) { dirty &= ~(1u << pattern); }
+void tack_mark_dirty(uint8_t pattern) { dirty |= 1u << pattern; }
 
 /* The song and the chain are two of the LXR's song slots: seq_activeSong is the one playing */
 extern uint8_t seq_songModeEnabled, seq_pendingPattern;
@@ -1236,6 +1261,7 @@ void tack_morph_now(uint8_t amount)
     dirty |= 1u << seq_activePattern;
 }
 int tack_post_morph_kit(uint8_t kit) { return post(EV_MORPH_KIT, kit, 0, 0); }
+void tack_morph_kit_changed(void) { morph_kit_in = 0xFFu; }   /* its slot was written: morph_sync reads it again */
 #ifdef PLAT_HOST
 uint8_t tack_heard(uint16_t param) { return lxr_host_getParam(param); }
 int tack_morph_kept(uint16_t param) { return morph_kind[param] == MORPH_KEEP; }
@@ -1454,7 +1480,7 @@ static void drop_locks(uint32_t key_lo, uint32_t key_hi)
 static void lane_extend(uint8_t v, uint8_t length)
 {
     const uint8_t pat = seq_activePattern;
-    const uint32_t old = seq_patternSet.length[pat][v], from = (old - 1u) / 16u * 16u, to = from + 16u;
+    const uint32_t old = (uint32_t)tack_length(v), from = (old - 1u) / 16u * 16u, to = from + 16u;
     LockList *p = &lock_list[pat];
     seq_patternSet.length[pat][v] = length;
     if (to < NUM_STEPS && !seq_patternSet.seq_mainSteps[to / 16u][pat][v]) {
@@ -1506,6 +1532,8 @@ static void play_note(uint8_t voice, uint8_t note, uint8_t vel)
     last_note[voice] = note;
     lxr_host_noteOn(voice, note, vel);
     seq_addNote(voice, vel, note);              /* it only records with REC on and the sequencer running */
+    if (ui_record && seq_isRunning())
+        commit_active();                        /* a pattern change restores what was last committed */
 }
 
 void tack_note_off_now(uint8_t voice, uint8_t note)
@@ -1585,7 +1613,7 @@ static void drain(void)
         case EV_KIT_HOME:
             kit_now = e.a + 1;
             seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(e.a + 1u);
-            dirty |= 1u << seq_activePattern;
+            commit_active();
             break;
         case EV_MORPH:
             tack_morph_now(e.a);

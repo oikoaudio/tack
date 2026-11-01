@@ -1,0 +1,15 @@
+# voice 1 picked some time ago; ARP held and its key pressed to mute it: that is a mute, not the lane view
+wait 600
+tapkey b0
+wait 600
+press ARP
+wait 20
+key b0 down
+wait 20
+expect muted0 1
+expect lanekey 0
+expect keyword 0
+key b0 up
+wait 20
+release ARP
+wait 40

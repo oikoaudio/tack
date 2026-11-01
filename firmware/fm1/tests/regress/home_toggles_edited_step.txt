@@ -1,0 +1,14 @@
+# step on, held, locked with K2, HOME tapped, step released: the step must stay on
+wait 600
+tapkey w3
+wait 100
+expect step3 1
+key w3 down
+wait 40
+turn K2 3
+expect locks3 1
+tap HOME
+wait 40
+key w3 up
+wait 100
+expect step3 1

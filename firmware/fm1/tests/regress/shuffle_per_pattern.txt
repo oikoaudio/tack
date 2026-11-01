@@ -1,0 +1,33 @@
+wait 600
+tap GLO
+wait 40
+turn K2 25
+wait 40
+expect shuffle 25
+tap HOME
+wait 40
+tapkey w0
+wait 40
+press SEQ
+wait 30
+tapkey w1
+wait 30
+release SEQ
+wait 60
+expect pattern 1
+expect shuffle 0
+tap GLO
+wait 40
+turn K2 10
+wait 40
+expect shuffle 10
+tap HOME
+wait 40
+press SEQ
+wait 30
+tapkey w0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+expect shuffle 25

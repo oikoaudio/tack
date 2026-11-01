@@ -93,7 +93,7 @@ static void sendCC(uint16_t p, uint8_t value)
 // every parameter as a CC
 static void sendParam(uint16_t p, uint8_t value)
 {
-	if(isModTarget(p)) setModTarget(p, value);
+	if(isModTarget(p) && value < getNumModTargets()) setModTarget(p, value);
 	sendCC(p, value);
 }
 //-----------------------------------------------------------
@@ -114,8 +114,13 @@ void lxr_host_loadKit(const uint8_t* values)
 		setModTarget(PAR_TARGET_LFO1 + i, activeParameters[PAR_TARGET_LFO1 + i]);
 	}
 
+	// three of a kit's bytes are MIDI's NRPN controllers and no sound's: sent in a row they would be a message
 	for(uint32_t i = 0; i < END_OF_SOUND_PARAMETERS; i++)
-		sendCC(parameterOrder[i], activeParameters[parameterOrder[i]]);
+	{
+		const uint32_t p = parameterOrder[i];
+		if(p != PAR_NRPN_DATA_ENTRY_COARSE && p != PAR_NRPN_FINE && p != PAR_NRPN_COARSE)
+			sendCC(p, activeParameters[p]);
+	}
 }
 
 void lxr_host_initKit(uint8_t* values)

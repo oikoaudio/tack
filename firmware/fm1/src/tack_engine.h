@@ -103,7 +103,7 @@ int tack_step_locks(uint8_t voice, uint8_t step);        /* on one step */
 #define TACK_RECUR_MAX 8u
 int tack_recur_len(uint8_t voice, uint8_t step);
 uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
-int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 640 */
+int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 500 */
 int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
 int tack_recur_slot(uint8_t voice, uint8_t step);        /* the slot this pass is on, -1 if it has no cycle or nothing runs */
 int tack_recur_skips(uint8_t voice, uint8_t step);       /* it will not play on this pass */
@@ -134,6 +134,8 @@ uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e);  /* value a
 const char *tack_slot_text(const TackSlot *s, uint8_t value);         /* its name, 0 for a plain number */
 int tack_slot_turn(const TackSlot *s, int32_t e);                     /* a dial that doesn't just set its value: 1 if it took the turn */
 int tack_slot_toggles(const TackSlot *s);                             /* it is on or off */
+/* why a dial takes no lock on a step, 0 if it does. Sync and retrigger are settings of a whole LFO, and RETRIG's restore would cut a ONCE short */
+const char *tack_slot_no_lock(const TackSlot *s);
 
 /* Roll: the voice repeats at the roll rate while on, and once if the sequencer is stopped */
 #define TACK_ROLL_RATES 6
@@ -196,6 +198,7 @@ uint8_t tack_lfo_sync(uint32_t voice);          /* its clock sync, 0 free */
 int tack_lfo_once(uint32_t voice);              /* it plays once on a retrigger */
 int tack_post_morph(uint8_t amount);
 int tack_post_morph_kit(uint8_t kit);
+void tack_morph_kit_changed(void);                                     /* the bank was written: morph reads its kit again */
 void tack_morph_now(uint8_t amount);                     /* from the audio interrupt: MIDI in */
 uint32_t tack_patterns_used(void);                       /* a bit each: the patterns with a step set */
 int tack_lane_nudge_get(uint8_t voice);
@@ -206,7 +209,7 @@ int tack_lane_nudge_turn(uint8_t voice, int32_t e);
 enum { TACK_FX_TYPE, TACK_FX_MIX, TACK_FX_A, TACK_FX_B, TACK_FX_C, TACK_FX_D, TACK_FX_E, TACK_FX_ALL };
 #define TACK_FX_SLOTS 4        /* knobs on a page */
 int tack_fx_pages(void);
-int tack_fx_step(uint32_t slot);       /* how far a detent moves it */
+uint8_t tack_fx_turn(uint32_t slot, int32_t e);                         /* what a turn makes of a slot */
 const char *tack_fx_text(uint32_t slot, uint8_t value);
 int tack_fx_delay_ms(void);
 #define TACK_FX_SENDS 6        /* the hats share one route */
@@ -228,6 +231,7 @@ uint32_t tack_kit_size(void);
 /* Patterns changed since they were saved, a bit each. Any pattern's image, for the store: pat_image_size bytes */
 uint32_t tack_dirty(void);
 void tack_clean(uint8_t pattern);
+void tack_mark_dirty(uint8_t pattern);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);   /* its size */
 /* Loading: before the audio starts, or stopped */
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);   /* 0, or -1 and nothing changed */

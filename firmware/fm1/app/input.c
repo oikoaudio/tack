@@ -1,12 +1,18 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The panel, read once a frame. app.c includes this: it is one file to the compiler, and shares app.c's state */
 
+static uint32_t bottom_key;              /* (home.c's) */
+
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), k;
     uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
     int32_t e;
 
+    if (ui.held >= 0 && ui.held_pattern != (uint8_t)tack_pattern()) {   /* the step is in the pattern that left */
+        ui.held = -1;
+        ui.redraw = 1;
+    }
     const uint32_t ended = up & ui.note_held;
     ui.note_held &= ~up;
     if (ended) {
@@ -14,9 +20,9 @@ static void input(void)
         up &= ~ended;
     }
     if (keys_notes(btn)) {                       /* SEQ or ARP held, or their own page, and the keys do what they always do */
-        note_keys(down, up);
+        note_keys(down, 0);                      /* (what comes up was held for something else: ROLL, a step, a voice, which end below) */
         ui.note_held |= down;
-        down = up = 0;
+        down = 0;
     }
     if (ui.held >= 0) {          /* a step held: the black keys are its slots */
         for (k = 0; k < TACK_RECUR_MAX; k++)
@@ -29,6 +35,7 @@ static void input(void)
     }
     for (k = 0; k < TACK_VOICES; k++)          /* the black keys: voice, or with ARP held its mute */
         if (down >> BK[k] & 1u) {
+            ui.lane_key = 0;                     /* only a plain press is the lane's key */
             if (btn >> B_ARP & 1u) {
                 ui.arp_used = 1;
                 tack_post_mute((uint8_t)k, (uint8_t)!tack_muted((uint8_t)k));
@@ -95,10 +102,10 @@ static void input(void)
                 if (ui.ks_what == SAVE_PATTERN)
                     ui.ks_pat = (uint8_t)k;
             } else if ((btn >> B_SEL & 1u) || lane_key_held()) {   /* SEL or the lane's key held: the lane ends here */
-                tack_post_length((uint8_t)ui.voice, (uint8_t)(step_of(k) + 1));
+                lane_length((uint8_t)ui.voice, step_of(k) + 1);
                 app_say("LENGTH", "");
             } else if (ui.held >= 0) {           /* a second key: a step at once */
-                toggle_step(k);
+                toggle_step((uint8_t)step_of(k));
             } else {
                 hold_step(k);
             }
@@ -106,7 +113,7 @@ static void input(void)
         }
         if ((up >> WK[k] & 1u) && ui.held == (int32_t)k) {
             if (!ui.held_used)
-                toggle_step(k);
+                toggle_step(ui.held_step);
             ui.held = -1;
             ui.redraw = 1;
         }
@@ -164,7 +171,7 @@ static void input(void)
     if ((btn >> B_SEL & 1u) && ((btn & ~(1u << B_SEL)) || keys))
         ui.sel_used = 1;
     if (((ui.btn & ~btn) >> B_SEL & 1u) && !ui.sel_used) {
-        if (seq_detail() && plat_ms() - ui.sel_at < SEL_HELP_MS)   /* the next step; a hold was to read the list */
+        if (seq_detail() && plat_ms() - ui.sel_at < SEL_SHOW_MS)   /* the next step; a hold was to read the length or the list */
             vv_walk(1);
     }
     if (ui.song_page == PAGE_SAVE) {             /* no page, so nothing to lose: the name's two shortcuts */
@@ -185,17 +192,19 @@ static void input(void)
             ui.redraw = 1;
     } else if (pressed(btn, B_OCTDN) && ui.bar > 0) {
         ui.bar--;
+        ui.held_used = 1;
         ui.redraw = 1;
     } else if (pressed(btn, B_OCTUP)) {          /* the bars the lanes reach */
-        if (ui.bar + 1 < bars_used()) {
+        if (ui.bar + 1 < bars_shown()) {
             ui.bar++;
+            ui.held_used = 1;
             ui.redraw = 1;
         } else if (ui.bar < (int32_t)TACK_BARS - 1) {
             app_say("SEL OCT+", "COPY BAR");
         }
     }
-    if (!(btn >> B_SEL & 1u) && !ui.note_mode && ui.bar >= bars_used()) {   /* a shorter lane, or nothing set past the end; SEL held, a new length is on its way */
-        ui.bar = bars_used() - 1;
+    if (!(btn >> B_SEL & 1u) && ui.bar >= bars_shown()) {   /* a shorter lane, or nothing set past the end; SEL held, a new length is on its way */
+        ui.bar = bars_shown() - 1;
         ui.redraw = 1;
     }
     if (pressed(btn, B_PLAY) && !ui.save_todo) {
@@ -228,10 +237,9 @@ static void input(void)
     if (pressed(btn, B_EDIT) && ui.held < 0 && !(btn >> B_SEL & 1u))
         page_press(TACK_G_EDIT);
     if (pressed(btn, B_EDIT) && ui.held >= 0) {  /* a step held: its locks go */
-        tack_post_lock_clear((uint8_t)ui.voice, (uint8_t)step_of((uint32_t)ui.held));
+        tack_post_lock_clear((uint8_t)ui.voice, ui.held_step);
         ui.held_used = 1;
-        hold_step((uint32_t)ui.held);
-        ui.held_used = 1;
+        held_read(0);
         app_say("LOCKS", "CLEARED");
     }
     if (pressed(btn, B_SAVE)) {
@@ -259,20 +267,18 @@ static void input(void)
         to_main();
         ui.voice_view = 0;
         if (ui.held >= 0)
-            hold_step((uint32_t)ui.held);
+            held_read(1);
         ui.redraw = 1;
     }
     ui.btn = btn;
+    if (ui.held >= 0 && ui.row_seen != row_now()) {   /* a step held: the row reached starts from its own values */
+        held_read(1);
+        ui.redraw = 1;
+    }
 
     for (k = 0; k < TACK_NP; k++)
         if ((e = plat_enc(EN_K1 + (int)k)) != 0) {
             ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-            if (ui.held >= 0 && ui.row_seen != row_now()) {   /* a step held: the row reached starts from its own values */
-                const uint8_t used = ui.held_used;
-                ui.row_seen = (int8_t)row_now();
-                hold_step((uint32_t)ui.held);
-                ui.held_used = used;
-            }
             if (ui.set_page) {
                 set_turn(k, e);
             } else if (vel_page()) {
@@ -327,6 +333,7 @@ static void input(void)
     }
     if (ui.popup && ui.popup != POP_TEMPO && ui.held < 0) {   /* the step let go: the page again */
         ui.popup = POP_NONE;
+        bottom_key = 0;                          /* it may have taken over from the tempo, which covered the bottom strip */
         ui.redraw = 1;
     }
     if (ui.held >= 0 && (e = plat_enc(EN_ALGO)) != 0) {

@@ -79,7 +79,7 @@ static void draw_sel_help(void)
 
 static void draw_popup(void)
 {
-    const uint8_t v = (uint8_t)ui.voice, st = (uint8_t)step_of((uint32_t)ui.held);
+    const uint8_t v = (uint8_t)ui.voice, st = ui.held_step;
     const uint16_t c = VOICE_COLOUR[ui.voice];
     char t[28];
     uint32_t n = 0;
@@ -154,6 +154,10 @@ static void draw_popup(void)
         pop_centre(34, &FONT_M, t, C_WHITE);
         cv_rect(16, 72, 180, 10, C_LINE);
         cv_rect(16, 72, 180 * chance / 100, 10, c);
+    }
+    if (ui.msg_until) {                          /* there is no header to say it in: in place of the title */
+        cv_rect(2, 4, 208, 24, C_BLACK);
+        pop_centre(8, &FONT_B, ui.msg, C_HI);
     }
     cv_blit(14, POP_Y);
 }

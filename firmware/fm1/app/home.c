@@ -331,8 +331,8 @@ static void draw_home_info(uint32_t used)
     }
     /* the title: what plays on the left, and on the right which pattern it has reached or the one queued */
     if (mode) {
-        memcpy(t, mode == TACK_SONG_ON ? "SONG " : "CHAIN ", 7u);
         n = mode == TACK_SONG_ON ? 5u : 6u;
+        memcpy(t, mode == TACK_SONG_ON ? "SONG " : "CHAIN ", n);
         int_text(tack_song_pos() + 1, t + n);
         while (t[n])
             n++;
@@ -397,7 +397,7 @@ static void draw_bottom(void)
     KEY(tack_recording());
     KEY(ui.held >= 0);
     if (ui.held >= 0) {
-        const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+        const uint8_t s = ui.held_step;
         KEY(tack_recur_len((uint8_t)ui.voice, s));
         KEY(tack_recur_mask((uint8_t)ui.voice, s));
     }
@@ -468,7 +468,7 @@ static void draw_bottom(void)
         draw_home_info(used);
     cv_text(EDGE, ROW_Y, &FONT_XS, page_name(), C_GRAY);
     if (ui.held >= 0) {          /* the step's recurrence, where the keys show it */
-        const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+        const uint8_t s = ui.held_step;
         const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
         for (i = 0; i < len; i++)
             cv_rect(240 - EDGE - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);

@@ -98,8 +98,8 @@ static void wd_dial(int32_t x, int32_t y, uint32_t v, uint32_t max, uint16_t c, 
 static void wd_signed(int32_t x, int32_t y, const TackSlot *sl, uint32_t v, uint16_t c, uint16_t rail, uint16_t text)
 {
     char t[6];
-    const int32_t s = slot_side(sl, v);
-    wd_arc(x, y, 12u, (uint32_t)(s ? 12 + s * 12 / slot_reach(sl, s) : 12), c, rail);
+    const int32_t s = slot_side(sl, v), reach = s ? slot_reach(sl, s) : 1;   /* a kit may hold more than the dial reaches */
+    wd_arc(x, y, 12u, (uint32_t)(12 + clamp(s, -reach, reach) * 12 / reach), c, rail);
     value_text(sl, v, t);
     cv_text(x - text_w(&FONT_S, t) / 2, y + 34, &FONT_S, t, text);
 }

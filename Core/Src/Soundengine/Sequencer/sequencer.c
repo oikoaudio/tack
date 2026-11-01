@@ -642,11 +642,15 @@ static void seq_sendMidi(MidiMsg msg)
 //------------------------------------------------------------------------------
 #ifdef LXR_FM1_BUILD
 int seq_platform_locks(uint8_t track, uint8_t step);
+/* the step a hit belongs to, when it is not the one playing: a nudged hit comes from the step before or after */
+static int8_t seq_hitStep = -1;
 #endif
-static void seq_parseAutomationNodes(uint8_t track, Step* stepData)
+static void seq_parseAutomationNodes(uint8_t track, uint8_t step, Step* stepData)
 {
 #ifdef LXR_FM1_BUILD
-	if(seq_platform_locks(track, (uint8_t)(seq_stepIndex[track] & 0x3f))) return;
+	if(seq_platform_locks(track, step)) return;
+#else
+	(void)step;
 #endif
 	//set new destination
 	autoNode_setDestination(&seq_automationNodes[track][0], stepData->param1Nr);
@@ -664,10 +668,17 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 	if(voiceNr > 6) return;
 
 
-#if USE_PATTERN_EDIT_BUFFER
-	seq_parseAutomationNodes(voiceNr, &patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]]);
+#ifdef LXR_FM1_BUILD
+	{
+		const int8_t step = seq_hitStep >= 0 ? seq_hitStep : seq_stepIndex[voiceNr];
+		seq_hitStep = -1;
+		if(step >= 0)	/* a roll with the sequencer stopped is no step's */
+			seq_parseAutomationNodes(voiceNr, (uint8_t)step, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][step]);
+	}
+#elif USE_PATTERN_EDIT_BUFFER
+	seq_parseAutomationNodes(voiceNr, seq_stepIndex[voiceNr], &patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]]);
 #else
-	seq_parseAutomationNodes(voiceNr, &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]]);
+	seq_parseAutomationNodes(voiceNr, seq_stepIndex[voiceNr], &seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]]);
 #endif
 
 	//turn the trigger off before sending the next one
@@ -1351,9 +1362,15 @@ void seq_processFlam(uint8_t idx)
 #endif
 
 			//calc priotity (next > current > prev)
-			uint8_t prevActive 		= (prevStepPattern 		& (1UL<<(23-idx)) ) != 0;
-			uint8_t currentActive 	= (currentStepPattern 	& (1UL<<(23-idx)) ) != 0;
-			uint8_t nextActive 		= (nextStepPattern 		& (1UL<<(23-idx)) ) != 0;
+#ifdef LXR_FM1_BUILD
+			/* a slow clock can leave a tick past a step's 24 */
+			const uint32_t tickMask = idx < 24 ? 1UL<<(23-idx) : 0;
+#else
+			const uint32_t tickMask = 1UL<<(23-idx);
+#endif
+			uint8_t prevActive 		= (prevStepPattern 		& tickMask ) != 0;
+			uint8_t currentActive 	= (currentStepPattern 	& tickMask ) != 0;
+			uint8_t nextActive 		= (nextStepPattern 		& tickMask ) != 0;
 
 			if(nextActive)
 			{
@@ -1361,6 +1378,9 @@ void seq_processFlam(uint8_t idx)
 				chokeNext = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].volume&STEP_VOLUME_MASK;
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][nextStep].note;
+#ifdef LXR_FM1_BUILD
+				seq_hitStep = (int8_t)nextStep;
+#endif
 				seq_triggerVoice(track,vol,note);
 			}
 			else if((currentActive) && (chokeNext == 0))
@@ -1376,6 +1396,9 @@ void seq_processFlam(uint8_t idx)
 				lastWasNoteOn[track] = 1;
 				const uint8_t vol = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].volume&STEP_VOLUME_MASK;
 				const uint8_t note = seq_patternSet.seq_subStepPattern[seq_activePattern][track][prevStep].note;
+#ifdef LXR_FM1_BUILD
+				seq_hitStep = (int8_t)prevStep;
+#endif
 				seq_triggerVoice(track,vol,note);
 			}
 			else if (lastWasNoteOn[track])

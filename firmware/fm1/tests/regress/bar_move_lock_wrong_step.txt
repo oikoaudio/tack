@@ -1,0 +1,22 @@
+# step 3 and its copy 19 on; hold 3 in bar 1, read K2's value, OCT+, turn K2: the lock lands on 19, which was never held
+wait 600
+tapkey w3
+press SEL
+wait 20
+tap OCT+
+release SEL
+wait 40
+tap OCT-
+wait 40
+expect bar 0
+expect step19 1
+key w3 down
+wait 40
+tap OCT+
+wait 40
+turn K2 3
+wait 40
+expect locks3 1
+expect locks19 0
+key w3 up
+wait 100

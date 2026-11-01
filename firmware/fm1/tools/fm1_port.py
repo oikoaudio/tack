@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Prints the --port name for the FM-1: TACK, or the update loader's when that is what is connected.
+"""Prints the --port name for the FM-1: TACK, or the name of whatever else it is running.
 
-The installer matches one name, and a unit left in update mode by a cut-off install shows up as Felucca Update, so looking
-for TACK alone would not find the unit the install has to finish on.
+The installer matches one name, so looking for TACK alone would miss a unit left in update mode by a cut-off install,
+which shows up as Felucca Update, and a unit on M-VAVE's firmware, which shows up as FM-1.
 """
 TACK = "TACK"
 LOADER = "Felucca Update"
+STOCK = "FM-1"
 
 
 def pick(names):
     def has(word):
         return any(word.lower() in name.lower() for name in names)
-    return LOADER if has(LOADER) and not has(TACK) else TACK
+    if has(TACK):
+        return TACK
+    return LOADER if has(LOADER) else STOCK if has(STOCK) else TACK
 
 
 if __name__ == "__main__":

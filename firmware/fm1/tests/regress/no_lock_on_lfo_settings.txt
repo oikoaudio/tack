@@ -1,0 +1,31 @@
+# RETRIG, ONCE and SYNC take no lock, nor does FREQ while the LFO is synced, and a held step stays as it was
+wait 600
+tapkey w0
+wait 60
+tap LFO
+wait 60
+press OCT-
+wait 30
+turn K1 1
+wait 30
+release OCT-
+wait 40
+key w0 down
+wait 40
+turn K3 2
+wait 40
+expect lockcount 0
+press OCT-
+wait 30
+turn K1 1
+wait 30
+turn K2 1
+wait 30
+turn K4 1
+wait 30
+release OCT-
+wait 30
+expect lockcount 0
+key w0 up
+wait 40
+expect step0 1

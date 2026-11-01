@@ -63,6 +63,7 @@ int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
 enum { TACK_LOCK_ROOM, TACK_LOCK_STEP_FULL, TACK_LOCK_PATTERN_FULL };
 int tack_post_pattern(uint8_t pattern);
 int tack_post_clear(uint8_t voice);
+int tack_post_shuffle(uint8_t amount);
 void tack_clear_pattern(uint8_t pattern);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);
@@ -599,6 +600,43 @@ static void nudge_cross(const char *name, uint8_t early_voice, uint8_t late_voic
     run(2);
     check(name, early_voice == late_voice ? (uint8_t)(b0 - a0) == 2u : (uint8_t)(b0 - a0) + (uint8_t)(b1 - a1) == 2u, 2,
           (uint8_t)(b0 - a0) + (early_voice == late_voice ? 0 : (uint8_t)(b1 - a1)));
+}
+
+/* a hit nudged early plays its own step's locks, ahead of the step they belong to */
+static void nudged_lock_tests(int filter)
+{
+    extern float seq_shuffle;
+    static uint8_t image[4096];
+    float low = 1.f;
+    tack_post_pattern(6);
+    run(4);
+    tack_post_step(0, 4, 1);
+    tack_post_step(0, 12, 1);
+    run(4);
+    tack_post_lock(0, 4, (uint16_t)filter, 10);
+    run(4);
+    tack_step_turn(0, 4, 0, -6);
+    run(4);
+    tack_post_run(1);
+    for (uint32_t b = 0; b < 1200; b++) {
+        run(1);
+        low = probe_filter(0) < low ? probe_filter(0) : low;
+    }
+    tack_post_run(0);
+    run(4);
+    check("a step nudged early plays its lock", low < 0.05f, low, 0.05);
+    /* the shuffle a pattern is saved with plays when it comes back from the store */
+    tack_post_shuffle(100);
+    run(2);
+    const uint32_t len = tack_pattern_export(6, image);
+    seq_shuffle = 0.f;
+    tack_load_pattern(6, image, len);
+    check("a pattern loaded brings its shuffle", seq_shuffle > 0.78f && seq_shuffle < 0.79f, seq_shuffle, 100.0 / 127.0);
+    tack_post_shuffle(0);
+    run(2);
+    tack_post_clear(0);
+    tack_post_pattern(0);
+    run(4);
 }
 
 static void nudge_tests(void)
@@ -1247,6 +1285,7 @@ int main(void)
     lane_format_tests();
     morph_tests();
     nudge_tests();
+    nudged_lock_tests(fp);
     hat_tests();
 
     ul_tests();

@@ -8,12 +8,21 @@ sequencer must be stopped.
 
 No kits come with Tack: they stay in the FM-1's flash, and the firmware has none in it. Needs mido with python-rtmidi.
 """
-import argparse, hashlib, os, pathlib, sys, time
+import argparse, hashlib, os, pathlib, re, sys, time
 
 import mido
 
 HEAD = [0x7D, ord("K"), ord("T")]
 SLOTS, SLOT, PART = 128, 256, 64
+BANK_FILE = re.compile(r"\d{3}-.*\.snd$", re.IGNORECASE)     # what --save writes
+
+
+def named(raw, stem):
+    """A kit needs a name: a blank one can't be seen in the bank, and 0xFF first reads as an empty slot, which ends it."""
+    if raw[:8].strip(b" \0") and raw[0] != 0xFF:
+        return raw
+    name = "".join(c for c in stem.upper() if c.isascii() and c.isalnum())[:8] or "KIT"
+    return name.ljust(8).encode("ascii") + raw[8:]
 
 
 def kits(root):
@@ -23,23 +32,24 @@ def kits(root):
             continue
         raw = f.read_bytes()
         h = hashlib.sha256(raw).digest()
-        if h in seen:
+        if h in seen and not BANK_FILE.match(f.name):   # a bank's copies stay: its slot numbers are what patterns refer to
             continue
         seen.add(h)
-        out.append((f, (raw + bytes(SLOT))[:SLOT]))
+        out.append((f, named((raw + bytes(SLOT))[:SLOT], f.stem)))
     return out
 
 
 def answer(inp, out, cmd, body=(), same=0, wait=5.0, tries=1):
     """The FM-1 drops a SysEx that arrives while it still holds the one before, about one read in 3000, so a request
-    that can be repeated goes again. The first `same` bytes after the reply's status must match the body."""
+    that can be repeated goes again. The first `same` bytes after the reply's status must match the body, unless the
+    status says the FM-1 refused the request: those replies carry nothing else."""
     for _ in range(tries):
         out.send(mido.Message("sysex", data=HEAD + [cmd, *body]))
         end = time.time() + wait
         while time.time() < end:
             for m in inp.iter_pending():
                 if (m.type == "sysex" and list(m.data[:5]) == HEAD + [0x7F, cmd]
-                        and list(m.data[6:6 + same]) == list(body[:same])):
+                        and (m.data[5] not in (0, 4) or list(m.data[6:6 + same]) == list(body[:same]))):
                     return m.data
             time.sleep(0.002)
     raise SystemExit("no answer from the FM-1 (is it running this build of Tack?)")
@@ -52,6 +62,9 @@ def ask(inp, out, cmd, body=(), wait=5.0, tries=1):
 def save(inp, out, folder):
     folder = pathlib.Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
+    for old in folder.iterdir():            # a kit renamed since would stay beside its new name, and move every kit after it up a slot
+        if BANK_FILE.match(old.name):
+            old.unlink()
     count = 0
     for slot in range(SLOTS):
         raw = bytearray()

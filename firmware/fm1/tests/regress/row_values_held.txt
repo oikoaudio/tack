@@ -1,0 +1,23 @@
+# an EDIT page, a step held, OCT+: the row reached shows the middle row's numbers until a dial turns
+wait 600
+tapkey w0
+tap EDIT
+wait 60
+press OCT+
+wait 60
+shot 05a_nohold_octup.png
+release OCT+
+wait 60
+key w0 down
+wait 60
+shot 05b_held_mid.png
+press OCT+
+wait 60
+shot 05c_held_octup.png
+expect row 1
+expect heldval0 0
+expect sl0 0
+release OCT+
+wait 40
+key w0 up
+wait 100

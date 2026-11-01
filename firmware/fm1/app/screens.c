@@ -58,8 +58,8 @@ static void pg_fx_row(uint32_t r, uint32_t *last)
     uint32_t key = rk(r, (uint32_t)on);
     key = rk(key, tack_get_param(tack_fx_param(TACK_FX_TYPE)));
     key = rk(key, (uint32_t)echo);
-    for (uint32_t i = 0; i < n; i++)
-        key = rk(key, tack_get_param(tack_fx_param(first + i)));
+    for (uint32_t i = 0; i < TACK_FX_ALL; i++)   /* all of them: MODE decides how the other row's TIME reads */
+        key = rk(key, tack_get_param(tack_fx_param(i)));
     if (key == *last)
         return;
     *last = key;
@@ -297,7 +297,7 @@ static void save_note_pattern(char *a, uint32_t todo)
             n += todo >> p & 1u;
         memcpy(a, "SAVE ", 5u);
         int_text((int32_t)n, a + 5);
-        memcpy(a + (n >= 10u ? 7 : 6), n == 1u ? " PATTERN" : " PATTERNS", 10u);
+        memcpy(a + (n >= 10u ? 7 : 6), n == 1u ? " PATTERN" : " PATTERNS", n == 1u ? 9u : 10u);
     } else {
         const int used = tack_patterns_used() >> ui.ks_pat & 1u;
         memcpy(a, used ? "OVERWRITE P" : "SAVE AS P", used ? 12u : 10u);
@@ -339,7 +339,7 @@ static void pg_save_note(uint32_t *last)
     const uint32_t todo = tack_dirty() | 1u << tack_pattern();
     const uint8_t *now = ui.ks_what == SAVE_PATTERN ? 0 : kit_slot(ui.ks_slot);
     const int run = tack_running();
-    uint32_t key = rk(rk(rk(rk(rk(67u, todo), (uint32_t)run), ui.ks_what), ui.ks_pat), ui.ks_slot);
+    uint32_t key = rk(rk(rk(rk(rk(rk(67u, todo), (uint32_t)run), ui.ks_what), ui.ks_pat), ui.ks_slot), (uint32_t)tack_pattern());
     char a[40], b[40];
     key = rk(rk(rk(key, now != 0), (uint32_t)tack_morph()), (uint32_t)save_name_empty());
     if (key == *last)
@@ -545,7 +545,7 @@ static void pg_lane_dials(uint32_t *last)
     const int nudge = tack_lane_nudge_get(v), len = tack_length(v);
     const uint32_t dir = tack_lane_dir(v), speed = tack_lane_speed(v);
     char t[8];
-    const int start = tack_lane_start(v);
+    const int start = lane_start_now(v);
     const uint32_t key = rk(rk(rk(rk(rk(rk(37u, v), (uint32_t)(nudge + 32)), (uint32_t)len), dir), speed), (uint32_t)start);
     if (key == *last)
         return;

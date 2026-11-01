@@ -81,7 +81,6 @@ void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmedi
     (void)isMorph; (void)sendImmediate;
     if (kit_load)
         kit_load(presetNr);
-    (void)presetNr;    /* per-pattern kits: not on the FM-1 yet */
 }
 void preset_touchTimer(PresetTimer type) { (void)type; }
 void trigger_clockTick(uint8_t onOff, uint8_t cnt) { (void)onOff; (void)cnt; }

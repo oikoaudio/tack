@@ -1,0 +1,23 @@
+# a name typed on the kit page stays through K4 to the pattern and back, and a new SAVE page starts from the slot's own
+wait 600
+tap SAVE
+wait 40
+turn K4 1
+wait 40
+expect kitpage 1
+expect kitletter0 73
+turn K3 1
+wait 40
+expect kitletter0 74
+turn K4 -1
+wait 40
+turn K4 1
+wait 40
+expect kitletter0 74
+tap HOME
+wait 40
+tap SAVE
+wait 40
+turn K4 1
+wait 40
+expect kitletter0 73

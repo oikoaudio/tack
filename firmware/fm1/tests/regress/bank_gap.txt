@@ -1,0 +1,19 @@
+# the pattern's kit was slot 4, and a shorter bank has gone in since: a save goes on the first free slot, not past a gap
+data kits4.bin 770048
+wait 600
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+turn PRESET 1
+wait 40
+data kits1.bin 770048
+wait 40
+tap SAVE
+wait 40
+turn K4 1
+wait 40
+expect kitpage 1
+expect kitslot 1

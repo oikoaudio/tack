@@ -130,7 +130,7 @@ full sequence worked: save a pattern and kit, back up, change the pattern, resto
 Locks: a step holds 8 and a pattern 500, in a sorted list per pattern. The sequencer's two slots in a step stay in RAM, unused,
 which costs about 30 KB of the pool, so the one change to `sequencer.c` is a hook. The store holds the compact form: 2,137 B a pattern, kit included, plus 3 B a lock. A pattern is refused whole, and loads empty, unless its magic, length, ranges and
 list order are right. Refused patterns stay in the store until overwritten, and the screen counts them at boot. There is no
-conversion in the firmware: `tools/ktl_convert.py` is a one-off for `.tack` version 1, and `APP_BACKUP_VERSION` is now 2.
+conversion in the firmware. `fm1 restore` stops at a backup in an older pattern format (`tools/tack_check.py`), as the FM-1 would clear those patterns. A change to the format needs no converter: nobody but the developer holds patterns yet.
 
 One parameter update costs 108 to 257 x86 instructions, median 118, for every destination up to 250 (`midiParser_ccHandler`
 stores a value, and the render does the rest). A lock is two updates when its step fires, one putting the last value back.
@@ -193,9 +193,9 @@ Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 283,520 B | 581,564 B | 46% |
-| RAM, `.data` and `.bss` | 37,180 B | 98,304 B | 38% |
-| Pool | 254,156 B | 344,064 B | 73% |
+| Flash image | 313,720 B | 581,564 B | 54% |
+| RAM, `.data` and `.bss` | 50,692 B | 98,304 B | 52% |
+| Pool | 247,436 B | 344,064 B | 72% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables
 (67,584 B plus the 8,194 B sine) and the transients (26,460 B). All engine code runs from flash through the XIP cache.

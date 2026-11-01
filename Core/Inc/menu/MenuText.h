@@ -130,13 +130,13 @@ const char ratioNames[][4] =
 //-----------------------------------------------------------------
 const char fxNames[][4] =
 {
-	{5},		//number of entries
+	{6},		//number of entries
 	{"off"},
 	{"drv"},
 	{"rng"},
 	{"cmp"},
 	{"del"},
-	//{"rev"}
+	{"rev"}
 };
 //-----------------------------------------------------------------
 const char distNames[][4] =

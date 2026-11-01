@@ -82,7 +82,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   is left out. Its target list has the FX parameters once per voice, so Tack lists each target once, and names
   targets like the parameters (the front panel calls the FM waveform "Oscillator Waveform" there). The front panel's
   "Veloc EG" page is the voice's amplitude envelope and has nothing to do with velocity, which has its own
-  parameters, so Tack calls it "Amp EG" ("Drum 1 Amp EG Decay"). The reverb runs if a kit asks for it, as FX type 5, but the editor doesn't offer it.
+  parameters, so Tack calls it "Amp EG" ("Drum 1 Amp EG Decay").
 - **Kits:** Tack offers kit files from the device's SD card (`.SND`) as presets, through CLAP's preset discovery,
   so hosts list them in their preset browser. It looks in the kit folder, `~/.local/share/Tack/Kits/` on Linux
   (or `$XDG_DATA_HOME/Tack/Kits/`) and `Documents/Tack/Kits` on Windows and macOS; each subfolder is a sound pack, e.g. a symlink to a backup of a project folder. Kits

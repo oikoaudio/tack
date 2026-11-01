@@ -365,7 +365,7 @@ static int collectGroups(const TackGui* g, int voice, uint8_t fxType, Group* gro
 	} else {
 		// the FX bus' own settings, then the controls of the selected FX type, named for it, then master
 		Group& common = addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, 0));
-		Group* typeGroup = fxType >= 1 && fxType <= 4 ? &addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType)) : nullptr;
+		Group* typeGroup = fxType >= 1 && fxType <= 5 ? &addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType)) : nullptr;
 		Group& master = addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, LXR_PARAMS_FX_MASTER_GROUP));
 		for(int i = 0; i < lxr_params_count(); i++) {
 			const LxrParamInfo* p = lxr_params_info(i);
@@ -409,7 +409,7 @@ static void collectFxTab(uint8_t fxType, Group* groups)
 {
 	for(int i = 0; i < FX_TAB_GROUPS; i++) groups[i].n = 0;
 	groups[FX_COMMON].title = lxr_params_groupName(LXR_PARAMS_FX_VOICE, 0);
-	groups[FX_TYPE].title = fxType >= 1 && fxType <= 4 ? lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType) : nullptr;
+	groups[FX_TYPE].title = fxType >= 1 && fxType <= 5 ? lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType) : nullptr;
 	groups[FX_MASTER].title = lxr_params_groupName(LXR_PARAMS_FX_VOICE, LXR_PARAMS_FX_MASTER_GROUP);
 	auto add = [](Group& gr, const LxrParamInfo* p, const char* label) {
 		if(gr.n < 8) { gr.params[gr.n] = p; gr.labels[gr.n] = label; gr.n++; }
@@ -441,7 +441,7 @@ static int fxTypeCells()
 {
 	int cells = 1;
 	Group groups[FX_TAB_GROUPS];
-	for(uint8_t fx = 1; fx <= 4; fx++) {
+	for(uint8_t fx = 1; fx <= 5; fx++) {
 		collectFxTab(fx, groups);
 		cells = std::max(cells, groups[FX_TYPE].n);
 	}

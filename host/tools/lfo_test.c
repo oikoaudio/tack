@@ -9,8 +9,10 @@
 #include <math.h>
 #include "lxr_host.h"
 #include "lfo_speed.h"
+#include "lxr_params.h"
 #include "Soundengine/DSPAudio/DrumVoice.h"
 #include "Soundengine/FxBus.h"
+#include "Soundengine/DSPAudio/TiltEq.h"
 
 extern DrumVoice voiceArray[];
 
@@ -72,6 +74,64 @@ int main(void)
 	lxr_host_setParam(PAR_RETRIGGER_LFO1, 1);
 	if(lfo->once) {
 		puts("FAIL RETRIG 1 loops");
+		failed = 1;
+	}
+	// once on a sine, whose table starts and ends at its bottom: it leaves the value set, peaks, and comes back with no jump
+	lxr_host_setParam(PAR_WAVE_LFO1, LFO_SINE);
+	lxr_host_setParam(PAR_RETRIGGER_LFO1, 7);
+	lfo_retrigger(0);
+	lfo_dispatchNextValue(lfo);
+	const float first = fxBus.dryWet;
+	float high = first;
+	for(blocks = 0; blocks < 100000 && !lfo->ended; blocks++) {
+		lfo_dispatchNextValue(lfo);
+		if(fxBus.dryWet > high) high = fxBus.dryWet;
+	}
+	lfo_dispatchNextValue(lfo);
+	if(fabs(first - 0.5f) > 0.02f || high < 0.85f || fabs(fxBus.dryWet - 0.5f) > 0.02f) {
+		printf("FAIL once on a sine: starts %.3f, peaks %.3f, ends %.3f\n", first, high, fxBus.dryWet);
+		failed = 1;
+	}
+	// an LFO aimed at RETRIG: the voice follows, and ONCE stays as set
+	lfo_modRetrigger(lfo, 3 / 127.f);
+	if(lfo->retrigger != 3 || !lfo->once) {
+		printf("FAIL a modulated RETRIG: voice %u, once %u\n", lfo->retrigger, lfo->once);
+		failed = 1;
+	}
+	lfo_modRetrigger(lfo, 11 / 127.f);
+	if(lfo->retrigger != 5) {
+		printf("FAIL a modulated RETRIG of 11 is voice 5: %u\n", lfo->retrigger);
+		failed = 1;
+	}
+	// a change of mode or tempo during the delay's crossfade keeps the time still waiting for it
+	Delay* d = &fxBus.delay;
+	d->interpValue = 0;
+	d->timePending = 0;
+	Delay_setDelayTime(d, 0.1f);
+	Delay_setDelayTime(d, 0.3f);
+	Delay_setMode(d, 2);
+	Delay_tempoChanged(d);
+	Delay_setMode(d, 0);
+	if(!d->timePending || fabs(d->pendingDelayTime - 0.3f) > 0.001f) {
+		printf("FAIL the delay lost a time: pending %u, %.3f\n", d->timePending, d->pendingDelayTime);
+		failed = 1;
+	}
+	// the reverb's tilt at its middle leaves nothing behind, whatever it was holding
+	TiltEq eq;
+	TiltEq_init(&eq);
+	TiltEq_setParameter(&eq, -0.5f);
+	for(int i = 0; i < 1000; i++) TiltEq_process(&eq, 0.5f);
+	TiltEq_setParameter(&eq, 0.f);
+	float rest = 1;
+	for(int i = 0; i < 44100; i++) rest = TiltEq_process(&eq, 0.f);
+	if(fabs(rest) > 0.001f) {
+		printf("FAIL the tilt held a level: %f\n", rest);
+		failed = 1;
+	}
+	// the editor shows a kit's reverb as a reverb, and all four of its dials
+	if(lxr_params_fromFirmware(PAR_FX_TYPE, 5) != 5 || !lxr_params_groupName(LXR_PARAMS_FX_VOICE, 5)
+			|| !lxr_params_fxLabel(PAR_FX_P1, 5) || !lxr_params_fxLabel(PAR_FX_P2, 5) || !lxr_params_fxLabel(PAR_FX_P3, 5) || !lxr_params_fxLabel(PAR_FX_P4, 5)) {
+		puts("FAIL the editor has no reverb");
 		failed = 1;
 	}
 	puts(failed ? "FAILED" : "lfo passed");

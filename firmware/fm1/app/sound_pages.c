@@ -6,7 +6,7 @@ static uint8_t pg_value(const TackSlot *sl, int on, uint32_t i, int *lit)
     uint8_t value = tack_get_param(sl->par);
     *lit = 0;
     if (ui.held >= 0) {
-        *lit = tack_lock_get((uint8_t)ui.voice, (uint8_t)step_of((uint32_t)ui.held), sl->par, &value);
+        *lit = tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &value);
         if (on)
             value = ui.held_val[i];
     }
@@ -167,7 +167,7 @@ static void pg_top(void)
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
-        cv_text(EDGE, 2, &FONT_B, page_label(row_now(), sl), C_WHITE);
+        cv_text(EDGE, 2, &FONT_B, page_label(ui.touched_row, sl), C_WHITE);
         if (name && v && same(sl->label, "RETRIG"))  /* the box has room for D1, and here there is for the voice */
             name = RETRIG_NAME[(v - 1u) % 6u];
         if (!name)
@@ -178,7 +178,7 @@ static void pg_top(void)
         else if (!name && sl->max)
             cv_rect(0, 18, 240 * (int32_t)v / sl->max, 2, VOICE_COLOUR[ui.voice]);
     } else if (ui.held >= 0) {                       /* the step's recurrence, where the keys show it */
-        const uint8_t st = (uint8_t)step_of((uint32_t)ui.held);
+        const uint8_t st = ui.held_step;
         const int len = tack_recur_len((uint8_t)ui.voice, st), mask = tack_recur_mask((uint8_t)ui.voice, st);
         t[0] = 'S';
         int_text(st + 1, t + 1);

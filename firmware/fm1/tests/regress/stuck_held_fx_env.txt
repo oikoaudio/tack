@@ -1,0 +1,22 @@
+# NOTE, FX, a white key held, ENV pressed, key let go: no step may stay held
+wait 600
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+expect notemode 1
+tap FX
+wait 40
+key w2 down
+wait 40
+expect held 2
+tap ENV
+wait 40
+key w2 up
+wait 60
+expect held -1
+shot 04_stuck_held.png
+tap EDIT
+wait 60
+# EDIT must open its page: group 1
+expect page 10

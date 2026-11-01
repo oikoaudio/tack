@@ -1,0 +1,21 @@
+# STEP view: voice 1 two bars, voice 2 one; at bar 2 voice 2 is picked. The view must come back to a bar it has
+wait 600
+tap SEQ
+wait 40
+press SEL
+wait 20
+tap OCT+
+release SEL
+wait 60
+expect bar 1
+press SEQ
+wait 20
+tapkey b1
+wait 20
+release SEQ
+wait 80
+expect voice 1
+expect len1 16
+expect bar 0
+expect selstep 0
+shot 11b.png
