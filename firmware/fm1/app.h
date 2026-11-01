@@ -28,7 +28,7 @@ void app_say(const char *a, const char *b);
                          OBJ_PAT0 + 6, OBJ_PAT0 + 7, OBJ_PAT0 + 8, OBJ_PAT0 + 9, OBJ_PAT0 + 10, OBJ_PAT0 + 11, \
                          OBJ_PAT0 + 12, OBJ_PAT0 + 13, OBJ_PAT0 + 14, OBJ_PAT0 + 15}
 #define APP_BACKUP_MAGIC 0x424C544Bu     /* "KTLB" */
-#define APP_BACKUP_VERSION 1u
+#define APP_BACKUP_VERSION 2u
 #define APP_BACKUP_WHAT "replaces all patterns"
 int app_backup_playing(void);
 void app_backup_flush(void);

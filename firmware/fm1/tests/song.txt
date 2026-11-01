@@ -1,0 +1,287 @@
+# Chains and the song: firmware/fm1/build/host/tack_host firmware/fm1/tests/song.txt OUTDIR
+# A bar of 16 steps is 2000 ms at the default 120 BPM
+wait 600
+expect songmode 0
+expect songlen 0
+
+# MIDI picks a pattern on channel 1: Program Change, and the notes below any voice's. Others leave it alone
+midi USB C0 03
+wait 40
+expect pattern 3
+midi USB 90 05 7F
+wait 40
+expect pattern 5
+midi USB C0 20
+wait 40
+expect pattern 5
+midi USB 90 10 7F
+wait 40
+expect pattern 5
+midi USB C1 02
+wait 40
+expect pattern 5
+midi USB 91 02 7F
+wait 40
+expect pattern 5
+# running, at the end of the bar
+tap PLAY
+wait 1000
+midi USB C0 02
+wait 40
+expect pattern 5
+wait 1000
+expect pattern 2
+tap PLAY
+wait 60
+expect running 0
+midi USB C0 00
+wait 40
+expect pattern 0
+
+# a voice's triggers are counted from the sequencer and from a key, and its lane shows as used only with steps
+expect used0 0
+expect fires1 0
+tap SEQ
+wait 40
+tapkey 0
+wait 200
+expect fires0 2
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+tapkey 0
+wait 60
+expect used0 1
+expect used1 0
+tapkey 0
+wait 60
+expect used0 0
+
+# one pattern, and a pattern change with no list behind it, as before
+press SEQ
+wait 20
+tapkey 2
+wait 40
+release SEQ
+wait 60
+expect pattern 1
+expect stepmode 1
+expect songmode 0
+
+# SEQ held and three keys: a chain, which loops from the first
+press SEQ
+wait 20
+tapkey 0
+wait 40
+tapkey 2
+wait 40
+tapkey 4
+wait 40
+release SEQ
+wait 60
+expect songmode 1
+expect pattern 0
+expect stepmode 1
+tap PLAY
+wait 1000
+expect running 1
+expect pattern 0
+wait 2000
+expect pattern 1
+wait 2000
+expect pattern 2
+wait 2000
+expect pattern 0
+wait 2000
+expect pattern 1
+
+# a chain added to while it plays, and one pattern ending it at the end of the bar
+press SEQ
+wait 20
+tapkey 12
+wait 40
+release SEQ
+wait 60
+expect songmode 0
+expect pattern 1
+wait 2000
+expect pattern 7
+wait 2000
+expect pattern 7
+tap PLAY
+wait 60
+expect running 0
+
+# the grid stays on the pages that edit steps, and the others have the screen
+expect tall 0
+tap EDIT
+wait 40
+expect tall 1
+tapkey 20
+wait 40
+expect eupage 1
+expect tall 0
+tapkey 20
+wait 40
+expect tall 1
+tap HOME
+wait 40
+expect tall 0
+
+# ARP held is a mute and opens nothing
+press ARP
+wait 20
+tapkey 1
+wait 40
+expect muted0 1
+tapkey 1
+wait 40
+expect muted0 0
+release ARP
+wait 40
+expect songpage 0
+
+# GLO's page and the SONG page close each other
+tap GLO
+wait 40
+expect setpage 1
+tap ARP
+wait 40
+expect setpage 0
+expect songpage 1
+tap GLO
+wait 40
+expect setpage 1
+expect songpage 0
+tap GLO
+wait 40
+expect setpage 0
+
+# ARP tapped is the SONG page, and the keys fill its rows
+tap ARP
+wait 40
+tap ARP
+wait 40
+expect songpage 0
+tap ARP
+wait 40
+expect songpage 1
+shot song_empty.png
+turn K4 1
+wait 40
+expect songmode 0
+tapkey 0
+wait 40
+tapkey 2
+wait 40
+tapkey 2
+wait 40
+expect songlen 3
+expect songedit 3
+expect songrow0 0
+expect songrow1 1
+expect songrow2 1
+expect songrow3 64
+expect step0 0
+turn K3 1
+wait 40
+expect songrow3 65
+shot song_rows.png
+# a key on the page wrote a row and no step, and the end stays an end as the song grows
+tapkey 4
+wait 40
+expect songrow3 2
+expect songrow4 65
+expect songlen 4
+turn K3 -1
+wait 40
+expect songrow4 64
+# K2 past the last pattern ends the song there; turning back brings the rest again
+turn K1 -2
+wait 40
+expect songedit 2
+turn K2 16
+wait 40
+expect songrow2 64
+expect songlen 2
+turn K2 -15
+wait 40
+expect songrow2 1
+expect songlen 4
+
+# it plays to the end and stops, and starts again from the top
+turn K4 1
+wait 40
+expect songmode 2
+expect stepmode 1
+tap PLAY
+wait 1000
+expect running 1
+expect pattern 0
+expect songpos 0
+wait 2000
+expect pattern 1
+expect songpos 1
+shot song_playing.png
+wait 2000
+expect pattern 1
+expect songpos 2
+wait 2000
+expect pattern 2
+wait 2000
+expect running 0
+tap PLAY
+wait 1000
+expect pattern 0
+expect songpos 0
+tap PLAY
+wait 60
+expect running 0
+
+# saved with the song on, a chain not, and an edited song survives
+tap SAVE
+wait 200
+reboot
+wait 800
+expect songmode 2
+expect songlen 4
+expect songrow3 2
+expect songrow4 64
+
+# the page closes, and the song goes off by hand without losing the rows
+tap HOME
+wait 40
+tap ARP
+wait 40
+expect songpage 1
+turn K4 -1
+wait 40
+expect songmode 0
+expect songlen 4
+tap HOME
+wait 40
+expect songpage 0
+
+# a backup holds the song, and a restore brings back what it held
+backup out:song.tack
+wait 200
+tap ARP
+wait 40
+turn K1 -3
+wait 40
+expect songedit 0
+turn K2 16
+wait 40
+expect songlen 0
+tap SAVE
+wait 200
+reboot
+wait 800
+expect songlen 0
+restore out:song.tack
+wait 200
+expect restore_rc 0
+expect songlen 4
+expect songrow1 1
+expect dropped 0

@@ -486,8 +486,14 @@ static void seq_sendMidi(MidiMsg msg)
 
 
 //------------------------------------------------------------------------------
+#ifdef LXR_FM1_BUILD
+int seq_platform_locks(uint8_t track, uint8_t step);
+#endif
 static void seq_parseAutomationNodes(uint8_t track, Step* stepData)
 {
+#ifdef LXR_FM1_BUILD
+	if(seq_platform_locks(track, (uint8_t)(seq_stepIndex[track] & 0x3f))) return;
+#endif
 	//set new destination
 	autoNode_setDestination(&seq_automationNodes[track][0], stepData->param1Nr);
 	autoNode_setDestination(&seq_automationNodes[track][1], stepData->param2Nr);
@@ -540,7 +546,9 @@ void seq_triggerVoice(uint8_t voiceNr, uint8_t vol, uint8_t note)
 		midiNote = activeParameters[PAR_MIDI_NOTE1 + voiceNr];
 
 	//send the new note to midi/usb out
-#if USE_PATTERN_EDIT_BUFFER
+#ifdef LXR_FM1_BUILD
+	(void)midiChan; (void)midiNote;	// voiceControl_noteOn above has sent it
+#elif USE_PATTERN_EDIT_BUFFER
 	seq_sendMidiNoteOn(midiChan, midiNote, patternBackupBuffer.seq_subStepPattern[voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
 #else
 	seq_sendMidiNoteOn(midiChan, midiNote, seq_patternSet.seq_subStepPattern[seq_activePattern][voiceNr][seq_stepIndex[voiceNr]].volume&STEP_VOLUME_MASK);
@@ -946,6 +954,10 @@ uint32_t flamIdxToPattern(uint8_t flamIdx)
 	}
 }
 //return pattern as 8 bit binary value (steps 0-7)
+#ifdef LXR_FM1_BUILD
+int seq_platform_step_plays(uint8_t track, uint8_t step, int8_t position);
+void seq_platform_lane_wrap(uint8_t track);
+#endif
 uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition stepPos)
 {
 #if 0
@@ -996,6 +1008,9 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 #else
 		uint8_t currentStepActive = seq_intIsMainStepActive(track,step,seq_activePattern);
 		if(!currentStepActive) return 0;
+#ifdef LXR_FM1_BUILD
+		if(!seq_platform_step_plays(track, step, stepPos == STEP_NEXT ? 1 : stepPos == STEP_PREV ? -1 : 0)) return 0;
+#endif
 
 
 		const  uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][step].flam;
@@ -1369,6 +1384,9 @@ IN_ITCM_RAM void seq_nextStep()
 		{
 			//if end is reached reset track to step 0
 			seq_stepIndex[i] = 0;
+#ifdef LXR_FM1_BUILD
+			seq_platform_lane_wrap((uint8_t)i);
+#endif
 		}
 
 

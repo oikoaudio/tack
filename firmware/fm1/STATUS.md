@@ -64,6 +64,7 @@ JieLi's SDK repository no longer exists at the URL in `get_sdk.sh`. The same rev
 | `fm1 kits DIR` | replaces the kit bank with every `.SND` under `DIR`, sequencer stopped |
 | `fm1 backup NAME` | writes patterns and settings to `NAME.tack`, and the kit bank to `NAME.kits/` |
 | `fm1 restore NAME` | puts both back. The FM-1 asks first: SEL yes, HOME no |
+| `fm1 convert OLD.tack NEW.tack` | one-off: a backup from before the list of locks, for this build. Delete `tools/ktl_convert.py` when done |
 
 `tests/verify.sh` checks the desktop renders against `tests/desktop_renders.sha256`, then builds the firmware and simulator.
 
@@ -98,21 +99,26 @@ The panel:
 | White keys | STEP mode: the 16 steps of the page, on release. PLAY mode: the first seven play the voices |
 | A step held, K1 to K4 | lock those values on the step, two per step. EDIT clears them |
 | SEL held, a white key | that step becomes the lane's last |
-| Black keys, first seven | select a voice; with ARP held, mute it |
+| Black keys, first seven | select a voice; with ARP held, mute it. Lit: the voice. Mid: steps in this pattern. Glow: an empty lane. Dark: muted. Each flashes as its voice fires, the lit one to dark |
+| NOTE mode | all 27 keys play the voice from F3 to G5, and OCT moves them up to 3 octaves. REC on writes what they play: stopped, step by step from the marked step, with a tap of SEL going past a step; running, live. REC off only plays. K1 step, K2 its note, K3 velocity, K4 on or off. The roll shows the voice's bar, and the keys light the step's note. SEQ held with a black key picks the voice |
+| MIDI channel 1 | notes 60 to 66 play the voices. Notes 0 to 15 and Program Change 0 to 15 pick a pattern, at the end of the bar when running |
+| A step held | recurrence: SELECT sets the cycle, 1 (every pass) to 8, and the first eight black keys pick the passes it plays on |
+| ARP | tap: SONG page, up to 63 rows of one pattern each. White keys fill the rows. K1 row, K2 pattern or end, K3 stop or loop at the end, K4 on or off. Picking one pattern turns the song off and keeps its rows |
 | SEQ | switch between STEP and PLAY mode |
 | OCT- and OCT+ | bar 1 to 4 |
 | PLAY, REC | start and stop, live recording |
+| Screen | the 7 row grid on the main, Euclidean and STEP pages. EDIT, ENV, LFO, FX, GLO and SONG have the screen below the header, as the keys show the voice's steps |
 | K1 to K4 | what the open page shows: pitch, filter, decay and volume of the voice on the main page |
 | SELECT, ALGORITHM, PRESET | tempo, shuffle, kit |
-| SEQ | tap: STEP or PLAY mode. Held with a white key: pattern 1 to 16 |
+| SEQ | tap: STEP, PLAY or NOTE mode. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
 | EDIT, ENV, LFO | the voice's sound pages, 256 parameter slots in all. Each press opens the next page, and past the last returns to the main page |
 | FX | FX type, mix and two settings of that type, then a second page of its others. Black keys send voices to the FX |
 | GLO | settings: tempo, shuffle, external MIDI clock, roll rate, and the `CPU`, `PEAK` and `XRUN` readings |
 | Black keys 8 to 10 | ROLL while held, the Euclidean page, COPY held with a white key: this pattern onto that one |
-| Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane |
+| Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane. Second press: a held step's note |
 | SEL and EDIT held a second | clear the lane |
 | SAVE | every changed pattern, tempo and the startup kit, refused while running because a flash write stops the sound |
-| HOME | the main page. GLO held: zero `PEAK` and `XRUN` |
+| HOME | the main page. GLO held: zero `PEAK` and `XRUN`. SEL and HOME held a second: the kit as it is in the bank, dropping every edit |
 | GLO held, PLAY | load test: every voice every 35 blocks, about 51 ms, on the loaded kit. PLAY alone ends it |
 
 Compiled and simulator-tested:
@@ -122,6 +128,13 @@ Compiled and simulator-tested:
 - Keys and USB MIDI note-on through the app, with Tack's channel map.
 - The sequencer in the trace harness: 7 tracks, 64 steps, per-track length, shuffle, shifts, flams, rolls, probability,
   two automation slots, live recording, pattern changes and songs.
+- Chains and the song in `tests/song.txt`: building and looping a chain, one pattern ending it, filling, cutting and
+  growing the rows, playing to the end and stopping, starting again from the top, saving the song through a reboot, and
+  a backup and restore that bring it back. A copy of the unit's own older backup restored here with its kit, pattern and
+  tempo, and an empty song.
+- NOTE mode and a step's note in `tests/note.txt`: playing without writing, step entry, OCT, the knobs, live recording,
+  the second STEP page, and saving through a reboot. The rendered audio measures an octave at 2.05 and a fifth at 1.52 on a
+  drum with a pitch envelope.
 - The panel in `tests/sequencer.txt`: steps, voices, mutes, bars, tempo, shuffle, patterns, transport, and saving one
   pattern and the kit, then loading them at boot. The recorded audio has onsets 498.8 to 500.9 ms apart at 120 BPM.
 
@@ -148,20 +161,35 @@ the xrun tag. `lock_test.sh` drives each through the real engine: a sent voice g
 0 removes the tail, each FX setting changes the output, a lock reaches a parameter above 127, and all 256 page slots step,
 clamp and render at both ends.
 
-Backup on the unit, build 4231e82: `fm1 backup` ran, and all 86 kits read back byte for byte equal to the uploaded files.
-The `.tack` held no patterns or settings, as nothing had been saved and the flush left the settings out. About one kit
-read in 3,000 went unanswered, which stopped a run: 4 of about 12,000 requests, all answered on the second try. The
-device drops a SysEx that starts before it releases the last one, so the tool now repeats a request and the reply names
-its part. The build after 4231e82 saves the settings in the flush and has not been installed.
+Backup on the unit: at 4231e82 all 86 kits read back byte for byte equal to the uploaded files. About one kit read in
+3,000 went unanswered, 4 of about 12,000 requests, and each was answered on the second try. The device drops a SysEx that
+starts before it releases the last one, so the tool repeats a request and the reply names its part. At 6a16e28 the user's
+full sequence worked: save a pattern and kit, back up, change the pattern, restore, power cycle.
 
-Not tested on anything: `fm1 restore`, and a backup holding patterns. fm1-base's own test covers the backup code, and the
-simulator cannot run it for Tack.
+Locks: a step holds 8 and a pattern 640, in a sorted list per pattern. The sequencer's two slots in a step stay in RAM, unused,
+which costs about 30 KB of the pool, so the one change to `sequencer.c` is a hook. The store holds the compact form: 1,863 B
+plus 3 B a lock, against 3,650 B before. A pattern is refused whole, and loads empty, unless its magic, length, ranges and
+list order are right. Refused patterns stay in the store until overwritten, and the screen counts them at boot. There is no
+conversion in the firmware: `tools/ktl_convert.py` is a one-off for `.tack` version 1, and `APP_BACKUP_VERSION` is now 2.
+
+One parameter update costs 108 to 257 x86 instructions, median 118, for every destination up to 250 (`midiParser_ccHandler`
+stores a value, and the render does the rest). A lock is two updates when its step fires, one putting the last value back.
+Eight locks on all seven voices together is 112 updates, about 16,000 instructions or 6% of a block by the 2.1 cycles per
+instruction above. The load test now does exactly this at each hit, so its `XRUN` on a unit is the real answer. It has not
+been run on a unit.
+
+Recurrence: a step plays on chosen slots of a cycle of 2 to 8 passes. The length and mask sit in the sequencer's unused first
+lock slot, so they copy and clear with the step, and each takes 3 B of the 640 in the image. Each lane counts its passes of
+each pattern, from the start of play.
+
+Compiled and simulator-tested, not yet on a device: recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
 
 Known omissions:
 
-- 16 patterns, not 64. The full bank needs 233,536 B and the pool has about 150 KB left. Each pattern is 3,649 B.
-- Song playback works, but the panel has no song page.
-- The STEP page edits nudge, flam, probability and velocity. It has no note, which the sequencer stores per step.
+- 16 patterns, not 64. The full bank does not fit the pool, which has about 116 KB left.
+- One song. A row plays its pattern once, so a repeat is a second row, and no row can be inserted or deleted.
+- A step's note is an offset from the kit's tuning, in semitones from 60, so C4 means the kit's pitch, not concert C4.
+- MIDI out is USB only, and notes arriving on USB or the jack go back out on the voice's channel. A DAW track that sends Tack its own output plays voices twice. A sequencer step's note-off comes one pulse after its note-on, about 5 ms at 120 BPM, so recorded steps are short.
 - A lane nudge adds to each step's nudge and stops at the limits of 7/8 of a step, so a large turn back can lose a hit's
   own offset.
 - The Euclidean page stops at length 16, as the LXR's menu does. From length 18 with one hit the generator recurses
@@ -184,15 +212,26 @@ Known omissions:
 The brief's first stage asked for one voice. The mixer computes all voices in one function and the whole engine compiled
 as easily as one voice, so the build went straight to the complete kit.
 
+## Ideas, not started
+
+From the user on 2026-11-01, after the sequencing work:
+
+- A second SEQ view of one voice at a larger size: offsets, velocity, locks and recurrence.
+- Whether PLAY mode goes, with the black keys playing their voice (open, 2026-11-01).
+- Sound pages that draw their values better, and two or more rows of parameters on a page, reached with the octave
+  buttons or by holding them, in place of paging with EDIT. Elektron and fors.fm/opal are the references. A tap of SEL is
+  kept free for these views.
+- An eighth voice: two oscillator FM on the user's wavetables, 1D but stepped through by two parameters as if 2D.
+
 ## Memory
 
 Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 260,672 B | 581,564 B | 45% |
-| RAM, `.data` and `.bss` | 36,720 B | 98,304 B | 37% |
-| Pool | 196,884 B | 344,064 B | 57% |
+| Flash image | 271,392 B | 581,564 B | 46% |
+| RAM, `.data` and `.bss` | 37,368 B | 98,304 B | 38% |
+| Pool | 227,636 B | 344,064 B | 66% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables
 (67,584 B plus the 8,194 B sine) and the transients (26,460 B). All engine code runs from flash through the XIP cache.
@@ -246,6 +285,7 @@ Two rules for any UI on this sequencer:
 
 - A pattern change restores the outgoing pattern from `patternBackupBuffer`, so an edit not committed there is lost. The
   buffer must also be filled at boot.
+- fm1-base's host `data` command stores a file 0x4000 below where `plat_data` reads it (`PLAT_DATA_LO` against `DATA_BASE`). `tests/kits.txt` allows for this. Take it out if a newer pin fixes it.
 - `seq_addPatternToSong` writes at `menu_songMenuPosition`, and playback leaves that value at 255. Set it first.
 
 ## Desktop Tack
@@ -337,6 +377,7 @@ Done on 2026-11-01:
 
 - It makes sound, and the load test reads `CPU 42`, `PEAK 42`, `XRUN 0` on the init kit (user's reading of the screen).
 
+- Commit `6a16e28` installed by the user. Saving, `fm1 backup`, `fm1 restore`, the kit reload and a power cycle worked.
 - Commit `36b4c89` installed by the user. `fm1_kits.py` uploaded 86 kits and the unit answered for each. The kits load.
 - The user read `CPU 48`, `PEAK 50`, `XRUN 3` after trying kits, and saw no xruns while switching kits fast. The three are
   unexplained. The next build tags the count with what the panel did last.

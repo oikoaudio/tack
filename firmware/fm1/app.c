@@ -13,11 +13,17 @@
  *   K1-K4        the page: pitch, filter, decay, volume of the voice unless a page is open
  *   EDIT ENV LFO the voice's sound pages: each press the next, and past the last back to the main page
  *   HOME         the main page, from anywhere
+ *   a step held  the first eight black keys pick the passes it plays on, SELECT how many there are in its cycle
+ *   SEQ          STEP, PLAY, NOTE. In NOTE all the keys play the voice, OCT their range; held, a black key is the voice.
+ *                  REC on writes them: running live, stopped step by step, SEL going past a step. K1 step, K2 its note,
+ *                  K3 velocity, K4 on or off
  *   FX           the FX pages: type, mix, two settings, then the type's others
  *   GLO          the settings page: tempo, shuffle, external MIDI clock, roll rate, the load
+ *   ARP          the SONG page, where the white keys fill the rows
  *                  GLO held: PLAY starts the load test, and PLAY alone ends it; HOME zeroes PEAK and XRUN
  *   SELECT       tempo                 ALGORITHM  shuffle             PRESET  kit
  *   SAVE         every changed pattern, the kit and tempo (stopped)     SEL and EDIT held a second  clear the lane
+ *                                                                       SEL and HOME held a second  the kit as in the bank
  */
 #include "src/tack_engine.h"
 #include "src/seq_platform.h"
@@ -36,7 +42,10 @@ typedef struct {
     uint8_t kit_now;                     /* the bank's kit it came from: slot + 1, 0 none */
     uint8_t rsv;
     uint8_t kit[KIT_SLOT];               /* the parameters, then the name at SET_KIT_NAME; older saves have it empty */
+    uint8_t song[TACK_SONG_ROWS];      /* older saves stop here */
+    uint8_t song_on, rsv2[3];
 } settings_t;
+#define SET_OLD_SIZE (sizeof(settings_t) - TACK_SONG_ROWS - 4u)
 #define SET_KIT_NAME 248u
 _Static_assert(sizeof(settings_t) <= PLAT_STORE_MAX, "one store object");
 static settings_t set;
@@ -68,15 +77,23 @@ static const uint8_t *kit_params(uint32_t i)
 static struct {
     uint32_t keys, btn, redraw;
     int32_t voice, bar;
-    uint8_t step_mode, stress, fx_page, set_page, eu_page, st_page;
+    uint8_t step_mode, stress, fx_page, set_page, eu_page, st_page, song_page;
+    uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
+    uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
+    int8_t note_oct;
+    uint8_t key_note[NKEYS];             /* what each key played, for its note-off */
+    uint8_t seq_voice;                   /* SEQ held picked a voice: no mode change on release */
+    uint8_t bad_patterns;                /* patterns the store held that were refused */
     uint8_t roll_voice;                  /* the voice ROLL went down on */
-    uint32_t clear_at;                   /* when SEL and EDIT went down together, 0 not */
+    uint32_t clear_at, revert_at;        /* when SEL and EDIT, SEL and HOME went down together, 0 not */
     uint8_t group, sub;                  /* the sound page */
     uint32_t save_todo;                  /* patterns a SAVE still has to write, one a frame */
     uint8_t saved, save_hold;            /* how many; a backup is reading the flash */
     int kit_seen;                        /* the kit the name is of */
     uint8_t seq_used;                    /* SEQ was a modifier this press: no mode change on release */
     uint8_t glo_used;                    /* so was GLO: no page */
+    uint8_t arp_used;                    /* so was ARP */
+    uint8_t sel_used;                    /* so was SEL */
     int32_t held;                        /* the white key held (0-15), -1 none */
     uint8_t held_used;                   /* it did something else: no toggle on release */
     uint8_t held_val[TACK_NP];
@@ -114,7 +131,8 @@ static void int_text(int32_t v, char *b)     /* signed, no padding */
     *b = 0;
 }
 
-/* audio interrupt: MIDI in, as Tack's channels: channel 1 plays the kit from note 60, 2-8 one voice each */
+/* audio interrupt: MIDI in, as Tack's channels: channel 1 plays the kit from note 60, 2-8 one voice each. On channel 1
+ * notes 0-15 and Program Change 0-15 pick a pattern, which a DAW can draw on a lane of its own */
 static void midi_in(void)
 {
     uint32_t pkt;
@@ -125,10 +143,21 @@ static void midi_in(void)
         } else if ((st & 0xF0u) == 0x90u && d2) {
             uint32_t ch = st & 15u;
             midi_seen++;
-            if (ch == 0u && d1 >= 60u && d1 < 60u + TACK_VOICES)
+            if (ch == 0u && d1 < TACK_PATTERNS)
+                tack_pattern_now((uint8_t)d1);
+            else if (ch == 0u && d1 >= 60u && d1 < 60u + TACK_VOICES)
                 tack_note_now((uint8_t)(d1 - 60u), 60, (uint8_t)d2);
             else if (ch >= 1u && ch <= TACK_VOICES)
                 tack_note_now((uint8_t)(ch - 1u), (uint8_t)d1, (uint8_t)d2);
+        } else if ((st & 0xF0u) == 0x80u || (st & 0xF0u) == 0x90u) {
+            uint32_t ch = st & 15u;
+            if (ch == 0u && d1 >= 60u && d1 < 60u + TACK_VOICES)
+                tack_note_off_now((uint8_t)(d1 - 60u), 60);
+            else if (ch >= 1u && ch <= TACK_VOICES)
+                tack_note_off_now((uint8_t)(ch - 1u), (uint8_t)d1);
+        } else if (st == 0xC0u) {
+            midi_seen++;
+            tack_pattern_now((uint8_t)d1);
         }
     }
 }
@@ -152,13 +181,17 @@ static void load_saved(int running_audio)
 {
     uint32_t i;
     for (i = 0; i < TACK_PATTERNS; i++) {
-        if (plat_store_load(OBJ_PAT0 + i, pat_buf, sizeof pat_buf) == (int)tack_pattern_image_size())
-            tack_load_pattern((uint8_t)i, pat_buf);
-        else if (running_audio)
+        const int len = plat_store_load(OBJ_PAT0 + i, pat_buf, sizeof pat_buf);
+        const int bad = len > 0 && tack_load_pattern((uint8_t)i, pat_buf, (uint32_t)len) != 0;
+        ui.bad_patterns = (uint8_t)(ui.bad_patterns + bad);
+        if (bad || (running_audio && len <= 0))
             tack_clear_pattern((uint8_t)i);
         tack_clean((uint8_t)i);
     }
-    if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) == (int)sizeof set && set.magic == SET_MAGIC) {
+    const int got = plat_store_load(OBJ_SETTINGS, &set, sizeof set);
+    const int ok = got >= (int)SET_OLD_SIZE && set.magic == SET_MAGIC;
+    tack_song_load(ok && got == (int)sizeof set ? set.song : 0, ok && got == (int)sizeof set && set.song_on);
+    if (ok) {
         if (running_audio) {
             while (tack_kit_busy())
                 ;
@@ -206,6 +239,8 @@ static int save_settings(void)
     set.kit_now = (uint8_t)tack_kit_now();
     memcpy(set.kit, tack_kit(), tack_kit_size());
     memcpy(set.kit + SET_KIT_NAME, ui.kit_name, 8);
+    memcpy(set.song, tack_song(), sizeof set.song);
+    set.song_on = tack_song_mode() == TACK_SONG_ON;
     return plat_store_save(OBJ_SETTINGS, &set, sizeof set);
 }
 
@@ -230,8 +265,7 @@ static void save(void)
 
 static int save_one(uint32_t i)
 {
-    tack_pattern_export((uint8_t)i, pat_buf);
-    if (plat_store_save(OBJ_PAT0 + i, pat_buf, tack_pattern_image_size()) != 0)
+    if (plat_store_save(OBJ_PAT0 + i, pat_buf, tack_pattern_export((uint8_t)i, pat_buf)) != 0)
         return -1;
     tack_clean((uint8_t)i);
     return 0;
@@ -316,8 +350,10 @@ static void lock_turn(uint32_t i, int32_t e)
         app_say("NO STEP", "");
     } else if (sl->target) {
         app_say("NO LOCK", "ON TARGETS");
-    } else if (!tack_lock_room((uint8_t)ui.voice, s, sl->par)) {
-        app_say("TWO LOCKS", "STEP FULL");
+    } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_STEP_FULL) {
+        app_say("STEP FULL", "8 LOCKS");
+    } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_PATTERN_FULL) {
+        app_say("PATTERN", "LOCKS FULL");
     } else {
         ui.held_val[i] = tack_slot_step(sl, ui.held_val[i], e);
         tack_post_lock((uint8_t)ui.voice, s, sl->par, ui.held_val[i]);
@@ -391,18 +427,189 @@ static void eu_turn(uint32_t slot, int32_t e)
 
 static void st_turn(uint32_t slot, int32_t e)
 {
-    if (ui.held >= 0) {
+    if (ui.st_page == 2u && slot) {
+        return;
+    } else if (ui.held >= 0) {
         const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
         ui.held_used = 1;
         if (tack_step_on((uint8_t)ui.voice, s))
-            tack_step_turn((uint8_t)ui.voice, s, slot, e);
+            tack_step_turn((uint8_t)ui.voice, s, ui.st_page == 2u ? (uint32_t)TACK_ST_NOTE : slot, e);
         else
             app_say("NO STEP", "");
-    } else if (slot == TACK_ST_NUDGE) {
+    } else if (slot == TACK_ST_NUDGE && ui.st_page == 1u) {
         mark('N');
         tack_lane_nudge_turn((uint8_t)ui.voice, e);
     } else {
         app_say("HOLD", "A STEP");
+    }
+}
+
+/* NOTE mode's own screen: on the main page, as a sound page opened from it keeps the keys and has its knobs */
+static int note_view(void)
+{
+    return ui.note_mode && ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.eu_page && !ui.st_page &&
+           !ui.song_page;
+}
+
+static uint32_t key_note(uint32_t k)             /* the keys are F3 to G5 at octave 0 */
+{
+    return (uint32_t)clamp(53 + (int32_t)k + 12 * ui.note_oct, 0, 127);
+}
+
+static uint32_t note_cursor(void) { return ui.note_step % (uint32_t)tack_length((uint8_t)ui.voice); }
+
+static void note_cursor_to(uint32_t s)
+{
+    ui.note_step = (uint8_t)s;
+    ui.bar = (int32_t)(s / 16u);
+}
+
+/* The keys play the voice. REC on writes them: running, as the LXR records; stopped, step by step */
+static void note_keys(uint32_t down, uint32_t up)
+{
+    for (uint32_t k = 0; k < NKEYS; k++) {
+        if (up >> k & 1u)
+            tack_post_note_off((uint8_t)ui.voice, ui.key_note[k]);
+        if (!(down >> k & 1u))
+            continue;
+        const uint8_t note = (uint8_t)key_note(k);
+        ui.key_note[k] = note;                   /* OCT may move before the key comes up */
+        tack_post_note((uint8_t)ui.voice, note, ui.note_vel);
+        if (tack_recording() && !tack_running()) {
+            const uint32_t s = note_cursor();
+            tack_post_step_note((uint8_t)ui.voice, (uint8_t)s, note, ui.note_vel);
+            note_cursor_to((s + 1u) % (uint32_t)tack_length((uint8_t)ui.voice));
+        }
+        ui.redraw = 1;
+    }
+}
+
+static void note_turn(uint32_t slot, int32_t e)
+{
+    const uint32_t s = note_cursor();
+    const int on = tack_step_on((uint8_t)ui.voice, (uint8_t)s);
+    if (slot == 0u) {
+        note_cursor_to((uint32_t)clamp((int32_t)s + e, 0, tack_length((uint8_t)ui.voice) - 1));
+    } else if (slot == 1u) {
+        if (on) {
+            tack_step_turn((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE, e);
+            if (!tack_running())               /* to tune by ear */
+                tack_post_note((uint8_t)ui.voice,
+                                 (uint8_t)clamp(tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE) + e, 0, 127),
+                                 ui.note_vel);
+        } else {
+            app_say("NO STEP", "");
+        }
+    } else if (slot == 2u) {
+        ui.note_vel = (uint8_t)clamp((int32_t)ui.note_vel + e, 1, 127);
+    } else {
+        tack_post_step((uint8_t)ui.voice, (uint8_t)s, e > 0);
+    }
+}
+
+/* the rows before the song's end */
+static uint32_t song_len(void)
+{
+    uint32_t n = 0;
+    while (n < TACK_SONG_ROWS - 1u && tack_song_get(n) < TACK_PATTERNS)
+        n++;
+    return n;
+}
+
+/* a row, a pattern or the end. A pattern on the end row moves the end along, unless the rows it cut off are behind it */
+static void song_write(uint32_t row, uint8_t value)
+{
+    const uint32_t len = song_len();
+    const uint8_t end = tack_song_get(len);
+    tack_post_song_row((uint8_t)row, value);
+    if (row == len && value < TACK_PATTERNS && tack_song_get(row + 1u) >= TACK_PATTERNS)
+        tack_post_song_row((uint8_t)(row + 1u), end);
+}
+
+static void song_key(uint32_t k)
+{
+    song_write(ui.song_row, (uint8_t)k);
+    if (ui.song_row < TACK_SONG_ROWS - 2u)
+        ui.song_row++;
+}
+
+static void song_turn(uint32_t slot, int32_t e)
+{
+    const uint32_t len = song_len();
+    if (ui.held >= 0) {
+        ui.held_used = 1;
+    } else if (slot == 0u) {
+        ui.song_row = (uint8_t)clamp((int32_t)ui.song_row + e, 0, (int32_t)(len < TACK_SONG_ROWS - 2u ? len : TACK_SONG_ROWS - 2u));
+    } else if (slot == 1u) {
+        const uint8_t now = tack_song_get(ui.song_row);
+        const int32_t v = clamp((now < TACK_PATTERNS ? (int32_t)now : (int32_t)TACK_PATTERNS) + e, 0, TACK_PATTERNS);
+        song_write(ui.song_row, v == TACK_PATTERNS ? tack_song_get(len) : (uint8_t)v);
+    } else if (slot == 2u) {
+        tack_post_song_row((uint8_t)len, e > 0 ? TACK_SONG_LOOP : TACK_SONG_STOP);
+    } else if (e > 0 && !len) {
+        app_say("SONG", "EMPTY");
+    } else {
+        tack_post_song_on(e > 0);
+    }
+}
+
+/* a step held: the first eight black keys are the slots of its recurrence, and SELECT how many there are */
+static void recur_key(uint32_t k)
+{
+    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held), v = (uint8_t)ui.voice;
+    const int len = tack_recur_len(v, s);
+    uint8_t mask = tack_recur_mask(v, s);
+    ui.held_used = 1;
+    if (!tack_step_on(v, s)) {
+        app_say("NO STEP", "");
+    } else if ((int)k >= len) {
+        app_say("SELECT", "ADDS SLOTS");
+    } else if ((mask ^= (uint8_t)(1u << k)) == 0) {
+        app_say("ONE SLOT", "AT LEAST");
+    } else {
+        tack_post_recur(v, s, (uint8_t)len, mask);
+    }
+}
+
+static void recur_turn(int32_t e)
+{
+    const uint8_t s = (uint8_t)step_of((uint32_t)ui.held), v = (uint8_t)ui.voice;
+    const int32_t n = clamp(tack_recur_len(v, s) + e, 1, TACK_RECUR_MAX);
+    uint8_t mask = (uint8_t)(tack_recur_mask(v, s) & ((1u << n) - 1u));
+    ui.held_used = 1;
+    if (!tack_step_on(v, s)) {
+        app_say("NO STEP", "");
+    } else if (!tack_recur_room(v, s)) {
+        app_say("PATTERN", "LOCKS FULL");
+    } else {
+        tack_post_recur(v, s, (uint8_t)n, mask ? mask : 1u);
+    }
+}
+
+/* two buttons held a second, for what is too much to lose to one press. 1 once when the second is up */
+static int held_second(uint32_t btn, uint32_t both, uint32_t *at, const char *word)
+{
+    if ((btn & both) != both) {
+        *at = 0;
+    } else if (!*at) {
+        *at = plat_ms() | 1u;
+        app_say("HOLD", word);
+    } else if (*at != 1u && plat_ms() - *at >= 1000u) {
+        *at = 1;                         /* done: not again until they are let go */
+        return 1;
+    }
+    return 0;
+}
+
+/* the kit as it is in the bank: every edit to it goes, saved or not */
+static void kit_revert(void)
+{
+    const int now = tack_kit_now();
+    if (now && kit_slot((uint32_t)now - 1u)) {
+        kit_load(now - 1);
+        app_say("KIT", "REVERTED");
+    } else {
+        app_say("NO KIT", "IN THE BANK");
     }
 }
 
@@ -420,14 +627,7 @@ static void pattern_copy(uint32_t k)
 /* SEL and EDIT held a second: a lane is too much to lose to one key */
 static void clear_hold(uint32_t btn)
 {
-    const uint32_t both = 1u << B_SEL | 1u << B_EDIT;
-    if ((btn & both) != both) {
-        ui.clear_at = 0;
-    } else if (!ui.clear_at) {
-        ui.clear_at = plat_ms() | 1u;
-        app_say("HOLD", "TO CLEAR");
-    } else if (ui.clear_at != 1u && plat_ms() - ui.clear_at >= 1000u) {
-        ui.clear_at = 1;                 /* done: not again until they are let go */
+    if (held_second(btn, 1u << B_SEL | 1u << B_EDIT, &ui.clear_at, "TO CLEAR")) {
         tack_post_clear((uint8_t)ui.voice);
         app_say("LANE", "CLEARED");
     }
@@ -446,7 +646,7 @@ static void pattern_pick(uint32_t k)
 static void page_press(uint8_t group)
 {
     const uint8_t used = ui.held_used;
-    ui.fx_page = ui.set_page = ui.eu_page = ui.st_page = 0;
+    ui.song_page = ui.fx_page = ui.set_page = ui.eu_page = ui.st_page = 0;
     if (ui.group != group) {
         ui.group = group;
         ui.sub = 0;
@@ -467,15 +667,30 @@ static void input(void)
     uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
     int32_t e;
 
+    if (ui.note_mode && !(btn >> B_SEQ & 1u) && !(btn >> B_ARP & 1u)) {   /* held, the keys do what they always do */
+        note_keys(down, up);
+        down = up = 0;
+    }
+    if (ui.step_mode && ui.held >= 0) {          /* a step held: the black keys are its slots */
+        for (k = 0; k < TACK_RECUR_MAX; k++)
+            if (down >> BK[k] & 1u) {
+                recur_key(k);
+                ui.redraw = 1;
+            }
+        for (k = 0; k < TACK_RECUR_MAX; k++)
+            down &= ~(1u << BK[k]);
+    }
     for (k = 0; k < TACK_VOICES; k++)          /* the black keys: voice, or with ARP held its mute */
         if (down >> BK[k] & 1u) {
             if (btn >> B_ARP & 1u) {
+                ui.arp_used = 1;
                 tack_post_mute((uint8_t)k, (uint8_t)!tack_muted((uint8_t)k));
             } else if (ui.fx_page) {
                 mark('F');
                 tack_post_fx_send(k, (uint8_t)!tack_fx_send(k));
             } else {
                 ui.voice = (int32_t)k;
+                ui.seq_voice |= (uint8_t)(btn >> B_SEQ & 1u);
                 if (ui.sub >= tack_pages((uint32_t)ui.voice, ui.group))
                     ui.sub = 0;
             }
@@ -489,21 +704,31 @@ static void input(void)
         tack_post_roll(ui.roll_voice, 0);
     if (down >> BK[KEY_EUCLID] & 1u) {
         ui.eu_page = !ui.eu_page;
-        ui.fx_page = ui.set_page = ui.st_page = 0;
+        ui.song_page = ui.fx_page = ui.set_page = ui.st_page = 0;
         ui.redraw = 1;
     }
     if (down >> BK[KEY_STEP] & 1u) {
-        ui.st_page = !ui.st_page;
-        ui.fx_page = ui.set_page = ui.eu_page = 0;
+        ui.st_page = ui.st_page >= 2u ? 0 : (uint8_t)(ui.st_page + 1u);
+        ui.song_page = ui.fx_page = ui.set_page = ui.eu_page = 0;
         ui.redraw = 1;
     }
     for (k = 0; k < 16u; k++) {                  /* the white keys: steps, or the voices */
         if (down >> WK[k] & 1u) {
-            if (btn >> B_SEQ & 1u) {             /* SEQ held: a pattern, in either mode */
-                ui.seq_used = 1;
-                pattern_pick(k);
+            if (btn >> B_SEQ & 1u) {             /* SEQ held: a pattern, in either mode; more of them a chain */
+                if (!ui.seq_used) {
+                    ui.seq_used = 1;
+                    ui.chain_n = 1;
+                    pattern_pick(k);
+                } else if (ui.chain_n < TACK_CHAIN_MAX) {
+                    char t[4];
+                    tack_post_chain(ui.chain_n++, (uint8_t)k);
+                    int_text(ui.chain_n, t);
+                    app_say("CHAIN", t);
+                }
             } else if (keys >> BK[KEY_COPY] & 1u) {
                 pattern_copy(k);
+            } else if (ui.song_page) {
+                song_key(k);
             } else if (!ui.step_mode) {
                 if (k < TACK_VOICES) {
                     ui.voice = (int32_t)k;
@@ -521,6 +746,8 @@ static void input(void)
             }
             ui.redraw = 1;
         }
+        if ((up >> WK[k] & 1u) && !ui.step_mode && k < TACK_VOICES)
+            tack_post_note_off((uint8_t)k, 60);
         if ((up >> WK[k] & 1u) && ui.held == (int32_t)k) {
             if (ui.step_mode && !ui.held_used)
                 toggle_step(k);
@@ -531,31 +758,50 @@ static void input(void)
     ui.keys = keys;
 
     if (pressed(btn, B_SEQ)) {
-        ui.seq_used = 0;
+        ui.seq_used = ui.seq_voice = 0;
         ui.redraw = 1;
     }
-    if (((ui.btn & ~btn) >> B_SEQ & 1u) && !ui.seq_used) {
-        ui.step_mode = !ui.step_mode;
+    if (((ui.btn & ~btn) >> B_SEQ & 1u) && !ui.seq_used && !ui.seq_voice) {   /* STEP, PLAY, NOTE */
+        ui.note_mode = !ui.step_mode && !ui.note_mode;
+        ui.step_mode = !ui.step_mode && !ui.note_mode;
         ui.held = -1;
         ui.redraw = 1;
     }
     if (pressed(btn, B_FX)) {
         ui.fx_page = ui.fx_page >= (uint8_t)tack_fx_pages() ? 0 : (uint8_t)(ui.fx_page + 1u);
-        ui.set_page = ui.eu_page = ui.st_page = 0;
+        ui.song_page = ui.set_page = ui.eu_page = ui.st_page = 0;
         ui.redraw = 1;
     }
     if (pressed(btn, B_GLO))
         ui.glo_used = 0;
     if (((ui.btn & ~btn) >> B_GLO & 1u) && !ui.glo_used) {
         ui.set_page = !ui.set_page;
-        ui.fx_page = ui.eu_page = ui.st_page = 0;
+        ui.song_page = ui.fx_page = ui.eu_page = ui.st_page = 0;
         ui.redraw = 1;
     }
-    if (pressed(btn, B_OCTDN) && ui.bar > 0) {
+    if (pressed(btn, B_ARP))
+        ui.arp_used = 0;
+    if (((ui.btn & ~btn) >> B_ARP & 1u) && !ui.arp_used) {
+        ui.song_page = !ui.song_page;
+        ui.fx_page = ui.set_page = ui.eu_page = ui.st_page = 0;
+        ui.redraw = 1;
+    }
+    if (pressed(btn, B_SEL))
+        ui.sel_used = 0;
+    if ((btn >> B_SEL & 1u) && ((btn & ~(1u << B_SEL)) || keys))
+        ui.sel_used = 1;
+    if (((ui.btn & ~btn) >> B_SEL & 1u) && !ui.sel_used && note_view() && !tack_running()) {   /* past a step, leaving it */
+        note_cursor_to((note_cursor() + 1u) % (uint32_t)tack_length((uint8_t)ui.voice));
+        ui.redraw = 1;
+    }
+    if (ui.note_mode) {                          /* the range of the keys; the knob walks the bars */
+        ui.note_oct = (int8_t)clamp((int32_t)ui.note_oct + (int32_t)pressed(btn, B_OCTUP) - (int32_t)pressed(btn, B_OCTDN), -3, 3);
+        if (pressed(btn, B_OCTUP) || pressed(btn, B_OCTDN))
+            ui.redraw = 1;
+    } else if (pressed(btn, B_OCTDN) && ui.bar > 0) {
         ui.bar--;
         ui.redraw = 1;
-    }
-    if (pressed(btn, B_OCTUP) && ui.bar < (int32_t)TACK_BARS - 1) {
+    } else if (pressed(btn, B_OCTUP) && ui.bar < (int32_t)TACK_BARS - 1) {
         ui.bar++;
         ui.redraw = 1;
     }
@@ -582,6 +828,8 @@ static void input(void)
     if (pressed(btn, B_LFO))
         page_press(TACK_G_LFO);
     clear_hold(btn);
+    if (held_second(btn, 1u << B_SEL | 1u << B_HOME, &ui.revert_at, "TO REVERT"))
+        kit_revert();
     if (pressed(btn, B_EDIT) && ui.held < 0 && !(btn >> B_SEL & 1u))
         page_press(TACK_G_EDIT);
     if (pressed(btn, B_EDIT) && ui.held >= 0) {  /* a step held: its locks go */
@@ -599,8 +847,8 @@ static void input(void)
         ui.xrun_base = plat_xruns();
         ui.xrun_act = 0;
         app_say("LOAD", "ZEROED");
-    } else if (pressed(btn, B_HOME)) {
-        ui.fx_page = ui.set_page = ui.eu_page = ui.st_page = 0;
+    } else if (pressed(btn, B_HOME) && !(btn >> B_SEL & 1u)) {
+        ui.song_page = ui.fx_page = ui.set_page = ui.eu_page = ui.st_page = 0;
         ui.group = TACK_G_MAIN;
         ui.sub = 0;
         if (ui.held >= 0)
@@ -613,6 +861,10 @@ static void input(void)
         if ((e = plat_enc(EN_K1 + (int)k)) != 0) {
             if (ui.set_page) {
                 set_turn(k, e);
+            } else if (ui.song_page) {
+                song_turn(k, e);
+            } else if (note_view()) {
+                note_turn(k, e);
             } else if (ui.eu_page) {
                 eu_turn(k, e);
             } else if (ui.st_page) {
@@ -629,7 +881,10 @@ static void input(void)
             ui.redraw = 1;
         }
     if ((e = plat_enc(EN_SELECT)) != 0) {
-        tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
+        if (ui.step_mode && ui.held >= 0)
+            recur_turn(e);
+        else
+            tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
         ui.redraw = 1;
     }
     if ((e = plat_enc(EN_ALGO)) != 0) {
@@ -693,18 +948,68 @@ int app_sysex(const uint8_t *p, uint32_t n)
     return 1;
 }
 
-/* the keys light the page's steps of the voice, the playhead dim-to-bright against them; the black keys the voice */
+#define FLASH_MS 50u
+
+/* A voice's key flashes as it fires: the others to lit, the selected one, lit already, to dark. Which of its keys */
+static uint32_t flashing(uint32_t v, uint32_t now)
+{
+    static uint8_t seen[TACK_VOICES];
+    static uint32_t at[TACK_VOICES];
+    const uint8_t n = tack_voice_fires((uint8_t)v);
+    if (n != seen[v]) {
+        seen[v] = n;
+        at[v] = now;
+    }
+    return at[v] && now - at[v] < FLASH_MS;
+}
+
+/* the keys light the page's steps of the voice, the playhead dim-to-bright against them. The black keys: the voice lit, a
+ * voice with steps in this pattern between that and the low glow of an empty lane, a muted one dark */
 static void lights(void)
 {
     uint32_t keys = 0, dim = 0, btn = 0, k;
     const int head = tack_running() ? tack_playhead((uint8_t)ui.voice) : -1;
-    for (k = 0; k < TACK_VOICES; k++) {
-        if (ui.fx_page ? tack_fx_send(k) : (int32_t)k == ui.voice)
-            keys |= 1u << BK[k];
-        else if (!ui.fx_page && !tack_muted((uint8_t)k))
-            dim |= 1u << BK[k];
+    const uint32_t now = plat_ms();
+    const int as_notes = ui.note_mode && !(ui.btn >> B_SEQ & 1u) && !(ui.btn >> B_ARP & 1u);
+    const int as_slots = ui.step_mode && ui.held >= 0;
+    uint32_t mid = 0;
+    if (as_slots) {                              /* lit: it plays on that slot. Mid: a slot it skips */
+        const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+        const uint32_t len = (uint32_t)tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+        for (k = 0; k < len; k++) {
+            if (mask >> k & 1u)
+                keys |= 1u << BK[k];
+            else
+                mid |= 1u << BK[k];
+        }
     }
-    if ((ui.btn >> B_SEQ & 1u) || (ui.keys >> BK[KEY_COPY] & 1u)) {   /* SEQ, COPY held: the keys are the patterns */
+    for (k = 0; k < TACK_VOICES; k++) {
+        const uint32_t fire = flashing(k, now);
+        if (as_notes || as_slots) {
+            continue;
+        } else if (ui.fx_page) {
+            if (tack_fx_send(k))
+                keys |= 1u << BK[k];
+        } else if ((int32_t)k == ui.voice) {
+            if (!fire)
+                keys |= 1u << BK[k];
+        } else if (fire) {
+            keys |= 1u << BK[k];
+        } else if (!tack_muted((uint8_t)k)) {
+            if (tack_lane_used((uint8_t)k))
+                mid |= 1u << BK[k];
+            else
+                dim |= 1u << BK[k];
+        }
+    }
+    if (as_notes) {                              /* the step's note on the keys: the one playing, or the one to write */
+        const uint32_t s = head >= 0 ? (uint32_t)head : note_cursor();
+        dim = (1u << NKEYS) - 1u;
+        if (tack_step_on((uint8_t)ui.voice, (uint8_t)s))
+            for (k = 0; k < NKEYS; k++)
+                if ((int)key_note(k) == tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE))
+                    keys |= 1u << k;
+    } else if ((ui.btn >> B_SEQ & 1u) || (ui.keys >> BK[KEY_COPY] & 1u) || ui.song_page) {   /* the keys are the patterns */
         for (k = 0; k < 16u; k++) {
             if ((int)k == tack_pattern())
                 keys |= 1u << WK[k];
@@ -721,7 +1026,7 @@ static void lights(void)
         for (k = 0; k < TACK_VOICES; k++)
             dim |= 1u << WK[k];
     }
-    if (ui.step_mode)
+    if (ui.step_mode || ui.note_mode)
         btn |= 1u << B_SEQ;
     if (ui.fx_page)
         btn |= 1u << B_FX;
@@ -735,9 +1040,12 @@ static void lights(void)
         btn |= 1u << B_REC;
     if (tack_ext_sync() || ui.set_page)
         btn |= 1u << B_GLO;
+    if (ui.song_page)
+        btn |= 1u << B_ARP;
     if (tack_running())
         btn |= 1u << B_PLAY | LED_PLAY_GREEN;
     plat_lights(btn, keys, 0, dim, 1);
+    plat_lights_mid((1u << NB) - 1u, mid);               /* the unlit buttons: the glow is too low to read a label by */
 }
 
 void app_input_only(void) { input(); }
@@ -745,12 +1053,13 @@ void app_input_only(void) { input(); }
 #define GRID_X 12
 #define GRID_CELL 14
 #define GRID_ROW 11
+#define GRID_H 82                         /* to the knobs: it clears what a full page left there */
 
 /* every lane on one page: a row each, the selected lane marked, the page's steps. Past a lane's end there is nothing */
 static void draw_grid(void)
 {
     uint32_t v, i;
-    cv_begin(240, 7u * GRID_ROW + 1u, C_BLACK);
+    cv_begin(240, GRID_H, C_BLACK);
     for (v = 0; v < TACK_VOICES; v++) {
         const int32_t y = (int32_t)v * GRID_ROW;
         const int muted = tack_muted((uint8_t)v);
@@ -767,6 +1076,8 @@ static void draw_grid(void)
             cv_rect(x, y, GRID_CELL - 2, GRID_ROW - 2, s == head ? C_WHITE : on ? (muted ? C_GRAY : C_HI) : C_LINE);
             if (on && tack_locked((uint8_t)v, (uint8_t)s))
                 cv_rect(x + 8, y + 1, 3, 3, C_BLACK);
+            if (on && tack_recur_len((uint8_t)v, (uint8_t)s) > 1)
+                cv_rect(x + 1, y + 5, 3, 3, C_BLACK);
         }
     }
     cv_blit(0, 52);
@@ -775,17 +1086,51 @@ static void draw_grid(void)
 /* The screen under the grid: the knobs' strip, then the bottom. There the envelope or wave of the page, and a last row with
  * the page's name on the left and its place among the group's pages on the right. The curves are the engine's: SlopeEg2.c's
  * slope and rates */
-#define KNOBS_Y 134
-#define KNOBS_H 36
+/* A page of sound or settings has the screen below the header, as the keys show the steps. The pages that edit steps keep
+ * the grid */
+static int tall(void)
+{
+    return !ui.eu_page && !ui.st_page &&
+           (ui.fx_page || ui.set_page || ui.song_page || ui.group != TACK_G_MAIN);
+}
+
+#define KNOBS_Y (tall() ? 52 : 134)
+#define KNOBS_H (tall() ? 52 : 36)
 #define BOTTOM_Y (KNOBS_Y + KNOBS_H)
-#define BOTTOM_H 70
+#define BOTTOM_H (240 - BOTTOM_Y)
 #define GRAPH_X 10
 #define GRAPH_TOP 2
-#define GRAPH_H 50
+#define GRAPH_H (tall() ? 112 : 50)
 #define GRAPH_W 220
-#define ROW_Y 54                         /* the name */
+#define ROW_Y (tall() ? 118 : 54)        /* the name */
 #define BAR_W 14
 #define BAR_PITCH 18
+
+static void note_text(int n, char *b)            /* MIDI 60 is C4 */
+{
+    static const char NAME[12][3] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+    const char *p = NAME[n % 12];
+    while (*p)
+        *b++ = *p++;
+    int_text(n / 12 - 1, b);
+}
+
+/* a knob's value under its label, a number or a word */
+static void knob_num(int32_t x, const char *t, uint16_t colour)
+{
+    if (tall())
+        cv_text(x, 18, &FONT_M, t, colour);
+    else
+        cv_text(x, 16, &FONT_S, t, colour);
+}
+
+static void knob_word(int32_t x, const char *t, uint16_t colour)
+{
+    if (tall())
+        cv_text(x, 22, &FONT_S, t, colour);
+    else
+        cv_text(x, 16, &FONT_XS, t, colour);
+}
 
 static float eg_shape(float v, float slope)
 {
@@ -927,6 +1272,10 @@ static const char *page_name(void)
         return ui.fx_page > 1u ? "FX 2" : "FX";
     if (ui.set_page)
         return "SETTINGS";
+    if (ui.song_page)
+        return "SONG";
+    if (note_view())
+        return "NOTE";
     if (ui.eu_page)
         return "EUCLID";
     if (ui.st_page)
@@ -940,7 +1289,7 @@ static const char *page_name(void)
 static const TackSlot *target_slot(void)
 {
     uint32_t i;
-    if (ui.fx_page || ui.set_page || ui.eu_page || ui.st_page)
+    if (ui.fx_page || ui.set_page || ui.eu_page || ui.st_page || ui.song_page)
         return 0;
     for (i = 0; i < TACK_NP; i++)
         if (slot(i) && slot(i)->target)
@@ -948,14 +1297,35 @@ static const TackSlot *target_slot(void)
     return 0;
 }
 
+/* the rows around the one being edited, laid out as the white keys are; a line under the row playing */
+#define SONG_CELLS 16
+static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS; }
+
+static void draw_song_rows(void)
+{
+    const uint32_t first = song_first(), len = song_len();
+    const int playing = tack_running() && tack_song_mode() == TACK_SONG_ON ? tack_song_pos() : -1;
+    for (uint32_t i = 0; i < SONG_CELLS && first + i <= len; i++) {
+        const uint32_t row = first + i;
+        const uint8_t v = tack_song_get(row);
+        const int32_t x = 10 + (int32_t)(i % 8u) * 28, y = 2 + (int32_t)(i / 8u) * 24;
+        char t[4];
+        int_text(v + 1, t);
+        cv_text(x, y, &FONT_S, v < TACK_PATTERNS ? t : v == TACK_SONG_LOOP ? "LOOP" : "STOP",
+                row == ui.song_row ? C_HI : v < TACK_PATTERNS ? C_WHITE : C_GRAY);
+        if ((int)row == playing)
+            cv_rect(x, y + 18, 20, 2, C_HI);
+    }
+}
+
 /* drawn only when it would change: it is the largest strip on a screen that redraws on every step */
 static void draw_bottom(void)
 {
     static uint32_t last;
-    const int overlay = ui.fx_page || ui.set_page || ui.eu_page || ui.st_page;
+    const int overlay = ui.fx_page || ui.set_page || ui.eu_page || ui.st_page || ui.song_page;
     const int graph = overlay ? TACK_GRAPH_NONE : tack_page_graph((uint32_t)ui.voice, ui.group, ui.sub);
-    const int pages = ui.fx_page ? tack_fx_pages() : overlay || !ui.group ? 0 : tack_pages((uint32_t)ui.voice, ui.group);
-    const int bar = ui.fx_page ? ui.fx_page - 1 : ui.sub;
+    const int pages = ui.fx_page ? tack_fx_pages() : ui.st_page ? 2 : overlay || !ui.group ? 0 : tack_pages((uint32_t)ui.voice, ui.group);
+    const int bar = ui.fx_page ? ui.fx_page - 1 : ui.st_page ? ui.st_page - 1 : ui.sub;
     const int echo = ui.fx_page ? tack_fx_delay_ms() : 0;
     const TackSlot *target = target_slot();
     const uint32_t xruns = plat_xruns() - ui.xrun_base;
@@ -968,7 +1338,16 @@ static void draw_bottom(void)
     KEY(ui.set_page);
     KEY(ui.eu_page);
     KEY(ui.st_page);
+    KEY(ui.song_page);
+    KEY(note_view());
+    KEY(ui.note_oct);
+    KEY(tack_recording());
     KEY(ui.held >= 0);
+    if (ui.held >= 0) {
+        const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+        KEY(tack_recur_len((uint8_t)ui.voice, s));
+        KEY(tack_recur_mask((uint8_t)ui.voice, s));
+    }
     KEY(graph);
     KEY(pages);
     KEY(ui.group);
@@ -992,6 +1371,14 @@ static void draw_bottom(void)
         KEY(plat_cpu_pct());
         KEY(ui.cpu_peak);
     }
+    if (ui.song_page) {
+        KEY(ui.song_row);
+        KEY(tack_song_mode());
+        KEY(tack_song_pos());
+        KEY(tack_running());
+        for (i = 0; i < SONG_CELLS; i++)
+            KEY(tack_song_get(song_first() + (uint32_t)i));
+    }
 #undef KEY
     if (key == last)
         return;
@@ -1003,7 +1390,7 @@ static void draw_bottom(void)
     } else if (ui.fx_page) {
         cv_text(10, 4, &FONT_XS, "SEND", C_GRAY);
         for (i = 0; i < TACK_FX_SENDS; i++)
-            cv_text(52 + i * 30, 4, &FONT_XS, SEND_NAME[i], tack_fx_send((uint32_t)i) ? C_HI : C_LINE);
+            cv_text(52 + i * 30, 3, &FONT_S, SEND_NAME[i], tack_fx_send((uint32_t)i) ? C_HI : C_GRAY);
         if (echo) {
             char t[16];
             cv_text(10, 26, &FONT_XS, "ECHO", C_GRAY);
@@ -1011,10 +1398,19 @@ static void draw_bottom(void)
             cv_text(52, 22, &FONT_S, t, C_WHITE);
             cv_text(92, 26, &FONT_XS, "MS", C_GRAY);
         }
+    } else if (ui.song_page) {
+        draw_song_rows();
+    } else if (note_view()) {
+        char t[8];
+        cv_text(10, 4, &FONT_XS, "OCT", C_GRAY);
+        int_text(ui.note_oct, t);
+        cv_text(40, 3, &FONT_S, t, C_WHITE);
+        cv_text(10, 26, &FONT_XS, tack_recording() ? (tack_running() ? "RECORDING" : "KEYS WRITE THE STEPS") : "REC TO WRITE",
+                tack_recording() ? C_HI : C_LINE);
     } else if (ui.eu_page) {
         cv_text(10, 4, &FONT_XS, "A TURN REWRITES THE LANE", C_LINE);
     } else if (ui.st_page && ui.held < 0) {
-        cv_text(10, 4, &FONT_XS, "HOLD A STEP FOR ONE HIT", C_LINE);
+        cv_text(10, 4, &FONT_XS, "HOLD A STEP FOR ONE HIT", C_GRAY);
     } else if (graph == TACK_GRAPH_LFO) {
         draw_lfo();
     } else if (graph >= TACK_GRAPH_OSC) {
@@ -1025,8 +1421,15 @@ static void draw_bottom(void)
     cv_text(10, ROW_Y, &FONT_XS, page_name(), C_GRAY);
     if (target)
         cv_text(84, ROW_Y, &FONT_XS, tack_slot_text(target, tack_get_param(target->par)), C_HI);
-    for (i = 0; i < pages; i++)
-        cv_rect(230 - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
+    if (ui.step_mode && ui.held >= 0) {          /* the step's recurrence, where the keys show it */
+        const uint8_t s = (uint8_t)step_of((uint32_t)ui.held);
+        const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+        for (i = 0; i < len; i++)
+            cv_rect(230 - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
+    } else {
+        for (i = 0; i < pages; i++)
+            cv_rect(230 - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
+    }
     if (xruns && !ui.set_page) {                 /* never hidden: a soak test reads this from any page */
         char t[8];
         t[0] = 'X';
@@ -1049,14 +1452,97 @@ static void draw_fx(void)
             continue;
         cv_text(x, 2, &FONT_XS, tack_fx_label(sl), C_GRAY);
         if (sl == TACK_FX_TYPE) {
-            cv_text(x, 16, &FONT_XS, tack_fx_type_name(), C_HI);
+            knob_word(x, tack_fx_type_name(), C_HI);
         } else if (tack_fx_text(sl, tack_get_param(tack_fx_param(sl)))) {
-            cv_text(x, 16, &FONT_XS, tack_fx_text(sl, tack_get_param(tack_fx_param(sl))), C_WHITE);
+            knob_word(x, tack_fx_text(sl, tack_get_param(tack_fx_param(sl))), C_WHITE);
         } else {
             int_text(tack_get_param(tack_fx_param(sl)), t);
-            cv_text(x, 16, &FONT_S, t, C_WHITE);
+            knob_num(x, t, C_WHITE);
         }
     }
+    cv_blit(0, KNOBS_Y);
+}
+
+/* the voice's bar as a piano roll in the grid's place: three octaves from the lowest note in it, the step to write marked */
+static void draw_roll(void)
+{
+    const uint8_t v = (uint8_t)ui.voice;
+    const int head = tack_running() ? tack_playhead(v) : -1, len = tack_length(v);
+    const int cursor = (int)note_cursor();
+    int low = 127;
+    uint32_t i;
+    for (i = 0; i < 16u; i++) {
+        const uint8_t s = (uint8_t)(ui.bar * 16 + (int)i);
+        if (tack_step_on(v, s) && tack_step_get(v, s, TACK_ST_NOTE) < low)
+            low = tack_step_get(v, s, TACK_ST_NOTE);
+    }
+    low = low == 127 ? 48 : low / 12 * 12;
+    cv_begin(240, GRID_H, C_BLACK);
+    for (i = 0; i < 16u; i++) {
+        const int s = ui.bar * 16 + (int)i;
+        const int32_t x = GRID_X + (int32_t)i * GRID_CELL;
+        if (s >= len)
+            continue;
+        cv_rect(x, 0, GRID_CELL - 2, 76, s == cursor ? C_GRAY : C_LINE);
+        cv_rect(x + 1, 1, GRID_CELL - 4, 74, C_BLACK);
+        if (tack_step_on(v, (uint8_t)s)) {
+            int y = 74 - (tack_step_get(v, (uint8_t)s, TACK_ST_NOTE) - low) * 2;
+            y = y < 1 ? 1 : y;
+            cv_rect(x + 1, y - 3 < 1 ? 1 : y - 3, GRID_CELL - 4, 4, s == head ? C_WHITE : C_HI);
+        }
+        if (s == head)
+            cv_rect(x, 76, GRID_CELL - 2, 2, C_WHITE);
+    }
+    cv_blit(0, 52);
+}
+
+/* the strip of NOTE mode: the step it would write, what it holds, how hard the keys are */
+static void draw_note(void)
+{
+    static const char *const LABEL[TACK_NP] = {"STEP", "NOTE", "VELOCITY", "HIT"};
+    const uint8_t s = (uint8_t)note_cursor();
+    const int on = tack_step_on((uint8_t)ui.voice, s);
+    char t[8];
+    uint32_t i;
+    cv_begin(240, KNOBS_H, C_BLACK);
+    for (i = 0; i < TACK_NP; i++)
+        cv_text(10 + (int32_t)i * 56, 2, &FONT_XS, LABEL[i], C_GRAY);
+    int_text(s + 1, t);
+    knob_num(10, t, C_WHITE);
+    if (on) {
+        note_text(tack_step_get((uint8_t)ui.voice, s, TACK_ST_NOTE), t);
+        knob_num(66, t, C_HI);
+    } else {
+        knob_word(66, "-", C_GRAY);
+    }
+    int_text(ui.note_vel, t);
+    knob_num(122, t, C_WHITE);
+    knob_word(178, on ? "ON" : "OFF", on ? C_HI : C_WHITE);
+    cv_blit(0, KNOBS_Y);
+}
+
+static void draw_song(void)
+{
+    static const char *const LABEL[TACK_NP] = {"ROW", "PATTERN", "AT END", "SONG"};
+    const uint32_t len = song_len();
+    const uint8_t v = tack_song_get(ui.song_row);
+    const int mode = tack_song_mode();
+    char t[8];
+    uint32_t i;
+    cv_begin(240, KNOBS_H, C_BLACK);
+    for (i = 0; i < TACK_NP; i++)
+        cv_text(10 + (int32_t)i * 56, 2, &FONT_XS, LABEL[i], C_GRAY);
+    int_text(ui.song_row + 1, t);
+    knob_num(10, t, C_WHITE);
+    if (v < TACK_PATTERNS) {
+        int_text(v + 1, t);
+        knob_num(66, t, C_WHITE);
+    } else {
+        knob_word(66, "END", C_GRAY);
+    }
+    knob_word(122, tack_song_get(len) == TACK_SONG_LOOP ? "LOOP" : "STOP", C_WHITE);
+    knob_word(178, mode == TACK_SONG_ON ? "ON" : mode == TACK_SONG_CHAIN ? "CHAIN" : "OFF",
+            mode ? C_HI : C_WHITE);
     cv_blit(0, KNOBS_Y);
 }
 
@@ -1066,34 +1552,43 @@ static void draw_set(void)
     cv_begin(240, KNOBS_H, C_BLACK);
     cv_text(10, 2, &FONT_XS, "TEMPO", C_GRAY);
     int_text(tack_bpm(), t);
-    cv_text(10, 16, &FONT_S, t, C_WHITE);
+    knob_num(10, t, C_WHITE);
     cv_text(66, 2, &FONT_XS, "SHUFFLE", C_GRAY);
     int_text(tack_shuffle(), t);
-    cv_text(66, 16, &FONT_S, t, C_WHITE);
+    knob_num(66, t, C_WHITE);
     cv_text(122, 2, &FONT_XS, "MIDI CLK", C_GRAY);
-    cv_text(122, 16, &FONT_XS, tack_ext_sync() ? "ON" : "OFF", tack_ext_sync() ? C_HI : C_WHITE);
+    knob_word(122, tack_ext_sync() ? "ON" : "OFF", tack_ext_sync() ? C_HI : C_WHITE);
     cv_text(178, 2, &FONT_XS, "ROLL", C_GRAY);
-    cv_text(178, 16, &FONT_XS, tack_roll_name(tack_roll_rate()), C_WHITE);
+    knob_word(178, tack_roll_name(tack_roll_rate()), C_WHITE);
     cv_blit(0, KNOBS_Y);
 }
 
 static void draw_st(void)
 {
-    static const char *const NAME[TACK_ST_SLOTS] = {"NUDGE", "FLAM", "CHANCE", "VELOCITY"};
+    static const char *const NAME[TACK_ST_NOTE] = {"NUDGE", "FLAM", "CHANCE", "VELOCITY"};
     const int held = ui.held >= 0;
     const uint8_t s = (uint8_t)(held ? step_of((uint32_t)ui.held) : 0);
     char t[8];
     uint32_t i;
     cv_begin(240, KNOBS_H, C_BLACK);
-    for (i = 0; i < (held ? (uint32_t)TACK_ST_SLOTS : 1u); i++) {
+    if (ui.st_page == 2u) {
+        cv_text(10, 2, &FONT_XS, "NOTE", C_GRAY);
+        if (held) {
+            note_text(tack_step_get((uint8_t)ui.voice, s, TACK_ST_NOTE), t);
+            knob_num(10, t, C_HI);
+        }
+        cv_blit(0, KNOBS_Y);
+        return;
+    }
+    for (i = 0; i < (held ? (uint32_t)TACK_ST_NOTE : 1u); i++) {
         const int32_t x = 10 + (int32_t)i * 56;
         const int v = held ? tack_step_get((uint8_t)ui.voice, s, i) : tack_lane_nudge_get((uint8_t)ui.voice);
         cv_text(x, 2, &FONT_XS, NAME[i], C_GRAY);
         if (i == TACK_ST_FLAM) {
-            cv_text(x, 16, &FONT_XS, tack_flam_name(v), C_WHITE);
+            knob_word(x, tack_flam_name(v), C_WHITE);
         } else {
             int_text(v, t);
-            cv_text(x, 16, &FONT_S, t, C_WHITE);
+            knob_num(x, t, C_WHITE);
         }
     }
     cv_blit(0, KNOBS_Y);
@@ -1109,7 +1604,7 @@ static void draw_eu(void)
         const int32_t x = 10 + (int32_t)i * 56;
         cv_text(x, 2, &FONT_XS, NAME[i], C_GRAY);
         int_text(tack_euclid_get((uint8_t)ui.voice, i), t);
-        cv_text(x, 16, &FONT_S, t, C_WHITE);
+        knob_num(x, t, C_WHITE);
     }
     cv_blit(0, KNOBS_Y);
 }
@@ -1127,7 +1622,9 @@ static void draw(void)
     int_text(tack_bpm(), t);
     cv_text(196, 4, &FONT_B, t, C_HI);
     cv_text(10, 22, &FONT_M, VOICE_NAME[ui.voice], tack_muted((uint8_t)ui.voice) ? C_GRAY : C_HI);
-    cv_text(120, 28, &FONT_XS, ui.step_mode ? "STEP" : "PLAY", C_WHITE);
+    if (tack_song_mode())
+        cv_text(86, 28, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
+    cv_text(120, 28, &FONT_XS, ui.note_mode ? "NOTE" : ui.step_mode ? "STEP" : "PLAY", C_WHITE);
     t[0] = 'B';
     int_text(ui.bar + 1, t + 1);
     cv_text(152, 28, &FONT_XS, t, C_GRAY);
@@ -1137,8 +1634,15 @@ static void draw(void)
     if (tack_recording())
         cv_text(210, 28, &FONT_XS, "REC", C_HI);
     cv_blit(0, 0);
-    draw_grid();
-    if (ui.fx_page || ui.set_page || ui.eu_page || ui.st_page)
+    if (note_view())
+        draw_roll();
+    else if (!tall())
+        draw_grid();
+    if (note_view()) {
+        draw_note();
+        goto strip_done;
+    }
+    if (ui.fx_page || ui.set_page || ui.eu_page || ui.st_page || ui.song_page)
         goto strip_done;
     cv_begin(240, KNOBS_H, C_BLACK);
     for (i = 0; i < TACK_NP; i++) {
@@ -1159,12 +1663,12 @@ static void draw(void)
         cv_text(x, 2, &FONT_XS, sl->label, C_GRAY);
         name = tack_slot_text(sl, v);
         if (sl->target) {                    /* too long for a column: draw_bottom */
-            cv_text(x, 16, &FONT_XS, "BELOW", C_GRAY);
+            knob_word(x, "BELOW", C_GRAY);
         } else if (name) {
-            cv_text(x, 16, &FONT_XS, name, lit ? C_HI : C_WHITE);
+            knob_word(x, name, lit ? C_HI : C_WHITE);
         } else {
             int_text(v, t);
-            cv_text(x, 16, &FONT_S, t, lit ? C_HI : C_WHITE);
+            knob_num(x, t, lit ? C_HI : C_WHITE);
         }
     }
     cv_blit(0, KNOBS_Y);
@@ -1173,6 +1677,8 @@ strip_done:
         draw_fx();
     if (ui.set_page)
         draw_set();
+    if (ui.song_page)
+        draw_song();
     if (ui.eu_page)
         draw_eu();
     if (ui.st_page)
@@ -1182,7 +1688,13 @@ strip_done:
 
 void app_ui_init(void)
 {
+    if (ui.bad_patterns) {
+        char t[4];
+        int_text(ui.bad_patterns, t);
+        app_say(t, "BAD PATTERNS");
+    }
     ui.step_mode = 1;
+    ui.note_vel = 110;
     ui.held = -1;
     lcd_fill(0, 0, 240, 240, C_BLACK);
     ui.redraw = 1;
@@ -1201,6 +1713,16 @@ void app_frame(void)
     }
     for (v = 0; v < TACK_VOICES; v++)          /* any lane's playhead moved */
         h = h * 67 + tack_playhead((uint8_t)v);
+    h = h * 67 + tack_song_mode() * 256 + tack_song_pos();
+    if (ui.note_mode || ui.held >= 0) {          /* a step's edit too */
+        const uint8_t s = (uint8_t)(ui.held >= 0 ? step_of((uint32_t)ui.held) : (int)note_cursor());
+        for (v = 0; v < TACK_ST_SLOTS; v++)
+            h = h * 67 + tack_step_get((uint8_t)ui.voice, s, v);
+        h = h * 67 + tack_step_on((uint8_t)ui.voice, s) + tack_recur_len((uint8_t)ui.voice, s) * 2 +
+            tack_recur_mask((uint8_t)ui.voice, s) * 32;
+    }
+    if (ui.song_page)                            /* a row turned reaches the engine after the frame that drew it */
+        h = h * 67 + (int)song_len() * 256 + tack_song_get(song_len()) + tack_song_get(ui.song_row) * 4;
     input();
     save_frame();
     (void)tack_kit_busy();                     /* a kit that went in shows, whichever way it came */
@@ -1236,6 +1758,34 @@ int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "voice"))
         *got = ui.voice;
+    else if (!strcmp(what, "setpage"))
+        *got = ui.set_page;
+    else if (!strncmp(what, "fires", 5))     /* firesN: voice N's triggers */
+        *got = tack_voice_fires((uint8_t)atoi(what + 5));
+    else if (!strncmp(what, "used", 4))      /* usedN: voice N has steps here */
+        *got = tack_lane_used((uint8_t)atoi(what + 4));
+    else if (!strcmp(what, "tall"))
+        *got = tall();
+    else if (!strcmp(what, "badpatterns"))
+        *got = ui.bad_patterns;
+    else if (!strcmp(what, "lockcount"))
+        *got = tack_lock_count();
+    else if (!strncmp(what, "recurlen", 8))  /* recurlenN, recurmaskN: the selected voice's step N */
+        *got = tack_recur_len((uint8_t)ui.voice, (uint8_t)atoi(what + 8));
+    else if (!strncmp(what, "recurmask", 9))
+        *got = tack_recur_mask((uint8_t)ui.voice, (uint8_t)atoi(what + 9));
+    else if (!strcmp(what, "songpage"))
+        *got = ui.song_page;
+    else if (!strcmp(what, "songmode"))
+        *got = tack_song_mode();
+    else if (!strcmp(what, "songpos"))
+        *got = tack_song_pos();
+    else if (!strcmp(what, "songedit"))
+        *got = ui.song_row;
+    else if (!strcmp(what, "songlen"))
+        *got = (int)song_len();
+    else if (!strncmp(what, "songrow", 7))   /* songrowN: what the row holds */
+        *got = tack_song_get((uint32_t)atoi(what + 7));
     else if (!strcmp(what, "fxpage"))
         *got = ui.fx_page;
     else if (!strcmp(what, "eupage"))
@@ -1276,6 +1826,14 @@ int app_expect(const char *what, int *got)
         *got = ui.kit;
     else if (!strcmp(what, "bar"))
         *got = ui.bar;
+    else if (!strcmp(what, "notemode"))
+        *got = ui.note_mode;
+    else if (!strcmp(what, "notestep"))
+        *got = ui.note_step;
+    else if (!strcmp(what, "noteoct"))
+        *got = ui.note_oct;
+    else if (!strncmp(what, "note", 4))      /* noteN: the selected voice's step N */
+        *got = tack_step_get((uint8_t)ui.voice, (uint8_t)atoi(what + 4), TACK_ST_NOTE);
     else if (!strcmp(what, "stepmode"))
         *got = ui.step_mode;
     else if (!strcmp(what, "running"))

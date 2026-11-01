@@ -33,10 +33,6 @@ int tack_kit_busy(void);
 int tack_kit_now(void);
 uint32_t tack_dirty(void);
 void tack_clean(uint8_t pattern);
-void tack_pattern_export(uint8_t pattern, void *image);
-void tack_load_pattern(uint8_t pattern, const void *image);
-uint32_t tack_pattern_image_size(void);
-const void *tack_pattern_image(void);
 void tack_load_kit(const uint8_t *values);
 const uint8_t *tack_kit(void);
 int probe_param_filter_type1(void);
@@ -54,6 +50,19 @@ void lxr_host_loadKit(const uint8_t *values);
 int tack_length(uint8_t voice);
 int tack_step_on(uint8_t voice, uint8_t step);
 int tack_locked(uint8_t voice, uint8_t step);
+int tack_lock_get(uint8_t voice, uint8_t step, uint16_t param, uint8_t *value);
+int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);
+int tack_lock_count(void);
+int tack_recur_len(uint8_t voice, uint8_t step);
+uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
+int tack_recur_room(uint8_t voice, uint8_t step);
+int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
+enum { TACK_LOCK_ROOM, TACK_LOCK_STEP_FULL, TACK_LOCK_PATTERN_FULL };
+int tack_post_pattern(uint8_t pattern);
+int tack_post_clear(uint8_t voice);
+void tack_clear_pattern(uint8_t pattern);
+uint32_t tack_pattern_export(uint8_t pattern, void *image);
+int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);
 int tack_euclid_turn(uint8_t voice, uint32_t slot, int32_t e);
 uint8_t tack_euclid_get(uint8_t voice, uint32_t slot);
 int tack_post_roll(uint8_t voice, uint8_t on);
@@ -466,13 +475,11 @@ static void pattern_tests(void)
     tack_post_pattern(0);
     run(4);
 
-    /* what a SAVE writes: any pattern's image equals the sequencer's own, and loads back */
+    /* what a SAVE writes: any pattern's image, which loads back */
     static uint8_t img[3840], copy[3840];
-    const uint32_t n = tack_pattern_image_size();
     tack_post_step(1, 9, 1);
     run(2);
-    tack_pattern_export(0, img);
-    check("a pattern's image is the sequencer's own", !memcmp(img, tack_pattern_image(), n), n, 0);
+    const uint32_t n = tack_pattern_export(0, img);
     tack_post_pattern(4);
     run(2);
     tack_pattern_export(0, copy);
@@ -486,11 +493,223 @@ static void pattern_tests(void)
     tack_post_copy(11);
     run(2);
     check("a copy marks the one it wrote", (tack_dirty() & (1u << 11)) && !(tack_dirty() & 1u), tack_dirty(), 0);
-    tack_load_pattern(0, img);
+    tack_load_pattern(0, img, n);
     run(2);
     check("an image loads back", tack_step_on(1, 9), tack_step_on(1, 9), 1);
     tack_post_clear(1);
     tack_post_clear(0);
+    run(2);
+}
+
+
+/* the list of locks: more than the sequencer's two slots, in any order, and only good images come back from the store */
+static uint8_t image[3840], broken[3840];
+#define IMG_LOCKS 1863u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 */
+#define IMG_LEN 1854u
+
+static uint32_t mutate(uint32_t len, void (*f)(uint8_t *))
+{
+    memcpy(broken, image, len);
+    f(broken);
+    return len;
+}
+static void bad_magic(uint8_t *p) { p[0] ^= 1; }
+static void bad_count(uint8_t *p) { p[4] = 0xFF; p[5] = 0xFF; }
+static void bad_note(uint8_t *p) { p[6 + 2] = 200; }
+static void bad_chance(uint8_t *p) { p[6 + 1] = 200; }
+static void bad_timing(uint8_t *p) { p[6 + 1344] = 0xFF; }
+static void bad_length(uint8_t *p) { p[IMG_LEN] = 65; }
+static void bad_shuffle(uint8_t *p) { p[IMG_LEN + 7] = 200; }
+static void bad_kit(uint8_t *p) { p[IMG_LEN + 8] = 200; }
+static void bad_voice(uint8_t *p) { p[IMG_LOCKS + 3 * 2] |= 0xC0; p[IMG_LOCKS + 3 * 2 + 2] |= 0x80; }
+static void bad_dest(uint8_t *p) { p[IMG_LOCKS + 3 * 2 + 1] = 0xFF; }
+static void bad_order(uint8_t *p)
+{
+    for (int i = 0; i < 3; i++) {
+        const uint8_t t = p[IMG_LOCKS + i];
+        p[IMG_LOCKS + i] = p[IMG_LOCKS + 3 * 2 + i];
+        p[IMG_LOCKS + 3 * 2 + i] = t;
+    }
+}
+static void bad_twice(uint8_t *p)
+{
+    for (int i = 0; i < 3; i++)
+        p[IMG_LOCKS + 3 + i] = p[IMG_LOCKS + i];
+}
+
+static void list_tests(void)
+{
+    uint8_t v = 0;
+    tack_post_run(0);
+    tack_post_pattern(3);
+    run(8);
+    tack_clear_pattern(3);
+    check("a cleared pattern has no locks", tack_lock_count() == 0, 0, tack_lock_count());
+
+    /* in descending order, so that each goes in at the front */
+    tack_post_step(0, 4, 1);
+    for (int i = 7; i >= 0; i--) {
+        tack_post_lock(0, 4, (uint16_t)(30 + i * 3), (uint8_t)(10 + i));
+        run(2);
+    }
+    check("a step holds eight locks", tack_lock_count() == 8, 8, tack_lock_count());
+    int all = 1;
+    for (int i = 0; i < 8; i++)
+        all &= tack_lock_get(0, 4, (uint16_t)(30 + i * 3), &v) && v == 10 + i;
+    check("each reads back from a list built backwards", all, 1, all);
+
+    /* the ninth, and a change to one already there */
+    check("the ninth finds no room", tack_lock_room(0, 4, 99) == TACK_LOCK_STEP_FULL, TACK_LOCK_STEP_FULL, tack_lock_room(0, 4, 99));
+    check("one already locked can still change", tack_lock_room(0, 4, 36) == TACK_LOCK_ROOM, TACK_LOCK_ROOM, tack_lock_room(0, 4, 36));
+    tack_post_lock(0, 4, 99, 50);
+    tack_post_lock(0, 4, 36, 77);
+    run(2);
+    tack_lock_get(0, 4, 36, &v);
+    check("the ninth is refused and a change is not", tack_lock_count() == 8 && v == 77, 77, v);
+
+    /* neighbours, and what goes when */
+    tack_post_step(0, 5, 1);
+    tack_post_step(1, 4, 1);
+    tack_post_lock(0, 5, 40, 1);
+    tack_post_lock(1, 4, 41, 2);
+    tack_post_lock(5, 63, 42, 3);
+    run(2);
+    check("other steps have their own", tack_lock_count() == 11 && tack_locked(0, 5) && tack_locked(1, 4) && tack_locked(5, 63), 11, tack_lock_count());
+    uint32_t len = tack_pattern_export(3, image);
+    tack_post_lock_clear(0, 4);
+    run(2);
+    check("clearing a step leaves its neighbours", !tack_locked(0, 4) && tack_locked(0, 5) && tack_locked(1, 4) && tack_lock_count() == 3, 3, tack_lock_count());
+
+    /* an image and back, into another pattern */
+    tack_post_pattern(4);
+    run(8);
+    tack_clear_pattern(4);
+    check("a good image loads", tack_load_pattern(4, image, len) == 0, 0, 0);
+    tack_lock_get(0, 4, 36, &v);
+    check("and has its locks", tack_lock_count() == 11 && v == 77 && tack_step_on(1, 4), 11, tack_lock_count());
+
+    /* lane clear takes that voice's only */
+    tack_post_clear(0);
+    run(2);
+    check("a cleared lane loses its own locks", !tack_locked(0, 4) && !tack_locked(0, 5) && tack_locked(1, 4) && tack_locked(5, 63), 2, tack_lock_count());
+
+    /* faulty images, against one pattern that must not change */
+    tack_post_pattern(5);
+    run(8);
+    tack_clear_pattern(5);
+    tack_post_step(2, 2, 1);
+    tack_post_lock(2, 2, 44, 9);
+    run(2);
+    const struct { const char *name; void (*f)(uint8_t *); } BAD[] = {
+        {"the wrong magic", bad_magic}, {"a count past the limit", bad_count}, {"a note out of range", bad_note},
+        {"a chance out of range", bad_chance}, {"timing out of range", bad_timing}, {"a length out of range", bad_length},
+        {"shuffle out of range", bad_shuffle}, {"a kit out of range", bad_kit}, {"a lock on a voice that is not there", bad_voice},
+        {"a lock with no destination", bad_dest}, {"locks out of order", bad_order}, {"the same lock twice", bad_twice}};
+    for (uint32_t i = 0; i < sizeof BAD / sizeof BAD[0]; i++) {
+        char name[80];
+        snprintf(name, sizeof name, "refused: %s", BAD[i].name);
+        mutate(len, BAD[i].f);
+        check(name, tack_load_pattern(5, broken, len) == -1, -1, 0);
+    }
+    check("refused: cut short", tack_load_pattern(5, image, len - 1) == -1, -1, 0);
+    check("refused: too long", tack_load_pattern(5, image, len + 1) == -1, -1, 0);
+    check("refused: empty", tack_load_pattern(5, image, 0) == -1, -1, 0);
+    memset(broken, 0x37, 3650);
+    check("refused: an older build's pattern", tack_load_pattern(5, broken, 3650) == -1, -1, 0);
+    check("a refused image changes nothing", tack_lock_count() == 1 && tack_locked(2, 2) && tack_step_on(2, 2), 1, tack_lock_count());
+
+    /* recurrence: kept with the pattern, sharing the locks' room, and held to the same standard */
+    tack_post_recur(2, 2, 3, 5);
+    tack_post_recur(2, 7, 2, 2);
+    run(2);
+    check("recurrence reads back", tack_recur_len(2, 2) == 3 && tack_recur_mask(2, 2) == 5, 3, tack_recur_len(2, 2));
+    len = tack_pattern_export(5, image);
+    {
+        tack_clear_pattern(6);
+        const int loaded = tack_load_pattern(6, image, len);
+        tack_post_pattern(6);
+        run(8);
+        check("an image keeps recurrence", loaded == 0 && tack_recur_len(2, 2) == 3 && tack_recur_mask(2, 7) == 2 && tack_recur_len(2, 3) == 1, 3, tack_recur_len(2, 2));
+        tack_post_pattern(5);
+        run(8);
+    }
+    {
+        const uint32_t last = len - 3;        /* the second entry: key, mask, length - 1 and the key's top bit */
+        const struct { const char *name; uint32_t at; uint8_t value; } RECUR[] = {
+            {"nine slots", 2, 8}, {"one slot", 2, 0}, {"no slot set", 1, 0}, {"a slot past the cycle", 1, 0xFF},
+            {"the same step twice", 0, 0x82}};
+        for (uint32_t i = 0; i < sizeof RECUR / sizeof RECUR[0]; i++) {
+            char name[80];
+            memcpy(broken, image, len);
+            broken[last + RECUR[i].at] = RECUR[i].value;
+            snprintf(name, sizeof name, "refused: %s", RECUR[i].name);
+            check(name, tack_load_pattern(5, broken, len) == -1, -1, 0);
+        }
+        memcpy(broken, image, len);
+        broken[last + 2] |= 0x80;
+        broken[last] = 0xC0;
+        check("refused: recurrence on a voice that is not there", tack_load_pattern(5, broken, len) == -1, -1, 0);
+    }
+    /* a saved image with no recurrence is one with the locks alone */
+    tack_post_recur(2, 2, 1, 0);
+    tack_post_recur(2, 7, 1, 0);
+    run(2);
+    check("one slot takes recurrence off", tack_recur_len(2, 2) == 1, 1, tack_recur_len(2, 2));
+
+    /* nine on a step, from outside */
+    {
+        uint8_t *q = image + IMG_LOCKS;
+        tack_clear_pattern(5);
+        for (uint8_t i = 0; i < 9; i++)
+            tack_post_lock(6, 9, (uint16_t)(30 + i), 5);
+        run(2);
+        len = tack_pattern_export(5, image);
+        memmove(q + 3, q, 8 * 3);
+        q[0] = q[3];
+        q[1] = 20;
+        q[2] = q[5];
+        image[4] = 9;
+        check("refused: nine on a step", tack_load_pattern(5, image, len + 3) == -1, -1, 0);
+    }
+
+    /* the pattern's limit */
+    tack_clear_pattern(5);
+    int put = 0;
+    for (uint8_t t = 0; t < TACK_VOICES; t++)
+        for (uint8_t s = 0; s < 64; s++)
+            for (uint8_t i = 0; i < 8 && put < 660; i++, put++) {
+                tack_post_lock(t, s, (uint16_t)(30 + i), 5);
+                if (put % 64 == 0)
+                    run(2);
+            }
+    run(4);
+    check("a pattern holds 640", tack_lock_count() == 640, 640, tack_lock_count());
+    check("and then says so", tack_lock_room(6, 60, 80) == TACK_LOCK_PATTERN_FULL, TACK_LOCK_PATTERN_FULL, tack_lock_room(6, 60, 80));
+    check("recurrence shares that room", !tack_recur_room(6, 60), 0, tack_recur_room(6, 60));
+    len = tack_pattern_export(5, image);
+    check("a full pattern fits one store object", len <= 3840, 3840, (int)len);
+    check("and loads", tack_load_pattern(6, image, len) == 0, 0, 0);
+    tack_clear_pattern(5);
+    tack_clear_pattern(6);
+    tack_post_pattern(0);
+    run(8);
+}
+
+/* a voice's eight locks all reach the engine at its step, and go back at the next */
+static void many_locks_play(int fp, float base)
+{
+    float b[16];
+    tack_post_lock(0, 4, (uint16_t)fp, 20);
+    for (int i = 1; i < 8; i++)
+        tack_post_lock(0, 4, (uint16_t)(fp + 20 + i), 40);
+    run(2);
+    tack_post_run(1);
+    lane(b, 16);
+    tack_post_run(0);
+    run(4);
+    check("among eight locks the filter's still works", fabsf(b[4] - base) > 0.1f * fabsf(base), base, b[4]);
+    check("and goes back at the next hit", fabsf(b[8] - base) < 1e-3f * fabsf(base) + 1e-6f, base, b[8]);
+    tack_post_lock_clear(0, 4);
     run(2);
 }
 
@@ -569,6 +788,10 @@ int main(void)
     tack_post_lock_clear(0, 4);
     tack_post_param((uint16_t)tp, 0);
     run(4);
+    tack_post_param((uint16_t)fp, 100);
+    run(4);
+    many_locks_play(fp, probe_filter(0));
+    list_tests();
 
     fx_tests();
     page_sweep();

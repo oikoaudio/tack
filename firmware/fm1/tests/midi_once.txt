@@ -1,0 +1,10 @@
+# A step's note-on goes out once, which verify.sh counts. Two bars: the second note-on follows a note-off
+wait 600
+tapkey 0
+wait 60
+out
+tap PLAY
+wait 2100
+out
+tap PLAY
+wait 60

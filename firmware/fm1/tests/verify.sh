@@ -16,7 +16,10 @@ bash host/tools/smoke_test.sh build/host 2>&1 | tail -1
 export JIELI_TOOLCHAIN=$HOME/.jieli/toolchain AC79_SDK=$HOME/.jieli/ac79-sdk JIELI_DOCKER=0
 python3 third_party/fm1-base/tools/build.py firmware/fm1 2>&1 | grep -E '^  (ok|FAIL|fail)|error|^package|ERROR|failed'
 CC=clang python3 third_party/fm1-base/tools/build.py firmware/fm1 --host 2>&1 | grep -E ' error|undefined|did not|^host'
-for t in keys sequencer; do
+python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'KITTWO  ' + bytes([50]) * 248)" > "$out/sim/kits.bin"
+for t in keys sequencer song note kits recur; do
     (cd "$out/sim" && timeout 60 "$root/firmware/fm1/build/host/tack_host" "$root/firmware/fm1/tests/$t.txt" . 2>&1 | grep -v -E '^  ok' | tail -3)
 done
+dup=$(cd "$out/sim" && timeout 60 "$root/firmware/fm1/build/host/tack_host" "$root/firmware/fm1/tests/midi_once.txt" . 2>&1 | grep -E '^  out (80|90)' | uniq -d | wc -l)
+[ "$dup" = 0 ] || echo "FAIL a note-on went out twice"
 timeout 300 bash firmware/fm1/tests/lock_test.sh "$out/lock" 2>&1 | tail -1

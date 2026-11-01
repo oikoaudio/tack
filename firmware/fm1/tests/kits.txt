@@ -1,0 +1,103 @@
+# The kit revert: firmware/fm1/build/host/tack_host firmware/fm1/tests/kits.txt OUTDIR
+# verify.sh writes kits.bin there: two made-up kits, as no kits come with Tack. Every parameter of the first is 40,
+# of the second 50. The bank is at 0xB8000. The host's data command stores 0x4000 below where plat_data reads, so 0xBC000
+wait 600
+
+# the init kit is in no slot, so nothing can be reverted to
+press SEL
+wait 20
+press HOME
+wait 1100
+release HOME
+release SEL
+wait 60
+expect kit 0
+expect param0 >-1
+
+data kits.bin 770048
+turn PRESET 1
+wait 60
+expect kit 1
+expect param0 50
+expect param2 50
+
+# an edit, and the hold brings the bank's kit back, not after the first moment and only once
+turn K1 7
+wait 60
+expect param0 57
+turn K3 -9
+wait 60
+expect param2 41
+press SEL
+wait 20
+press HOME
+wait 500
+expect param0 57
+wait 700
+expect param0 50
+expect param2 50
+expect kit 1
+turn K1 3
+wait 60
+wait 1200
+expect param0 53
+release HOME
+release SEL
+wait 60
+
+# HOME or SEL alone, and a hold let go early, change nothing
+tap HOME
+wait 60
+tap SEL
+wait 60
+press SEL
+wait 20
+press HOME
+wait 300
+release HOME
+release SEL
+wait 1200
+expect param0 53
+
+# with SEL held HOME does not leave the page, and after a SAVE the bank still has the kit as it was
+tap EDIT
+wait 40
+expect tall 1
+press SEL
+wait 20
+press HOME
+wait 40
+expect tall 1
+release HOME
+release SEL
+wait 40
+tap HOME
+wait 40
+tap SAVE
+wait 200
+press SEL
+wait 20
+press HOME
+wait 1200
+release HOME
+release SEL
+wait 60
+expect param0 50
+
+# while it plays, as a kit from PRESET does
+turn K1 4
+wait 60
+tap PLAY
+wait 300
+press SEL
+wait 20
+press HOME
+wait 1200
+release HOME
+release SEL
+wait 60
+expect running 1
+expect param0 50
+tap PLAY
+wait 60
+expect dropped 0

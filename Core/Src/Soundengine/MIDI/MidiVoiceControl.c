@@ -27,9 +27,15 @@ uint8_t voiceStatus[NUM_DRUM_VOICES];
 static uint8_t active_voices=0;	// which voices are currently playing a note
 //----------------------------------------------------------------
 // this fn assumes a valid voice is sent
+#ifdef LXR_FM1_BUILD
+volatile uint8_t voiceControl_fires[7];	// counts each voice's triggers, for the FM-1's key lights
+#endif
 void voiceControl_noteOn(uint8_t voice, uint8_t note, uint8_t vel)
 {
 	active_voices |= (1<<voice);
+#ifdef LXR_FM1_BUILD
+	if(voice < 7) voiceControl_fires[voice]++;
+#endif
 
 	if(voice < 3)
 		Drum_trigger(voice, vel, note);

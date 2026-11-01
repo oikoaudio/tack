@@ -53,6 +53,25 @@ void menu_repaintAll() {}
 void menu_setShownPattern(uint8_t patternNr) { (void)patternNr; }
 static SeqKitLoad kit_load;
 void seq_platform_set_kit_load(SeqKitLoad fn) { kit_load = fn; }
+static SeqLocks locks_fn;
+void seq_platform_set_locks(SeqLocks fn) { locks_fn = fn; }
+int seq_platform_locks(uint8_t track, uint8_t step) { return locks_fn ? locks_fn(track, step) : 0; }
+static SeqStepPlays plays_fn;
+static SeqLaneWrap wrap_fn;
+void seq_platform_set_recurrence(SeqStepPlays plays, SeqLaneWrap wrap)
+{
+    plays_fn = plays;
+    wrap_fn = wrap;
+}
+int seq_platform_step_plays(uint8_t track, uint8_t step, int8_t position)
+{
+    return plays_fn ? plays_fn(track, step, position) : 1;
+}
+void seq_platform_lane_wrap(uint8_t track)
+{
+    if (wrap_fn)
+        wrap_fn(track);
+}
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate)
 {
     (void)isMorph; (void)sendImmediate;

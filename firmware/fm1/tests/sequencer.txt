@@ -419,6 +419,8 @@ wait 40
 expect st_1 2
 tapkey 25
 wait 40
+tapkey 25
+wait 40
 expect stpage 0
 # the load test
 press GLO

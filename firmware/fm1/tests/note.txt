@@ -1,0 +1,322 @@
+# NOTE mode and a step's note: firmware/fm1/build/host/tack_host firmware/fm1/tests/note.txt OUTDIR
+# Key numbers run chromatically from 0, F3. Key 7 is C4, MIDI 60, the kit's own tuning
+wait 600
+expect stepmode 1
+expect notemode 0
+tap SEQ
+wait 40
+expect stepmode 0
+expect notemode 0
+tap SEQ
+wait 40
+expect stepmode 0
+expect notemode 1
+shot note_empty.png
+
+# without REC the keys only play
+tapkey 7
+wait 40
+expect fires0 1
+expect used0 0
+expect notestep 0
+
+# REC while stopped writes the step and moves on, black keys included
+tap REC
+wait 40
+tapkey 7
+wait 40
+expect step0 1
+expect note0 60
+expect notestep 1
+tapkey 9
+wait 40
+expect note1 62
+tapkey 6
+wait 40
+expect note2 59
+expect voice 0
+expect notestep 3
+expect st_3 110
+
+# OCT is the keys' range, and leaves the bar alone
+tap OCT+
+wait 40
+expect noteoct 1
+expect bar 0
+tapkey 7
+wait 40
+expect note3 72
+tap OCT-
+wait 40
+expect noteoct 0
+expect notestep 4
+
+# SEL goes past a step and leaves it, and held for something else it does not
+tap SEL
+wait 40
+expect notestep 5
+expect step4 0
+turn K1 -1
+wait 40
+expect notestep 4
+tapkey 7
+wait 40
+expect notestep 5
+expect note4 60
+turn K4 -1
+wait 40
+turn K1 -1
+wait 40
+turn K4 -1
+wait 40
+expect step4 0
+expect notestep 4
+
+# the knobs: K1 the step, K2 its note, K3 how hard the keys write, K4 a rest
+turn K1 -1
+wait 40
+expect notestep 3
+turn K2 2
+wait 40
+expect note3 74
+turn K4 -1
+wait 40
+expect step3 0
+turn K2 3
+wait 40
+expect note3 74
+turn K4 1
+wait 40
+expect step3 1
+expect note3 74
+turn K3 -10
+wait 40
+turn K1 -3
+wait 40
+expect notestep 0
+tapkey 7
+wait 40
+expect st_3 100
+expect notestep 1
+
+# the cursor walks the bars and wraps at the lane's end
+turn K1 16
+wait 40
+expect notestep 15
+tapkey 7
+wait 40
+expect step15 1
+expect notestep 0
+turn K1 16
+wait 40
+turn K3 10
+wait 40
+shot note_steps.png
+
+# REC off again: playing writes nothing
+tap REC
+wait 40
+tapkey 11
+wait 40
+expect notestep 15
+expect step15 1
+expect note15 60
+
+# every note-on gets its note-off: a key's on release
+out
+key 7 down
+wait 40
+expect_out USB 90 3C 6E
+expect_no_out USB 80 3C 00
+key 7 up
+wait 40
+expect_out USB 80 3C 00
+# overlapping keys: the voice sounds one note, so the new one ends the old, and the old key's release is not the new one's
+out
+key 7 down
+wait 40
+key 9 down
+wait 40
+expect_out USB 80 3C 00
+out
+key 7 up
+wait 40
+expect_no_out USB 80 3E 00
+key 9 up
+wait 40
+expect_out USB 80 3E 00
+# OCT moved while a key is down
+out
+key 7 down
+wait 40
+tap OCT+
+wait 40
+key 7 up
+wait 40
+expect_out USB 80 3C 00
+tap OCT-
+wait 40
+# MIDI in, by note-off and by a note-on of velocity 0
+out
+midi USB 91 40 64
+wait 40
+midi USB 81 40 00
+wait 40
+expect_out USB 80 40 00
+out
+midi USB 92 41 64
+wait 40
+midi USB 92 41 00
+wait 40
+expect_out USB 80 41 00
+
+# the notes reach the voice: the sequencer sends what it triggers
+out
+tap PLAY
+wait 1000
+expect_out USB 90 3E 6E
+expect_out USB 90 3B 6E
+expect_out USB 90 4A 6E
+expect_no_out USB 90 40 6E
+expect fires0 >12
+
+# REC while running records the key at the step it lands on, and the page shows the roll moving
+tap REC
+wait 40
+shot note_playing.png
+tapkey 19
+wait 60
+tap REC
+wait 40
+tap PLAY
+wait 60
+expect running 0
+
+# a stop just after a step's note-on still ends it
+out
+tap PLAY
+wait 6
+tap PLAY
+wait 60
+expect running 0
+expect_out USB 90 3C 64
+expect_out USB 80 3C 00
+
+# SEQ held: a black key is the voice, a white key the pattern, and NOTE stays
+press SEQ
+wait 20
+tapkey 3
+wait 40
+release SEQ
+wait 60
+expect voice 1
+expect notemode 1
+press SEQ
+wait 20
+tapkey 1
+wait 40
+release SEQ
+wait 60
+expect voice 0
+expect notemode 1
+press SEQ
+wait 20
+tapkey 2
+wait 40
+release SEQ
+wait 60
+expect pattern 1
+expect notemode 1
+press SEQ
+wait 20
+tapkey 0
+wait 40
+release SEQ
+wait 60
+expect pattern 0
+
+# ARP held still mutes
+press ARP
+wait 20
+tapkey 3
+wait 40
+release ARP
+wait 40
+expect muted1 1
+expect songpage 0
+press ARP
+wait 20
+tapkey 3
+wait 40
+release ARP
+wait 40
+expect muted1 0
+
+# a sound page from NOTE has its knobs and the keys still play the voice
+tap EDIT
+wait 40
+expect tall 1
+expect notemode 1
+tapkey 7
+wait 40
+tap HOME
+wait 40
+expect tall 0
+
+# back to STEP, and the second page of the STEP key: a held step's note
+tap SEQ
+wait 40
+expect stepmode 1
+expect notemode 0
+tapkey 25
+wait 40
+expect stpage 1
+tapkey 25
+wait 40
+expect stpage 2
+key 0 down
+wait 40
+turn K1 5
+wait 40
+shot step_note.png
+key 0 up
+wait 40
+expect note0 65
+expect step0 1
+tapkey 25
+wait 40
+expect stpage 0
+
+# more locks on a step than the sequencer has slots, across pages, kept through a save
+expect lockcount 0
+key 0 down
+wait 40
+turn K1 3
+wait 30
+turn K2 3
+wait 30
+turn K3 3
+wait 30
+tap ENV
+wait 40
+turn K1 3
+wait 30
+turn K3 3
+wait 30
+expect lockcount 5
+key 0 up
+wait 40
+tap HOME
+wait 40
+
+# a step's note is saved with the pattern
+tap SAVE
+wait 200
+reboot
+wait 800
+expect note0 65
+expect note1 62
+expect note2 59
+expect lockcount 5
+expect badpatterns 0
+expect dropped 0

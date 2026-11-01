@@ -8,6 +8,8 @@
 #define TACK_RATE 44100u       /* the FM-1's output; REAL_FS is set to match (fm1.toml) */
 #define TACK_PATTERNS 16u
 #define TACK_BARS 4u
+#define TACK_LOCKS_MAX 640u            /* in a pattern */
+#define TACK_STEP_LOCKS 8u             /* on a step: each costs two parameter updates when the step fires */
 
 void tack_init(void);
 /* n stereo frames, a multiple of TACK_BLOCK; lr are 24-bit samples */
@@ -16,12 +18,23 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12);
 /* From the main loop: applied in order before the next engine block, so a parameter set before a note is heard on it.
  * Each returns 0 when the queue is full. */
 int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel);
+int tack_post_note_off(uint8_t voice, uint8_t note);     /* MIDI out only: the voices are one-shots */
 int tack_post_param(uint16_t param, uint8_t value);
 int tack_post_step(uint8_t voice, uint8_t step, uint8_t on);
 int tack_post_run(uint8_t on);
 int tack_post_bpm(uint16_t bpm);
 int tack_post_shuffle(uint8_t amount);
-int tack_post_pattern(uint8_t pattern);
+int tack_post_pattern(uint8_t pattern);                  /* one pattern: a chain or song playing ends */
+/* A song is a list of patterns, a row a play of one, ended by TACK_SONG_STOP or TACK_SONG_LOOP. A chain is a list of
+ * the same kind that SEQ held builds and SAVE leaves out, so that it cannot overwrite the song. Row 63 is always an end */
+#define TACK_SONG_ROWS 64u
+#define TACK_SONG_STOP 64u
+#define TACK_SONG_LOOP 65u
+#define TACK_CHAIN_MAX 16u
+enum { TACK_SONG_OFF, TACK_SONG_CHAIN, TACK_SONG_ON };
+int tack_post_chain(uint8_t index, uint8_t pattern);     /* after a tack_post_pattern, index 0 of the chain */
+int tack_post_song_row(uint8_t row, uint8_t value);
+int tack_post_song_on(uint8_t on);
 int tack_post_mute(uint8_t voice, uint8_t muted);
 int tack_post_record(uint8_t on);
 int tack_post_ext_sync(uint8_t on);
@@ -45,6 +58,7 @@ void tack_set_kit_now(int kit);
 
 /* From the render's own context: MIDI in */
 void tack_note_now(uint8_t voice, uint8_t note, uint8_t vel);
+void tack_note_off_now(uint8_t voice, uint8_t note);     /* from the audio interrupt, as tack_note_now */
 void tack_midi_realtime(uint8_t status);
 
 /* The main loop's view. Bytes the interrupt writes, read whole: at worst a frame old */
@@ -53,6 +67,14 @@ int tack_step_on(uint8_t voice, uint8_t step);
 int tack_playhead(uint8_t voice);
 int tack_running(void);
 int tack_pattern(void);
+void tack_pattern_now(uint8_t pattern);                  /* from the audio interrupt, as tack_post_pattern */
+uint8_t tack_voice_fires(uint8_t voice);                 /* a count of its triggers, from any source */
+int tack_lane_used(uint8_t voice);                       /* it has steps in the active pattern */
+int tack_song_mode(void);
+int tack_song_pos(void);                                 /* the row playing, -1 before the first */
+uint8_t tack_song_get(uint32_t row);
+const uint8_t *tack_song(void);
+void tack_song_load(const uint8_t *rows, int on);        /* stopped; rows 0: an empty song */
 int tack_muted(uint8_t voice);
 uint16_t tack_bpm(void);
 uint8_t tack_shuffle(void);
@@ -60,7 +82,16 @@ int tack_recording(void);
 int tack_ext_sync(void);
 int tack_length(uint8_t voice);
 int tack_lock_get(uint8_t voice, uint8_t step, uint16_t param, uint8_t *value);   /* 1 = locked, *value its value */
-int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);    /* 1 = locked already, or a slot is free */
+enum { TACK_LOCK_ROOM, TACK_LOCK_STEP_FULL, TACK_LOCK_PATTERN_FULL };
+int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);
+int tack_lock_count(void);                               /* in the active pattern */
+/* Recurrence: a step plays on some of the slots of a cycle of its lane's passes through the pattern. Length 1 is every pass,
+ * and otherwise bit n of the mask is slot n + 1, at least one set */
+#define TACK_RECUR_MAX 8u
+int tack_recur_len(uint8_t voice, uint8_t step);
+uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
+int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 640 */
+int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
 int tack_locked(uint8_t voice, uint8_t step);
 uint32_t tack_dropped_events(void);
 
@@ -102,7 +133,9 @@ int tack_post_copy(uint8_t dst);
 int tack_post_clear(uint8_t voice);
 
 /* One hit's timing and level. A nudge is -7 to +7 eighths of a step */
-enum { TACK_ST_NUDGE, TACK_ST_FLAM, TACK_ST_PROB, TACK_ST_VEL, TACK_ST_SLOTS };
+enum { TACK_ST_NUDGE, TACK_ST_FLAM, TACK_ST_PROB, TACK_ST_VEL, TACK_ST_NOTE, TACK_ST_SLOTS };
+/* The step on, with this note: 60 is the kit's own tuning, and a voice plays others that many semitones from it */
+int tack_post_step_note(uint8_t voice, uint8_t step, uint8_t note, uint8_t vel);
 int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot);
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
 const char *tack_flam_name(int flam);
@@ -126,15 +159,13 @@ int tack_fx_send(uint32_t voice);
 int tack_post_fx_send(uint32_t voice, uint8_t on);
 
 /* Saving: main loop, with the sequencer stopped. The image is the active pattern, the LXR's backup buffer */
-const void *tack_pattern_image(void);
-uint32_t tack_pattern_image_size(void);
 const uint8_t *tack_kit(void);
 uint32_t tack_kit_size(void);
 /* Patterns changed since they were saved, a bit each. Any pattern's image, for the store: pat_image_size bytes */
 uint32_t tack_dirty(void);
 void tack_clean(uint8_t pattern);
-void tack_pattern_export(uint8_t pattern, void *image);
+uint32_t tack_pattern_export(uint8_t pattern, void *image);   /* its size */
 /* Loading: before the audio starts, or stopped */
-void tack_load_pattern(uint8_t pattern, const void *image);
+int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);   /* 0, or -1 and nothing changed */
 void tack_clear_pattern(uint8_t pattern);
 void tack_load_kit(const uint8_t *values);
