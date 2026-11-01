@@ -5,6 +5,7 @@
 uint8_t tack_heard(uint16_t param);
 int tack_morph_kept(uint16_t param);
 int tack_morph_differs(void);
+int tack_mutate_moved(int outside);
 
 int app_expect(const char *what, int *got)
 {
@@ -70,10 +71,20 @@ int app_expect(const char *what, int *got)
         *got = ui.fx_page;
     else if (!strcmp(what, "crush"))
         *got = tack_get_param(tack_rate_param());
+    else if (!strcmp(what, "savepage"))
+        *got = ui.song_page == PAGE_SAVE;
+    else if (!strcmp(what, "savewhat"))
+        *got = ui.ks_what;
+    else if (!strcmp(what, "savepat"))
+        *got = ui.ks_pat;
     else if (!strcmp(what, "kitpage"))
-        *got = ui.song_page == PAGE_KIT;
+        *got = ui.song_page == PAGE_SAVE && ui.ks_what != SAVE_PATTERN;
+    else if (!strcmp(what, "kitmorph"))
+        *got = ui.ks_morph;
     else if (!strcmp(what, "kitslot"))
         *got = ui.ks_slot;
+    else if (!strcmp(what, "kitempty"))       /* the kit page's name has no letters */
+        *got = save_name_empty();
     else if (!strncmp(what, "kitletter", 9))  /* kitletterN: the kit page's name */
         *got = ui.ks_name[atoi(what + 9)];
     else if (!strncmp(what, "kitname", 7))    /* kitnameN: the name of what is playing */
@@ -86,6 +97,12 @@ int app_expect(const char *what, int *got)
         *got = tack_morph_kit();
     else if (!strcmp(what, "morphdiff"))     /* the parameters heard that are not the kit's */
         *got = tack_morph_differs();
+    else if (!strcmp(what, "mutmoved"))
+        *got = tack_mutate_moved(0);
+    else if (!strcmp(what, "mutwide"))        /* a step moves many parameters; how many depends on when the turn came */
+        *got = tack_mutate_moved(0) >= 20;
+    else if (!strcmp(what, "mutoutside"))
+        *got = tack_mutate_moved(1);
     else if (!strncmp(what, "heard", 5))     /* heardN: parameter N as the voices have it */
         *got = tack_heard((uint16_t)atoi(what + 5));
     else if (!strncmp(what, "kept", 4))      /* keptN: morph leaves parameter N alone */
@@ -111,7 +128,13 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "patused"))
         *got = (int)tack_patterns_used();
     else if (!strcmp(what, "keyword"))       /* 1 ROLL, 2 COPY TO */
-        *got = !key_word() ? 0 : key_word()[0] == 'R' ? 1 : key_word()[0] == 'C' ? 2 : 3;
+        *got = !key_word() ? 0 : key_word()[0] == 'R' ? 1 : key_word()[0] == 'C' ? 2 : key_word()[0] == 'L' ? 4 : 3;
+    else if (!strncmp(what, "msgkit", 6))     /* the first letter of the kit the top bar is naming */
+        *got = ui.msg_until && !strncmp(ui.msg, "KIT ", 4) ? ui.msg[4] : 0;
+    else if (!strcmp(what, "msgext"))         /* the top bar is saying the clock is external */
+        *got = ui.msg_until && !strncmp(ui.msg, "EXT", 3);
+    else if (!strncmp(what, "sellight", 8))   /* sellightN: white key N with SEL held */
+        *got = sel_light((uint32_t)atoi(what + 8));
     else if (!strncmp(what, "st", 2) && what[2] == '_')   /* st_N: step 0's slot N on the selected voice */
         *got = tack_step_get((uint8_t)ui.voice, 0, (uint32_t)atoi(what + 3));
     else if (!strcmp(what, "lanenudge"))

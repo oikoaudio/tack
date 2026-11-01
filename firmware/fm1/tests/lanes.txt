@@ -372,7 +372,11 @@ wait 60
 # saved with the pattern, through a reboot
 tap HOME
 wait 40
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 300
 reboot
 wait 600

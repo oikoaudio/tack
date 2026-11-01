@@ -122,4 +122,45 @@ wait 40
 expect fxpage 0
 expect voiceview 0
 expect page 0
+
+# SEL held a moment says how long the lane is, in the top bar and on the keys. A tap says nothing, as it walks the steps
+press SEL
+wait 100
+expect keyword 0
+wait 200
+expect keyword 4
+tapkey 19
+wait 40
+expect len0 12
+expect sellight0 1
+expect sellight10 1
+expect sellight11 2
+expect sellight12 0
+expect sellight15 0
+shot sel_length.png
+release SEL
+wait 40
+expect keyword 0
+tap SEL
+wait 40
+expect keyword 0
+
+# a lane past this bar has its end on another, so every key here is in it
+press SEL
+wait 300
+tap OCT+
+wait 40
+expect len0 28
+expect bar 1
+expect sellight11 2
+release SEL
+wait 40
+tap OCT-
+wait 40
+press SEL
+wait 300
+expect bar 0
+expect sellight15 1
+release SEL
+wait 40
 expect dropped 0

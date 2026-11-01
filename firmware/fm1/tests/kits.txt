@@ -73,7 +73,11 @@ release SEL
 wait 40
 tap HOME
 wait 40
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 press SEL
 wait 20

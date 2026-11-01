@@ -317,7 +317,11 @@ tap HOME
 wait 40
 
 # a step's note is saved with the pattern
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 reboot
 wait 800

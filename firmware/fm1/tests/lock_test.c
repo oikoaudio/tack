@@ -491,6 +491,25 @@ static void morph_tests(void)
     tack_post_morph_kit(0);
     run(40);
     check("back to the kit's filter", fabsf(probe_filter(0) - a) < 1e-6f, probe_filter(0), a);
+
+    /* across the dial: the engine's own filter value at each amount, not what the kit says */
+    tack_post_morph_kit(2);
+    run(4);
+    {
+        static const int AT[5] = {0, 32, 64, 96, 127};
+        float f[5];
+        for (int i = 0; i < 5; i++) {
+            tack_post_morph((uint8_t)AT[i]);
+            run(40);
+            f[i] = probe_filter(0);
+            printf("  morph %3d filter %.4f\n", AT[i], f[i]);
+        }
+        check("the filter sweeps across the dial", f[0] > f[1] && f[1] > f[2] && f[2] > f[3] && f[3] > f[4], f[1], f[3]);
+    }
+    tack_post_morph(0);
+    tack_post_morph_kit(0);
+    tack_post_param((uint16_t)fp, 120);
+    run(40);
 }
 
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);

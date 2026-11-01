@@ -42,7 +42,8 @@ static int seq_detail(void) { return voice_page() || note_view(); }
 #define PAGE_LANE 2u
 #define PAGE_EUCLID 3u
 #define PAGE_VEL 4u
-#define PAGE_KIT 5u                      /* SEL held with SAVE: where and under what name the kit goes in the bank */
+#define PAGE_SAVE 5u                     /* SAVE: what is saved and where, K4 and K1 or SELECT, and a second press writes it */
+enum { SAVE_PATTERN, SAVE_BLEND, SAVE_KIT };
 static int vel_page(void) { return ui.song_page == PAGE_VEL; }
 static int arp_page(void) { return ui.song_page >= PAGE_LANE && ui.song_page <= PAGE_VEL; }
 
@@ -51,11 +52,9 @@ static int keys_notes(uint32_t btn)             /* the keys play the voice: not 
     return ui.note_mode && !ui.song_page && !ui.fx_page && !ui.set_page && !(btn >> B_SEQ & 1u) && !(btn >> B_ARP & 1u);
 }
 
-/* the name of the kit morph goes to, without the spaces that pad it */
-static void morph_name(char *t)
+/* a bank kit's name, without the spaces that pad it */
+static void kit_name_of(const uint8_t *k, char *t)
 {
-    const int kit = tack_morph_kit();
-    const uint8_t *k = kit ? kit_slot((uint32_t)kit - 1u) : 0;
     uint32_t n = 8u;
     memcpy(t, k ? (const char *)k : "NONE    ", 8u);
     while (n && (t[n - 1u] == ' ' || !t[n - 1u]))
@@ -63,13 +62,45 @@ static void morph_name(char *t)
     t[n] = 0;
 }
 
+/* the name of the kit morph goes to */
+static void morph_name(char *t)
+{
+    const int kit = tack_morph_kit();
+    kit_name_of(kit ? kit_slot((uint32_t)kit - 1u) : 0, t);
+}
+
+static int seq_in_view(void);
+
+/* the overview: its header has room for what other pages say in a message */
+static int on_home(void) { return seq_in_view() && !ui.voice_view; }
+
 static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.keys >> BK[KEY_MORPH] & 1u); }
+
+/* SEL held a moment where it can set the lane's end: what the end is now. Not at once, or it would flash on each tap that walks
+ * the steps */
+#define SEL_SHOW_MS 250u
+
+static int sel_length(void)
+{
+    return (ui.btn >> B_SEL & 1u) && ui.held < 0 && (seq_in_view() || arp_page()) && plat_ms() - ui.sel_at >= SEL_SHOW_MS;
+}
+
+/* a white key while it shows: 0 past the lane's end, 1 in the lane, 2 the last step */
+static int sel_light(uint32_t k)
+{
+    const int s = step_of(k), len = tack_length((uint8_t)ui.voice);
+    return s + 1 == len ? 2 : s < len;
+}
 
 static const char *key_word(void)
 {
-    static char morph[20] = "MORPH TO ";
+    static char morph[20] = "MORPH TO ", length[12] = "LENGTH ";
     if (ui.roll_on)
         return "ROLL";
+    if (sel_length()) {
+        int_text(tack_length((uint8_t)ui.voice), length + 7);
+        return length;
+    }
     if (morph_held()) {
         morph_name(morph + 9);
         return morph;

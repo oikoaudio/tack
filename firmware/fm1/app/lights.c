@@ -60,6 +60,20 @@ static void lights(void)
             for (k = 0; k < NKEYS; k++)
                 if ((int)key_note(k) == tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE))
                     keys |= 1u << k;
+    } else if (ui.song_page == PAGE_SAVE && ui.ks_what == SAVE_PATTERN) {   /* the slots, as SEQ held has them */
+        for (k = 0; k < 16u; k++) {
+            if (k == ui.ks_pat)
+                keys |= 1u << WK[k];
+            else
+                dim |= 1u << WK[k];
+        }
+    } else if (sel_length()) {                   /* the lane at mid, so it is not taken for its steps, and its last step lit */
+        for (k = 0; k < 16u; k++) {
+            if (sel_light(k) == 2)
+                keys |= 1u << WK[k];
+            else if (sel_light(k))
+                mid |= 1u << WK[k];
+        }
     } else if ((ui.btn >> B_SEQ & 1u) || (ui.keys >> BK[KEY_COPY] & 1u) || ui.song_page == PAGE_SONG) {   /* the keys are the patterns */
         for (k = 0; k < 16u; k++) {
             if ((int)k == tack_pattern())
@@ -93,7 +107,7 @@ static void lights(void)
         btn |= 1u << B_GLO;
     if (arp_page() || ui.song_page == PAGE_SONG)
         btn |= 1u << (arp_page() ? B_ARP : B_SEQ);
-    if (ui.song_page == PAGE_KIT)
+    if (ui.song_page >= PAGE_SAVE)
         btn |= 1u << B_SAVE;
     if (tack_running())
         btn |= 1u << B_PLAY | LED_PLAY_GREEN;

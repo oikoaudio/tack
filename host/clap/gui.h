@@ -55,7 +55,16 @@ typedef struct
 	 * where the voice plays (Direct or FX); false if the file couldn't be read
 	 */
 	bool (*loadVoice)(void* ctx, const char* path, int fromVoice, int toVoice);
+	/**
+	 * moves the kit steps along a mutate walk, back if negative, and returns the step reached. voice 0-5, -1 the whole kit, or
+	 * TACK_MUTATE_AGAIN whichever the walk has been on. A voice plugin only has its own voice
+	 */
+	int (*mutate)(void* ctx, int voice, int steps);
+	/** how far the kit is along that walk; 0 once it has been edited or another kit loaded */
+	int (*mutateStep)(void* ctx);
 } TackGuiHost;
+
+#define TACK_MUTATE_AGAIN (-2)
 
 /** Plugin parameter id of a voice plugin's chromatic switch, shown as a keyboard in the editor. */
 #define TACK_GUI_CHROMATIC_ID 1001

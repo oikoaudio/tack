@@ -23,7 +23,7 @@ plugins are in [host/](../../host), and share the engine with this firmware.
 3. Press white keys to set steps on that voice, then press PLAY.
 4. Turn K1 to K4 for its pitch, filter, decay and volume.
 5. Hold a step and turn a dial to lock that value to the step.
-6. Stop, then press SAVE.
+6. Stop, press SAVE to see what it will write, and press it again to write it.
 
 [The manual](https://www.oikoaudio.com/manuals/tack-fm1/) covers every key and page.
 

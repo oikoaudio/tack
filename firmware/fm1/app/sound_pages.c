@@ -64,6 +64,7 @@ static void pg_draw_picture(int page, int kind, uint32_t first, uint32_t n, uint
     } else if (kind == PIC_LFO) {
         v[0] = (float)graph_value(g, 1, 0) / 127.0f;
         v[1] = graph_value(g, 3, 0);
+        v[2] = lfo_cycles();
         wd_curve(x, 0, w, lfo_picture, v, c);
     } else {
         v[0] = (float)tack_get_param(page_slot(page, 0)->par) / 127.0f;
@@ -91,6 +92,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     RKEY(on);
     RKEY(voice);
     RKEY(ui.held >= 0);
+    RKEY(tack_lfo_sync(voice));                /* the picture on the row above it */
     for (uint32_t i = 0; page != NO_PAGE && i < TACK_NP; i++) {
         RKEY(pulse_idle(page, i));
         const TackSlot *sl = page_slot(page, i);
@@ -141,6 +143,8 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     cv_blit(0, PG_Y + r * PG_RH);
 }
 
+#define PG_TAB_GAP 3
+
 static void pg_top(void)
 {
     static const char *const RETRIG_NAME[6] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "HI-HAT"};
@@ -174,15 +178,15 @@ static void pg_top(void)
         for (int k = 0; k < len; k++)
             cv_rect(240 - (8 - k) * 16, 4, 12, 11, mask >> k & 1 ? C_HI : C_DIM);
     } else {
-        if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG || ui.song_page == PAGE_KIT)
-            cv_text(5, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_KIT ? "SAVE KIT" : "SONG", C_HI);
+        if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG || ui.song_page == PAGE_SAVE)
+            cv_text(5, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_SAVE ? "SAVE" : "SONG", C_HI);
         else
             cv_text(5, 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
         t[0] = 'P';
         int_text(tack_pattern() + 1, t + 1);
         cv_text(92, 2, &FONT_B, t, tack_running() ? C_HI : C_WHITE);
         if (arp_page())
-            cv_text(122, 2, &FONT_B, vel_page() ? "VEL" : ui.song_page == PAGE_EUCLID ? "EUCL" : "LANE", C_HI);
+            cv_text(122, 2, &FONT_B, vel_page() ? "VEL SHAPE" : ui.song_page == PAGE_EUCLID ? "EUCLID" : "LANE", C_HI);
         if (seq_detail()) {
             if (tack_song_mode())                  /* what picks the pattern: the steps show whichever is playing */
                 cv_text(9 + text_w(&FONT_B, VOICE_NAME[ui.voice]), 5, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
@@ -190,21 +194,21 @@ static void pg_top(void)
             t[0] = 'B';
             int_text(ui.bar + 1, t + 1);
             cv_text(162, 5, &FONT_XS, t, C_GRAY);
-            if (!tack_ext_sync()) {                /* EXT has this place */
-                t[0] = 'S';
-                int_text((int32_t)note_cursor() + 1, t + 1);
-                cv_text(182, 5, &FONT_XS, t, C_WHITE);
-            }
-        }
-        if (sound_page() && screens() > 1) {
-            int_text(screen_now() + 1, t);
-            cv_rect(140, 3, 8, 13, screen_now() == 0 ? C_HI : C_DIM);
-            cv_rect(150, 3, 8, 13, screen_now() == 1 ? C_HI : C_DIM);
+            t[0] = 'S';
+            int_text((int32_t)note_cursor() + 1, t + 1);
+            cv_text(182, 5, &FONT_XS, t, C_WHITE);
         }
         int_text(tack_bpm(), t);
         cv_text(235 - text_w(&FONT_B, t), 2, &FONT_B, t, C_HI);
-        if (tack_ext_sync())                       /* the tempo is the clock's */
-            cv_text(235 - text_w(&FONT_B, t) - 6 - text_w(&FONT_XS, "EXT"), 5, &FONT_XS, "EXT", C_GRAY);
+    }
+    {                                                /* a page with more than one mode: the line under the bar in as many parts */
+        const int n = arp_page() ? 3 : seq_detail() || (sound_page() && screens() > 1) ? 2 : 0;
+        const int at = arp_page() ? (int)ui.song_page - PAGE_LANE : seq_detail() ? ui.note_mode != 0 : screen_now();
+        if (n && !(ui.touched_until && ui.touched)) {
+            const int32_t w = (240 - (n - 1) * PG_TAB_GAP) / n;
+            for (int i = 0; i < n; i++)
+                cv_rect(i * (w + PG_TAB_GAP), 18, w, 2, i == at ? C_HI : C_GRAY);
+        }
     }
     cv_blit(0, 0);
 }

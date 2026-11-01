@@ -79,6 +79,8 @@ add_library(lxr_engine STATIC
     # modTargets: the list of valid modulation targets, used by the kit loader
     ${LXR_CORE}/Src/menu/Cc2Text.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../engine/lxr_core.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../engine/kit_name.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../engine/kit_mutate.c
     src/lxr_host.c
     src/lxr_files.c
     src/lxr_params.c
@@ -111,6 +113,9 @@ target_link_libraries(timing_test PRIVATE lxr_engine)
 
 add_executable(list_params tools/list_params.c)
 target_link_libraries(list_params PRIVATE lxr_engine)
+
+add_executable(mutate_test tools/mutate_test.c)
+target_link_libraries(mutate_test PRIVATE lxr_engine)
 
 add_executable(make_kit tools/make_kit.c)
 target_link_libraries(make_kit PRIVATE lxr_engine)

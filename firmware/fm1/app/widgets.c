@@ -222,9 +222,9 @@ static float osc_picture(float p, const float *v)
     return 0.5f + 0.5f * osc_shape((uint32_t)v[0], q - (float)(int32_t)q, v[1], (int32_t)(p * 200.0f));
 }
 
-/* two cycles of the LFO, as far as its amount. v: amount, wave */
+/* the LFO, as far as its amount. v: amount, wave, cycles */
 static float lfo_picture(float p, const float *v)
 {
-    const float q = p * 2.0f;
+    const float q = p * v[2];
     return 0.5f + 0.5f * v[0] * lfo_shape((uint32_t)v[1], q - (float)(int32_t)q);
 }

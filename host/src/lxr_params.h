@@ -66,6 +66,12 @@ uint16_t lxr_params_default(uint16_t param);
 /** Firmware parameter number of the FX type, whose value (0 off, 1-4) selects what the FX parameters mean. */
 uint16_t lxr_params_fxTypeParam(void);
 
+/**
+ * What kit_walk() (kit_mutate.h) may move: top[param] its highest value, 0 if it stays, and voice[param] its voice. The voices' sound
+ * parameters. The FX stay: their parameters mean something else for each FX type, and a delay's feedback can run away.
+ */
+void lxr_params_mutateTable(uint8_t* top, uint8_t* voice);
+
 /** Whether a parameter is a modulation destination (velocity or LFO). */
 bool lxr_params_isTarget(uint16_t param);
 

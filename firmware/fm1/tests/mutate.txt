@@ -1,0 +1,77 @@
+# Mutate: firmware/fm1/build/host/tack_host firmware/fm1/tests/mutate.txt OUTDIR
+# verify.sh writes kits.bin here: KITONE with every parameter 40 and KITTWO with every parameter 50, and the bank's second kit is the one PRESET lands on
+wait 600
+data kits.bin 770048
+turn PRESET 1
+wait 60
+expect kit 1
+expect kitv8 50
+expect kitv215 0
+
+# SEL and PRESET move the whole kit, and what the voices hear follows a few parameters a block
+press SEL
+wait 30
+turn PRESET 1
+wait 60
+release SEL
+wait 60
+expect kit 1
+expect mutoutside 0
+expect mutwide 1
+expect morphdiff 0
+
+# the level, the pan and the routing stay
+expect kitv88 50
+expect kitv94 50
+expect kitv215 0
+shot mutate_kit.png
+
+# forward again, and back the same way: the start is the kit it began as, exactly
+press SEL
+wait 30
+turn PRESET 4
+wait 60
+turn PRESET -4
+wait 60
+expect mutwide 1
+turn PRESET -1
+wait 60
+expect mutmoved 0
+expect morphdiff 0
+turn PRESET -3
+wait 60
+expect mutmoved 0
+release SEL
+wait 60
+expect kit 1
+
+# SEL on its own still does nothing to the kit, and PRESET still walks the bank
+turn PRESET -1
+wait 60
+expect kit 0
+turn PRESET 1
+wait 60
+expect kit 1
+
+# SEL and ALGORITHM move the selected voice only, and leave morph alone
+press SEL
+wait 30
+turn ALGO 2
+wait 60
+release SEL
+wait 60
+expect morph 0
+expect mutoutside 0
+expect morphdiff 0
+
+# an edit starts a new walk from the edit: back stays on it
+turn K1 3
+wait 60
+press SEL
+wait 30
+turn ALGO -1
+wait 60
+release SEL
+wait 60
+expect mutmoved 0
+expect dropped 0

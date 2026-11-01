@@ -22,9 +22,11 @@
 #include <stdlib.h>
 #include <stdatomic.h>
 #include <math.h>
+#include <time.h>
 #include <clap/clap.h>
 #include "lxr_host.h"
 #include "lxr_params.h"
+#include "kit_mutate.h"
 #include "presets.h"
 #include "engine.h"
 #include "gui.h"
@@ -123,6 +125,8 @@ typedef struct
 	char kitPath[KIT_PATH_SIZE];	// the kit file it was loaded from or saved to; empty for the init kit or unknown
 	int kitVoice;	// voice plugins: the voice of that kit file it plays; -1 for the whole kit
 	bool kitEdited;	// in the editor, since it was loaded or saved
+	KitWalk walk;	// the editor's Mutate
+	bool walkFromEdited;	// back at the walk's start, the kit is as edited as it was then
 
 	// voice plugins: notes set the pitch (C3 the tuned pitch), or every note plays the tuned pitch. Read by the
 	// audio thread; a lost race only affects the note being played as it changes
@@ -905,6 +909,31 @@ static bool guiLoadVoice(void* ctx, const char* path, int fromVoice, int toVoice
 	return true;
 }
 
+static int guiMutate(void* ctx, int voice, int steps)
+{
+	Tack* k = ctx;
+	static uint8_t top[LXR_HOST_NUM_PARAMS], voices[LXR_HOST_NUM_PARAMS];
+	static uint32_t rolls;
+	uint8_t kit[LXR_HOST_NUM_PARAMS];
+	if(!top[PAR_FILTER_FREQ_1]) lxr_params_mutateTable(top, voices);
+	if(k->type->voice >= 0) voice = k->type->voice;
+	memcpy(kit, k->values, sizeof kit);
+	if(!kit_walk_step(&k->walk, kit)) k->walkFromEdited = k->kitEdited;
+	const int step = kit_walk(&k->walk, kit, top, voices, voice == TACK_MUTATE_AGAIN ? k->walk.scope : voice < 0 ? KIT_MUTATE_ALL : (uint8_t)voice,
+		steps, (uint32_t)time(NULL) * 2654435761u + ++rolls);
+	setKit(k, kit);
+	// still the same kit, edited: its name and file stay
+	k->kitEdited = step || k->walkFromEdited;
+	if(k->hostState) k->hostState->mark_dirty(k->host);
+	return step;
+}
+
+static int guiMutateStep(void* ctx)
+{
+	Tack* k = ctx;
+	return kit_walk_step(&k->walk, k->values);
+}
+
 static int guiSaveKit(void* ctx, const char* name, bool overwrite)
 {
 	Tack* k = ctx;
@@ -961,7 +990,7 @@ static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloat
 	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || (!TACK_GUI_OWN_TIMER && !k->hostTimer)) return false;
 	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiAudition, guiKitName, guiSaveKit,
 		guiKitPath, guiKitEdited, guiLoadKit, k->type->voice, guiHasParam, guiOffersValue, guiValueText, guiKitVoice,
-		guiModulation, guiLoadVoice };
+		guiModulation, guiLoadVoice, guiMutate, guiMutateStep };
 	k->gui = tack_guiCreate(&host);
 	if(!k->gui) return false;
 	if(!TACK_GUI_OWN_TIMER && !k->hostTimer->register_timer(k->host, GUI_TIMER_MS, &k->guiTimer)) {

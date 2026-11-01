@@ -44,7 +44,18 @@ static int save_one(uint32_t i)
 static void save_frame(void)
 {
     uint32_t i;
-    char t[4];
+    char t[16];
+    if (ui.save_as) {                            /* the copy and the change are in, or the sequencer took over */
+        const uint32_t to = ui.save_as - 1u;
+        if (tack_running()) {
+            ui.save_as = 0;
+            app_say("SAVE", "STOPPED");
+        } else if ((uint32_t)tack_pattern() == to && (tack_dirty() >> to & 1u)) {
+            ui.save_as = 0;
+            ui.saved = 0;
+            ui.save_todo = save_settings() ? 0u : 1u << to;
+        }
+    }
     if (!ui.save_todo)
         return;
     if (tack_running()) {              /* started from MIDI: what is left stays changed, for the next SAVE */
@@ -65,7 +76,16 @@ static void save_frame(void)
     if (!ui.save_todo) {
         const uint32_t g = plat_tick_gap();
         ui.save_gap = g > ui.save_gap ? g : ui.save_gap;
-        int_text(ui.saved, t);
+        if (ui.saved == 1u) {
+            memcpy(t, "PATTERN ", 8u);
+            int_text((int32_t)i + 1, t + 8);
+        } else {
+            uint32_t n = 0;
+            int_text(ui.saved, t);
+            while (t[n])
+                n++;
+            memcpy(t + n, " PATTERNS", 10u);
+        }
         app_say("SAVED", t);
     }
 }

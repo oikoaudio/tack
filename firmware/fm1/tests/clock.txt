@@ -12,6 +12,14 @@ tap GLO
 wait 40
 turn K3 1
 wait 40
+# PLAY does nothing while the clock runs things, and says so, then the message goes
+expect msgext 0
+tap PLAY
+wait 40
+expect msgext 1
+expect running 0
+wait 1100
+expect msgext 0
 expect ext 1
 tap GLO
 wait 40

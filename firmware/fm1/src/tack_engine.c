@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "tack_engine.h"
 #include "lxr_core.h"
+#include "kit_mutate.h"
 #include "Parameters.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/clockSync.h"
@@ -94,8 +95,9 @@ uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e)
 {
     int32_t top = s->max, v = value;
     if (!s->en) {
+        const int32_t low = s->par >= PAR_PWM_1 && s->par <= PAR_PWM_6;   /* the engine plays 0 as 1: adjustValue */
         v += e;
-        return (uint8_t)(v < 0 ? 0 : v > top ? top : v);
+        return (uint8_t)(v < low ? low : v > top ? top : v);
     }
     const TackEnum *en = &TACK_ENUM[s->en - 1];
     const int32_t from = enum_pos(en, value);
@@ -203,7 +205,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -1019,13 +1021,20 @@ int tack_bits(void) { return 127 - bits_of[seq_activePattern]; }
 
 /* Morph blends the kit towards a second kit from the bank, as the LXR's does. The kit itself stays as it is, in morph_a and the
  * main loop's shadow, so a save writes it and the dials show it. What the voices hear is written a few parameters a block, and only
- * those that changed. Only what a page shows is blended: a wave, a type and the like changes at half way, and modulation targets,
- * routing and anything no page has stay the kit's. A lock's end hands back what was last written, so the blended value */
+ * those that changed. As on the LXR a value between the two is a value, so a wave or a filter type steps through those between
+ * them. An FX's type and modes, and which voice restarts an LFO, have nothing between them, and change at half way. Modulation
+ * targets, routing and anything no page has stay the kit's. A lock's end hands back what was last written, so the blended value */
 enum { MORPH_KEEP, MORPH_BLEND, MORPH_SWITCH };
 #define MORPH_PER_BLOCK 16u
 static uint8_t morph_kind[LXR_HOST_NUM_PARAMS], morph_b[LXR_HOST_NUM_PARAMS], morph_sent[LXR_HOST_NUM_PARAMS];
 static uint8_t morph_kit_in, morph_kit_ok, morph_now, morph_dirty;
 static uint32_t morph_at, morph_clean;
+
+/* Mutate walks the kit, on the main loop as a step back replays the whole way. What it arrives at goes to the audio side as one event,
+ * and from there out as morph's writes do, a few a block */
+static KitWalk mutate_walk;
+static uint8_t mutate_top[LXR_HOST_NUM_PARAMS], mutate_voice[LXR_HOST_NUM_PARAMS], mutate_next[LXR_HOST_NUM_PARAMS];
+static volatile uint8_t mutate_waiting;          /* the audio side has mutate_next still to take */
 
 static void morph_kinds(void)
 {
@@ -1034,8 +1043,11 @@ static void morph_kinds(void)
             for (int sub = 0; sub < tack_pages(v, g); sub++)
                 for (uint32_t n = 0; n < 4u; n++) {
                     const TackSlot *s = tack_slot(v, g, (uint32_t)sub, n);
-                    if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6))
-                        morph_kind[s->par] = s->en ? MORPH_SWITCH : MORPH_BLEND;
+                    if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6)) {
+                        morph_kind[s->par] = s->par >= PAR_RETRIGGER_LFO1 && s->par <= PAR_RETRIGGER_LFO6 ? MORPH_SWITCH : MORPH_BLEND;
+                        mutate_top[s->par] = s->max;
+                        mutate_voice[s->par] = (uint8_t)(v < 5u ? v : 5u);   /* the hats share their oscillators */
+                    }
                 }
     for (uint32_t k = 0; k < sizeof FX_KIND / sizeof FX_KIND[0]; k++)
         for (uint32_t n = 0; n < 5u; n++)
@@ -1114,6 +1126,33 @@ static void morph_after_kit(void)
     morph_write(LXR_HOST_NUM_PARAMS);
 }
 
+/* what the voices hear, as a kit: stopped, so that nothing moves as it is read */
+void tack_kit_blended(uint8_t *values)
+{
+    for (uint32_t p = 0; p < LXR_HOST_NUM_PARAMS; p++)
+        values[p] = morph_value(p, morph_a[p]);
+}
+
+uint8_t tack_lfo_sync(uint32_t voice) { return shadow[PAR_SYNC_LFO1 + (voice < 5u ? voice : 5u)]; }
+
+int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed)
+{
+    int step;
+    if (mutate_waiting)
+        return mutate_walk.step;
+    memcpy(mutate_next, shadow, sizeof mutate_next);
+    step = kit_walk(&mutate_walk, mutate_next, mutate_top, mutate_voice, voice < TACK_VOICES ? (uint8_t)(voice < 5u ? voice : 5u) : KIT_MUTATE_ALL, steps, seed);
+    mutate_waiting = 1;
+    if (!post(EV_MUTATE, 0, 0, 0)) {
+        mutate_waiting = 0;
+        return step;
+    }
+    for (uint32_t p = 0; p < LXR_HOST_NUM_PARAMS; p++)
+        if (mutate_top[p])
+            shadow[p] = mutate_next[p];
+    return step;
+}
+
 int tack_morph(void) { return morph_of[seq_activePattern]; }
 int tack_morph_kit(void) { return morph_kit_of[seq_activePattern]; }
 int tack_post_morph(uint8_t amount) { return post(EV_MORPH, amount, 0, 0); }
@@ -1126,6 +1165,14 @@ int tack_post_morph_kit(uint8_t kit) { return post(EV_MORPH_KIT, kit, 0, 0); }
 #ifdef PLAT_HOST
 uint8_t tack_heard(uint16_t param) { return lxr_host_getParam(param); }
 int tack_morph_kept(uint16_t param) { return morph_kind[param] == MORPH_KEEP; }
+/* parameters away from the walk's start, and of those, how many are outside its voice */
+int tack_mutate_moved(int outside)
+{
+    int n = 0;
+    for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
+        n += shadow[i] != mutate_walk.from[i] && (!outside || (mutate_walk.scope != KIT_MUTATE_ALL && mutate_voice[i] != mutate_walk.scope));
+    return n;
+}
 int tack_morph_differs(void)
 {
     int n = 0;
@@ -1377,6 +1424,14 @@ static void drain(void)
             }
             break;
         }
+        case EV_MUTATE:
+            for (uint32_t p = 0; p < LXR_HOST_NUM_PARAMS; p++)
+                if (mutate_top[p])
+                    morph_a[p] = mutate_next[p];
+            mutate_waiting = 0;
+            dirty |= 1u << seq_activePattern;
+            morph_touch();
+            break;
         case EV_STEP:
             set_step(e.a, e.b, e.c);
             break;

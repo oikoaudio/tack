@@ -57,7 +57,11 @@ expect param0 35
 expect kit 0
 
 # through a reboot, which here stays on the pattern it was on
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 300
 reboot
 wait 600
@@ -93,17 +97,127 @@ wait 30
 release SEQ
 wait 60
 
-# SEL with SAVE opens the kit page, on the first empty slot, with the kit's name
-press SEL
-wait 20
+# SAVE shows what it would write, and a second press writes it. HOME leaves with nothing written
+tapkey 14
+wait 60
 tap SAVE
 wait 40
-release SEL
+expect savepage 1
+expect dirty >0
+shot save_page.png
+tap HOME
+wait 40
+expect savepage 0
+expect dirty >0
+tap SAVE
+wait 40
+tap SAVE
+wait 300
+expect savepage 0
+expect dirty 0
+
+# SAVE is one page. The encoders are the page's: no tempo, no morph, no kit. SELECT and K1 pick the slot, as the white keys do for a
+# pattern, K4 what is saved, SEL alone does nothing, and a page button goes to its page with nothing written
+tap EDIT
+wait 40
+tap SAVE
+wait 40
+expect savepage 1
+expect savewhat 0
+expect savepat 0
+turn ALGO 3
+wait 40
+expect morph 0
+turn PRESET 1
+wait 60
+expect kit 1
+turn SELECT 3
+wait 40
+expect popup 0
+expect savepat 3
+turn K1 1
+wait 40
+expect savepat 4
+tapkey 2
+wait 40
+expect savepat 1
+expect step1 0
+tap SEL
+wait 40
+expect savepage 1
+turn K4 1
+wait 40
+expect savewhat 2
+expect kitpage 1
+turn SELECT 1
+wait 40
+expect popup 0
+expect kitslot 2
+expect kitpage 1
+turn K4 -1
+wait 40
+expect savewhat 0
+tap ENV
+wait 40
+expect savepage 0
+expect page 20
+tap SAVE
+wait 40
+tap HOME
+wait 40
+expect savepage 0
+expect page 0
+
+# on another slot SAVE puts the pattern there and carries on there, its sound with it, and writes that one. It survives a reboot
+tap SAVE
+wait 40
+tapkey 7
+wait 40
+expect savepat 4
+shot save_as.png
+tap SAVE
+wait 300
+expect savepage 0
+expect pattern 4
+expect step0 1
+expect param0 57
+expect saved 1
+reboot
+wait 600
+expect pattern 4
+expect step0 1
+expect param0 57
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+
+# K4 goes to a kit, on the kit's own slot as it came from the bank, with the kit's name
+tap SAVE
+wait 40
+turn K4 1
 wait 40
 expect kitpage 1
-expect kitslot 2
+expect kitslot 1
 expect kitletter0 75
+expect kitletter3 84
 shot kit_page.png
+
+# the name is the one a save would replace, and an empty slot has the kit's
+turn K1 -1
+wait 40
+expect kitslot 0
+expect kitletter3 79
+turn K1 1
+wait 40
+expect kitletter3 84
+turn K1 1
+wait 40
+expect kitslot 2
+expect kitletter3 84
 
 # the slot stops at the first empty one, and the white keys change no step
 turn K1 5
@@ -113,19 +227,52 @@ tapkey 4
 wait 40
 expect step2 0
 
-# a letter at a time: K2 the place, K3 the letter
+# a letter at a time: K2 the place, K3 the letter, round the list either way
 turn K3 1
 wait 40
 expect kitletter0 76
 turn K2 7
 wait 40
-turn K3 -50
+expect kitletter7 32
+turn K3 -1
+wait 40
+expect kitletter7 95
+turn K3 1
 wait 40
 expect kitletter7 32
 turn K3 26
 wait 40
 expect kitletter7 90
 shot kit_name.png
+
+# what was typed stays while the slot is picked
+turn K1 -1
+wait 40
+expect kitslot 1
+expect kitletter0 76
+expect kitletter7 90
+turn K1 1
+wait 40
+
+# OCT- clears, and with no name there is no save
+tap OCT-
+wait 40
+expect kitempty 1
+shot kit_empty.png
+tap SAVE
+wait 60
+expect kitpage 1
+expect bankname2 0
+turn K3 1
+wait 40
+expect kitletter0 65
+expect kitempty 0
+
+# OCT+ makes one up, from the first letter, and the slot leaves it alone too
+tap OCT+
+wait 40
+expect kitempty 0
+shot kit_made_up.png
 
 # HOME leaves and writes nothing
 tap HOME
@@ -134,12 +281,13 @@ expect kitpage 0
 expect bankname2 0
 
 # again, and SAVE writes it: the name, and this sound with its edit
-press SEL
-wait 20
 tap SAVE
 wait 40
-release SEL
+turn K4 1
 wait 40
+turn K1 1
+wait 40
+expect kitslot 2
 turn K3 1
 wait 40
 tap SAVE
@@ -162,11 +310,9 @@ expect param0 57
 expect kitname0 76
 
 # a slot in use says so and is replaced, and its neighbours in the sector stay
-press SEL
-wait 20
 tap SAVE
 wait 40
-release SEL
+turn K4 1
 wait 40
 turn K1 -3
 wait 40
@@ -176,17 +322,15 @@ wait 40
 shot kit_replace.png
 tap SAVE
 wait 60
-expect bankname0 79
+expect bankname0 78
 expect bankname1 75
 expect bankname2 76
 expect kit 0
 
 # while it runs a flash write would stop the sound, so it waits
-press SEL
-wait 20
 tap SAVE
 wait 40
-release SEL
+turn K4 1
 wait 40
 tap PLAY
 wait 100
@@ -197,4 +341,19 @@ tap PLAY
 wait 60
 tap HOME
 wait 40
+
+# PRESET on a page with no kit name on it says which kit it landed on, in full, and HOME has no need to
+tap EDIT
+wait 40
+turn PRESET 1
+wait 60
+expect kit 1
+expect msgkit 75
+shot preset_name.png
+tap HOME
+wait 1100
+turn PRESET 1
+wait 60
+expect kit 2
+expect msgkit 0
 expect dropped 0

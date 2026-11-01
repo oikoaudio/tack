@@ -53,9 +53,14 @@ static void kit_load(int32_t i)
 static void kit_step(int32_t e)
 {
     int32_t i = ui.kit + (e > 0 ? 1 : -1);
-    if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i))
+    if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i)) {
         kit_load(i);
-    else
+        if (!on_home()) {                        /* HOME has the name */
+            char t[9];
+            kit_name_of(kit_slot((uint32_t)i), t);
+            app_say("KIT", t);
+        }
+    } else
         app_say("KITS", kit_slot(0) ? "END" : "NONE LOADED");
 }
 
@@ -125,7 +130,7 @@ static void morph_turn(int32_t e)
         return;
     }
     tack_post_morph((uint8_t)v);
-    if (ui.voice_view || ui.group != TACK_G_MAIN || ui.fx_page || ui.set_page || ui.song_page) {
+    if (!on_home()) {
         int_text(v, t);
         app_say("MORPH", t);
     }
@@ -289,27 +294,113 @@ static uint32_t kit_free(void)
     return i;
 }
 
-static void kit_page_open(void)
+/* what morph makes can be saved: there is a blend to save */
+static int save_can_blend(void) { return tack_morph_kit() && tack_morph(); }
+
+static int save_name_empty(void)
+{
+    for (uint32_t i = 0; i < 8u; i++)
+        if (ui.ks_name[i] != ' ')
+            return 0;
+    return 1;
+}
+
+/* The name of what a save replaces. An empty slot has none, so the kit's, or for a blend a start from both */
+static void save_name_load(void)
+{
+    const uint8_t *now = kit_slot(ui.ks_slot);
+    const uint8_t *to = ui.ks_morph ? kit_slot((uint32_t)tack_morph_kit() - 1u) : 0;
+    const char *own = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
+    for (uint32_t i = 0; i < 8u; i++)
+        ui.ks_name[i] = KIT_LETTERS[kit_letter(now ? (char)now[i] : to && i >= 4u ? (char)to[i - 4u] : own[i])];
+    ui.ks_name[8] = 0;
+    ui.ks_pos = 0;
+    ui.ks_typed = 0;
+}
+
+static void save_name_clear(void)
+{
+    memset(ui.ks_name, ' ', 8u);
+    ui.ks_pos = 0;
+    ui.ks_typed = 1;
+}
+
+/* SEL with PRESET the kit, with ALGORITHM the voice: forward is further from where it began, and back returns the same way */
+static void mutate_turn(uint32_t voice, int32_t e)
+{
+    static uint32_t rolls;
+    char t[12] = "START";
+    const int step = tack_mutate(voice, e, plat_ms() * 2654435761u + ++rolls);
+    if (step)
+        int_text(step, t);
+    app_say(voice < TACK_VOICES ? VOICE_NAME[voice] : "KIT", step ? t : "START");
+}
+
+static void save_name_make_up(void)
+{
+    ui.ks_seed = ui.ks_seed * 1664525u + 1013904223u + plat_ms();
+    kit_name_make_up(ui.ks_seed, ui.ks_name);
+    ui.ks_pos = 0;
+    ui.ks_typed = 1;
+}
+
+static void save_kit_setup(int blend)
 {
     const uint32_t free = kit_free();
-    ui.ks_slot = (uint8_t)(free < KIT_SLOTS ? free : KIT_SLOTS - 1u);
-    ui.ks_pos = 0;
-    for (uint32_t i = 0; i < 8u; i++)
-        ui.ks_name[i] = KIT_LETTERS[kit_letter(ui.kit_name[i])];
-    ui.ks_name[8] = 0;
-    ui.song_page = PAGE_KIT;
+    const int own = tack_kit_now();
+    ui.ks_morph = (uint8_t)blend;                /* a sound between two kits: named after both, for a start */
+    /* a kit from the bank goes back where it came from, and the page says it replaces it. A blend is a new kit */
+    ui.ks_slot = (uint8_t)(own && !blend ? own - 1 : free < KIT_SLOTS ? (int)free : (int)KIT_SLOTS - 1);
+    save_name_load();
+}
+
+static void save_open(void)
+{
+    ui.ks_what = SAVE_PATTERN;
+    ui.ks_pat = (uint8_t)tack_pattern();
+    ui.song_page = PAGE_SAVE;
     ui.fx_page = ui.set_page = 0;
 }
 
-static void kit_turn(uint32_t slot, int32_t e)
+/* K4: pattern, a blend if there is one, kit */
+static void save_what(int32_t e)
 {
-    if (slot == 0u) {
+    int32_t w = (int32_t)ui.ks_what + (e > 0 ? 1 : -1);
+    if (w == SAVE_BLEND && !save_can_blend())
+        w += e > 0 ? 1 : -1;
+    if (w < SAVE_PATTERN || w > SAVE_KIT)
+        return;
+    ui.ks_what = (uint8_t)w;
+    if (w != SAVE_PATTERN)
+        save_kit_setup(w == SAVE_BLEND);
+}
+
+/* SELECT and K1: the slot, of the patterns or the bank */
+static void save_slot(int32_t e)
+{
+    if (ui.ks_what == SAVE_PATTERN) {
+        ui.ks_pat = (uint8_t)clamp((int32_t)ui.ks_pat + e, 0, TACK_PATTERNS - 1);
+    } else {
         const uint32_t free = kit_free();
         ui.ks_slot = (uint8_t)clamp((int32_t)ui.ks_slot + e, 0, (int32_t)(free < KIT_SLOTS ? free : KIT_SLOTS - 1u));
+        if (!ui.ks_typed)
+            save_name_load();
+    }
+}
+
+static void save_turn(uint32_t slot, int32_t e)
+{
+    if (slot == 0u) {
+        save_slot(e);
+    } else if (slot == 3u) {
+        save_what(e);
+    } else if (ui.ks_what == SAVE_PATTERN) {
+        ;
     } else if (slot == 1u) {
         ui.ks_pos = (uint8_t)clamp((int32_t)ui.ks_pos + e, 0, 7);
-    } else if (slot == 2u) {
-        ui.ks_name[ui.ks_pos] = KIT_LETTERS[clamp(kit_letter(ui.ks_name[ui.ks_pos]) + e, 0, KIT_LETTER_N - 1)];
+    } else {                                     /* round: the end of the list is a turn back from A */
+        ui.ks_name[ui.ks_pos] = KIT_LETTERS[((kit_letter(ui.ks_name[ui.ks_pos]) + e) % KIT_LETTER_N + KIT_LETTER_N) % KIT_LETTER_N];
+        ui.ks_typed = 1;
     }
 }
 
@@ -317,13 +408,17 @@ static void kit_turn(uint32_t slot, int32_t e)
  * would lose them from the bank, though never from a pattern, and a filled slot goes in with no erase at all */
 static void kit_bank_save(void)
 {
-    static uint8_t sector[0x1000];
+    static uint8_t sector[0x1000], blended[KIT_SLOT];
     const uint32_t slot = ui.ks_slot, base = KIT_BASE + slot / 16u * 0x1000u, at = slot % 16u * KIT_SLOT;
     const uint8_t *now = plat_data(base);
     uint8_t t[4];
     int bad, fresh = 1;
     if (tack_running()) {
         app_say("STOP FIRST", "");
+        return;
+    }
+    if (save_name_empty()) {
+        app_say("NAME", "IS EMPTY");
         return;
     }
     if (!now || ui.save_todo || ui.save_hold || tack_kit_busy())
@@ -333,18 +428,41 @@ static void kit_bank_save(void)
         fresh &= sector[at + i] == 0xFFu;
     memset(sector + at, 0, KIT_SLOT);
     memcpy(sector + at, ui.ks_name, 8u);
-    memcpy(sector + at + 8u, tack_kit(), tack_kit_size());
+    if (ui.ks_morph)
+        tack_kit_blended(blended);
+    memcpy(sector + at + 8u, ui.ks_morph ? blended : tack_kit(), tack_kit_size());
     mark('K');
     bad = fresh ? plat_data_write(base + at, sector + at, KIT_SLOT) : plat_data_erase(base) || plat_data_write(base, sector, sizeof sector);
     if (bad) {
         app_say("KIT SAVE", "FAILED");
         return;
     }
-    tack_set_kit_name((const uint8_t *)ui.ks_name);
-    tack_post_kit_home((uint8_t)slot);
+    if (!ui.ks_morph) {                          /* a blend is a new kit: this pattern stays on its two */
+        tack_set_kit_name((const uint8_t *)ui.ks_name);
+        tack_post_kit_home((uint8_t)slot);
+    }
     ui.song_page = 0;
     int_text((int32_t)slot + 1, (char *)t);
     app_say("KIT SAVED", (char *)t);
+}
+
+/* SAVE on the page. On the pattern's own slot, everything changed. On another, the pattern goes there and carries on there: the copy
+ * and the change are events, so save_frame writes it once they have landed */
+static void save_commit(void)
+{
+    if (ui.ks_what != SAVE_PATTERN) {
+        kit_bank_save();
+    } else if (tack_running()) {
+        app_say("STOP FIRST", "");
+    } else if ((int)ui.ks_pat == tack_pattern()) {
+        save();
+        ui.song_page = 0;
+    } else if (!ui.save_todo && !ui.save_hold) {
+        tack_post_copy(ui.ks_pat);
+        tack_post_pattern(ui.ks_pat);
+        ui.save_as = (uint8_t)(ui.ks_pat + 1u);
+        ui.song_page = 0;
+    }
 }
 
 /* the chain playing, over the rows from the one being edited, as the white keys would write them */

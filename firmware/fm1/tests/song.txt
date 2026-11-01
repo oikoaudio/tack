@@ -258,7 +258,11 @@ wait 60
 expect running 0
 
 # saved with the song on, a chain not, and an edited song survives
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 reboot
 wait 800
@@ -300,7 +304,11 @@ expect songedit 0
 turn K2 16
 wait 40
 expect songlen 0
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 reboot
 wait 800

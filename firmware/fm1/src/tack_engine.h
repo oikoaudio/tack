@@ -185,6 +185,11 @@ int tack_post_lane_start(uint8_t voice, uint8_t start);
 #define TACK_MORPH_KITS 128u
 int tack_morph(void);
 int tack_morph_kit(void);
+void tack_kit_blended(uint8_t *values);                  /* the kit as morph has it now */
+/* Walks the kit, or one voice of it, by steps; negative goes back the same way. Returns the step reached, 0 the walk's start. The main
+ * loop only. An edit or another kit starts a new walk, and voice TACK_VOICES or above is the whole kit */
+int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed);
+uint8_t tack_lfo_sync(uint32_t voice);          /* its clock sync, 0 free */
 int tack_post_morph(uint8_t amount);
 int tack_post_morph_kit(uint8_t kit);
 void tack_morph_now(uint8_t amount);                     /* from the audio interrupt: MIDI in */

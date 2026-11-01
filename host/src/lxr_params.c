@@ -579,3 +579,14 @@ void lxr_params_valueText(uint16_t param, uint16_t value, char* buf, size_t size
 		break;
 	}
 }
+
+void lxr_params_mutateTable(uint8_t* top, uint8_t* voice)
+{
+	for(int i = 0; i < lxr_params_count(); i++) {
+		const LxrParamInfo* p = lxr_params_info(i);
+		if(p->voice < LXR_PARAMS_FX_VOICE && !lxr_params_isTarget(p->param) && p->max <= 255) {
+			top[p->param] = (uint8_t)p->max;
+			voice[p->param] = p->voice;
+		}
+	}
+}

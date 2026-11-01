@@ -45,6 +45,7 @@
  */
 #include "src/tack_engine.h"
 #include "src/seq_platform.h"
+#include "../../engine/kit_name.h"
 
 static const char *const VOICE_NAME[TACK_VOICES] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "CL HAT", "OP HAT"};
 static const char *const P_NAME[TACK_NP] = {"PITCH", "FILTER", "DECAY", "VOLUME"};
@@ -112,7 +113,12 @@ static struct {
     uint8_t roll_voice;                  /* the voice ROLL went down on */
     uint8_t roll_on;                     /* ROLL is down */
     uint8_t copy_used;                   /* COPY went on to a white key: not a tap */
-    uint8_t ks_slot, ks_pos;             /* the kit page: the slot, and the letter being changed */
+    uint8_t ks_what, ks_pat;             /* the save page: what, and the pattern slot */
+    uint8_t ks_slot, ks_pos;             /* the bank's slot, and the letter being changed */
+    uint8_t ks_morph;                    /* it saves what morph makes, not the kit */
+    uint8_t ks_typed;                    /* the name is the player's now: picking a slot leaves it alone */
+    uint32_t ks_seed;                    /* the last name made up */
+    uint8_t save_as;                     /* a pattern on its way to this slot + 1, to be written when it lands */
     char ks_name[9];
     uint32_t clear_at, revert_at;        /* when SEL and EDIT, SEL and HOME went down together, 0 not */
     uint8_t group, sub;                  /* the sound page */
@@ -133,6 +139,8 @@ static struct {
     uint8_t last_row[4];                 /* each group's middle row when it was left */
     int8_t row_seen;                     /* the row a held step's knobs started from */
     uint8_t sel_used;                    /* so was SEL */
+    uint8_t sel_was;                     /* the lane's length was showing */
+    uint32_t sel_at;                     /* when SEL went down */
     int32_t held;                        /* the white key held (0-15), -1 none */
     uint8_t held_used;                   /* it did something else: no toggle on release */
     uint8_t held_val[TACK_NP];
@@ -481,6 +489,10 @@ void app_frame(void)
     h = h * 67 + tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384;
     h = h * 67 + tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64;
     h = h * 67 + tack_length((uint8_t)ui.voice) * 64 + (int)tack_lane_dir((uint8_t)ui.voice) * 4 + (int)tack_lane_speed((uint8_t)ui.voice);
+    if (sel_length() != ui.sel_was) {
+        ui.sel_was = (uint8_t)sel_length();
+        ui.redraw = 1;
+    }
     if (ui.note_mode || ui.held >= 0) {          /* a step's edit too */
         const uint8_t s = (uint8_t)(ui.held >= 0 ? step_of((uint32_t)ui.held) : (int)note_cursor());
         for (v = 0; v < TACK_ST_SLOTS; v++)

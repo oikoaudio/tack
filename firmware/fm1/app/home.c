@@ -10,6 +10,7 @@ static void outline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, uint1
 #define GRID_H 82                         /* to the knobs: it clears what a full page left there */
 
 #define GRID_FLOOR 3                      /* the height of a step at the lowest velocity */
+#define C_HEAD RGB(96, 98, 108)           /* the playhead's cell, with a hit white on it at its velocity */
 #define C_BEAT RGB(46, 48, 58)            /* a cell on the beat: the bar reads at a glance */
 
 /* every lane on one page: a row each, marked in its voice's colour and the selected lane in full, the page's steps. A step's
@@ -33,12 +34,10 @@ static void draw_grid(void)
             }
             const int on = tack_step_on((uint8_t)v, (uint8_t)s);
             const int rest = on && (muted || tack_recur_skips((uint8_t)v, (uint8_t)s));   /* grey: not this pass */
-            cv_rect(x, y, GRID_CELL - 2, GRID_ROW - 2, i % 4u ? C_LINE : C_BEAT);
+            cv_rect(x, y, GRID_CELL - 2, GRID_ROW - 2, s == head ? C_HEAD : i % 4u ? C_LINE : C_BEAT);
             if (on) {
                 const int32_t h = GRID_FLOOR + (GRID_ROW - 2 - GRID_FLOOR) * tack_step_get((uint8_t)v, (uint8_t)s, TACK_ST_VEL) / 127;
                 cv_rect(x, y + GRID_ROW - 2 - h, GRID_CELL - 2, h, s == head ? C_WHITE : rest ? C_GRAY : VOICE_COLOUR[v]);
-            } else if (s == head) {
-                cv_rect(x, y + GRID_ROW - 4, GRID_CELL - 2, 2, C_WHITE);
             }
             if (on && tack_locked((uint8_t)v, (uint8_t)s))
                 cv_rect(x + 8, y + 1, 3, 3, C_BLACK);
@@ -227,14 +226,25 @@ static float lfo_shape(uint32_t wave, float p)   /* -1 to 1, as lfo.c's waves in
     }
 }
 
+/* How many cycles a picture of the LFO holds. Synced, what a bar holds, as lfo_calcPhaseInc has it. Free, a sign of how fast it goes
+ * and not a measure: FREQ's whole range is many times more cycles than can be told apart */
+static float lfo_cycles(void)
+{
+    static const float SYNCED[12] = {1.0f, 0.25f, 0.5f, 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 12.0f, 16.0f, 16.0f};
+    const uint8_t sync = tack_lfo_sync((uint32_t)ui.voice);
+    if (sync)
+        return SYNCED[sync < 12u ? sync : 0u];
+    return 1.0f + 7.0f * (float)graph_value(TACK_GRAPH_LFO, 2, 0) / 127.0f;
+}
+
 static void draw_lfo(void)
 {
-    const float amount = (float)graph_value(TACK_GRAPH_LFO, 1, 0) / 127.0f;
+    const float amount = (float)graph_value(TACK_GRAPH_LFO, 1, 0) / 127.0f, cycles = lfo_cycles();
     const uint32_t wave = graph_value(TACK_GRAPH_LFO, 3, 0);
     int32_t x;
-    for (x = 0; x < GRAPH_W; x++) {
-        const float p = (float)(x % 110) / 110.0f;
-        graph_column(x, 0.5f + 0.5f * amount * lfo_shape(wave, p));
+    for (x = 0; x < graph_w; x++) {
+        const float q = (float)x * cycles / (float)graph_w;
+        graph_column(x, 0.5f + 0.5f * amount * lfo_shape(wave, q - (float)(int32_t)q));
     }
 }
 
@@ -399,7 +409,9 @@ static void draw_bottom(void)
         KEY(tack_get_param(target->par));
     if (graph == TACK_GRAPH_LFO) {
         KEY(graph_value(graph, 1, 0));
+        KEY(graph_value(graph, 2, 0));
         KEY(graph_value(graph, 3, 0));
+        KEY(tack_lfo_sync((uint32_t)ui.voice));
     } else if (graph) {
         for (i = 0; i < 3; i++)
             KEY(graph_value(graph, (uint32_t)i, 0));

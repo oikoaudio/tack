@@ -201,25 +201,59 @@ static void pg_song_top(uint32_t *last)
     cv_blit(0, PG_Y);
 }
 
-static void pg_kit_top(uint32_t *last)
+/* SAVE: K4 says what, K1 or SELECT where, and the last row what a second press will do */
+static const char *save_word(void)
 {
-    const uint32_t key = rk(rk(rk(43u, ui.ks_slot), ui.ks_pos), (uint32_t)kit_letter(ui.ks_name[ui.ks_pos]));
-    char t[2] = {ui.ks_name[ui.ks_pos], 0};
+    return ui.ks_what == SAVE_PATTERN ? "PTRN" : ui.ks_what == SAVE_BLEND ? "BLEND" : "KIT";
+}
+
+static void pg_save_top(uint32_t *last)
+{
+    const int pattern = ui.ks_what == SAVE_PATTERN;
+    uint32_t key = rk(rk(rk(rk(43u, ui.ks_what), ui.ks_pat), ui.ks_slot), ui.ks_pos);
+    key = rk(rk(key, (uint32_t)kit_letter(ui.ks_name[ui.ks_pos])), (uint32_t)save_can_blend());
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, tint(C_HI));
-    wd_value(0, ui.ks_slot + 1u, 0, 1, 0);
+    wd_value(0, (pattern ? ui.ks_pat : ui.ks_slot) + 1u, 0, 1, 0);
     pg_column(0, "SLOT", 1);
-    wd_value(1, ui.ks_pos + 1u, 0, 1, 0);
-    pg_column(1, "PLACE", 1);
-    wd_box(PG_CW * 2 + PG_CW / 2, 0, t[0] == ' ' ? "SPACE" : t, C_HI);
-    pg_column(2, "LETTER", 1);
+    if (!pattern) {
+        const char t[2] = {ui.ks_name[ui.ks_pos], 0};
+        wd_value(1, ui.ks_pos + 1u, 0, 1, 0);
+        pg_column(1, "CURSOR", 1);
+        wd_box(PG_CW * 2 + PG_CW / 2, 0, t[0] == ' ' ? "SPACE" : t, C_HI);
+        pg_column(2, "LETTER", 1);
+    }
+    wd_box(PG_CW * 3 + PG_CW / 2, 0, save_word(), C_HI);
+    pg_column(3, "SAVING", 1);
     cv_blit(0, PG_Y);
 }
 
-/* the name, a box to each letter and the one being changed lit */
-static void pg_kit_name(uint32_t *last)
+/* a pattern's slots, as the white keys are, the one picked lit. Grey: empty */
+static void pg_save_slots(uint32_t *last)
+{
+    const uint32_t used = tack_patterns_used(), changed = tack_dirty();
+    const uint32_t key = rk(rk(rk(61u, ui.ks_pat), used), changed);
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, C_BLACK);
+    for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
+        const int32_t x = 6 + (int32_t)(p % 8u) * 29, y = 2 + (int32_t)(p / 8u) * 34;
+        const int on = p == ui.ks_pat;
+        char t[4];
+        cv_rect(x, y, 26, 30, on ? C_HI : C_LINE);
+        int_text((int32_t)p + 1, t);
+        cv_text(x + 13 - text_w(&FONT_S, t) / 2, y + 7, &FONT_S, t, on ? C_BLACK : used >> p & 1u ? C_WHITE : C_GRAY);
+    }
+    cv_blit(0, PG_Y + PG_RH);
+}
+
+#define PG_NAME_W 20
+
+/* the name as a word, the letter being changed lit and a line under each place that is free */
+static void pg_save_name(uint32_t *last)
 {
     uint32_t key = rk(47u, ui.ks_pos);
     for (uint32_t i = 0; i < 8u; i++)
@@ -228,38 +262,105 @@ static void pg_kit_name(uint32_t *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
+    cv_text(6, 2, &FONT_XS, "NAME", C_GRAY);
+    cv_text(234 - text_w(&FONT_XS, "OCT- CLEARS  OCT+ MAKES ONE UP"), 2, &FONT_XS, "OCT- CLEARS  OCT+ MAKES ONE UP", C_GRAY);
     for (uint32_t i = 0; i < 8u; i++) {
-        const int32_t x = 6 + (int32_t)i * 29;
+        const int32_t x = 120 - 4 * PG_NAME_W + (int32_t)i * PG_NAME_W;
         const char t[2] = {ui.ks_name[i], 0};
-        cv_rect(x, 12, 26, 44, i == ui.ks_pos ? C_HI : C_LINE);
-        cv_text(x + 13 - text_w(&FONT_M, t) / 2, 22, &FONT_M, t, i == ui.ks_pos ? C_BLACK : C_WHITE);
+        if (i == ui.ks_pos)
+            cv_rect(x, 22, PG_NAME_W, 40, C_HI);
+        else if (t[0] == ' ')
+            cv_rect(x + 3, 58, PG_NAME_W - 6, 2, C_GRAY);
+        cv_text(x + PG_NAME_W / 2 - text_w(&FONT_M, t) / 2, 28, &FONT_M, t, i == ui.ks_pos ? C_BLACK : C_WHITE);
     }
     cv_blit(0, PG_Y + PG_RH);
 }
 
-/* what the slot holds, as it is about to go */
-static void pg_kit_note(uint32_t *last)
+static void save_note_pattern(char *a, char *b, uint32_t todo)
 {
-    const uint8_t *now = kit_slot(ui.ks_slot);
-    const uint32_t key = rk(rk(53u, ui.ks_slot), now != 0);
-    char t[20];
+    const int now = tack_pattern() + 1;
     uint32_t n = 0;
+    if (ui.ks_pat + 1 == now) {
+        for (uint32_t p = 0; p < TACK_PATTERNS; p++)
+            n += todo >> p & 1u;
+        int_text((int32_t)n, a);
+        n = 0;
+        while (a[n])
+            n++;
+        memcpy(a + n, n == 1u && a[0] == '1' ? " CHANGED PATTERN" : " CHANGED PATTERNS", 18u);
+        memcpy(b, "PICK ANOTHER SLOT TO COPY THIS ONE", 35u);
+    } else {
+        memcpy(a, "COPY P", 7u);
+        int_text(now, a + 6);
+        n = 6;
+        while (a[n])
+            n++;
+        memcpy(a + n, " TO P", 6u);
+        int_text(ui.ks_pat + 1, a + n + 5);
+        n += 5;
+        while (a[n])
+            n++;
+        if (tack_patterns_used() >> ui.ks_pat & 1u)
+            memcpy(a + n, ", REPLACING IT", 15u);
+        memcpy(b, "AND CARRY ON THERE", 19u);
+    }
+}
+
+static void save_note_kit(char *a, char *b, const uint8_t *now)
+{
+    uint32_t n;
+    char t[9];
+    if (now) {
+        kit_name_of(now, t);
+        memcpy(a, "REPLACES ", 9u);
+        memcpy(a + 9, t, 9u);
+    } else {
+        memcpy(a, "EMPTY SLOT", 11u);
+    }
+    if (ui.ks_what == SAVE_BLEND) {
+        memcpy(b, "MORPH ", 7u);
+        int_text(tack_morph(), b + 6);
+        n = 6;
+        while (b[n])
+            n++;
+        memcpy(b + n, " OF ", 5u);
+        n += 4;
+        kit_name_of((const uint8_t *)(ui.kit_name[0] ? ui.kit_name : "INIT KIT"), b + n);
+        while (b[n])
+            n++;
+        memcpy(b + n, " > ", 4u);
+        morph_name(b + n + 3);
+    } else {
+        memcpy(b, "THE KIT PLAYING NOW, WITH ITS EDITS", 36u);
+    }
+}
+
+static void pg_save_note(uint32_t *last)
+{
+    const uint32_t todo = tack_dirty() | 1u << tack_pattern();
+    const uint8_t *now = ui.ks_what == SAVE_PATTERN ? 0 : kit_slot(ui.ks_slot);
+    const int run = tack_running();
+    uint32_t key = rk(rk(rk(rk(rk(67u, todo), (uint32_t)run), ui.ks_what), ui.ks_pat), ui.ks_slot);
+    char a[40], b[40];
+    key = rk(rk(rk(key, now != 0), (uint32_t)tack_morph()), (uint32_t)save_name_empty());
     if (key == *last)
         return;
     *last = key;
+    a[0] = b[0] = 0;
+    if (ui.ks_what == SAVE_PATTERN)
+        save_note_pattern(a, b, todo);
+    else
+        save_note_kit(a, b, now);
     cv_begin(240, PG_RH, C_BLACK);
-    if (now) {
-        memcpy(t, "REPLACES ", 9u);
-        memcpy(t + 9, now, 8u);
-        n = 17u;
-        while (n > 9u && (t[n - 1u] == ' ' || !t[n - 1u]))
-            n--;
-        t[n] = 0;
-    } else {
-        memcpy(t, "EMPTY SLOT", 11u);
+    cv_text(120 - text_w(&FONT_B, a) / 2, 2, &FONT_B, a, now || (ui.ks_what == SAVE_PATTERN && (int)ui.ks_pat != tack_pattern()) ? C_HI : C_WHITE);
+    cv_text(120 - text_w(&FONT_XS, b) / 2, 22, &FONT_XS, b, C_WHITE);
+    {
+        const int nameless = ui.ks_what != SAVE_PATTERN && save_name_empty();
+        const char *const c = nameless ? "IT NEEDS A NAME" : run ? "STOP FIRST, IT PAUSES THE SOUND" : "PRESS SAVE TO WRITE IT";
+        const char *const d = ui.ks_what == SAVE_PATTERN ? "K4 FOR A KIT. ANY PAGE BUTTON LEAVES" : "ANY PAGE BUTTON LEAVES";
+        cv_text(120 - text_w(&FONT_XS, c) / 2, 38, &FONT_XS, c, run || nameless ? C_HI : C_WHITE);
+        cv_text(120 - text_w(&FONT_XS, d) / 2, 54, &FONT_XS, d, C_GRAY);
     }
-    cv_text(120 - text_w(&FONT_B, t) / 2, 10, &FONT_B, t, now ? C_HI : C_WHITE);
-    cv_text(120 - text_w(&FONT_XS, "SAVE WRITES IT, HOME LEAVES") / 2, 34, &FONT_XS, "SAVE WRITES IT, HOME LEAVES", C_GRAY);
     cv_blit(0, PG_Y + 2u * PG_RH);
 }
 
@@ -556,17 +657,21 @@ static void pg_screen(int invalid)
     static uint32_t rows[SCREEN_ROWS];
     static int was;
     const int now = ui.fx_page ? 1 : ui.set_page ? 2 : vel_page() ? 6 : ui.song_page == PAGE_LANE ? 7 : ui.song_page == PAGE_EUCLID ? 8
-                    : ui.song_page == PAGE_KIT ? 9 : ui.song_page ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
+                    : ui.song_page == PAGE_SAVE ? (ui.ks_what == SAVE_PATTERN ? 10 : 9) : ui.song_page ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
     if (invalid || now != was) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
         rows[0] = rows[1] = rows[2] = 0xFFFFFFFFu;
         was = now;
     }
     pg_top();
-    if (now == 9) {
-        pg_kit_top(&rows[0]);
-        pg_kit_name(&rows[1]);
-        pg_kit_note(&rows[2]);
+    if (now == 10) {
+        pg_save_top(&rows[0]);
+        pg_save_slots(&rows[1]);
+        pg_save_note(&rows[2]);
+    } else if (now == 9) {
+        pg_save_top(&rows[0]);
+        pg_save_name(&rows[1]);
+        pg_save_note(&rows[2]);
     } else if (now == 1) {
         pg_fx_sends(&rows[0]);
         pg_fx_row(1, &rows[1]);

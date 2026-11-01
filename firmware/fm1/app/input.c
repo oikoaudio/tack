@@ -88,8 +88,9 @@ static void input(void)
                 pattern_copy(k);
             } else if (ui.song_page == PAGE_SONG) {
                 song_key(k);
-            } else if (ui.song_page == PAGE_KIT) {
-                ;
+            } else if (ui.song_page == PAGE_SAVE) {     /* the keys are the slots, for a pattern */
+                if (ui.ks_what == SAVE_PATTERN)
+                    ui.ks_pat = (uint8_t)k;
             } else if (btn >> B_SEL & 1u) {      /* SEL held: the lane ends here */
                 tack_post_length((uint8_t)ui.voice, (uint8_t)(step_of(k) + 1));
                 app_say("LENGTH", "");
@@ -153,15 +154,23 @@ static void input(void)
         ui.fx_page = ui.set_page = 0;
         ui.redraw = 1;
     }
-    if (pressed(btn, B_SEL))
+    if (pressed(btn, B_SEL)) {
         ui.sel_used = 0;
+        ui.sel_at = plat_ms();
+    }
     if ((btn >> B_SEL & 1u) && ((btn & ~(1u << B_SEL)) || keys))
         ui.sel_used = 1;
     if (((ui.btn & ~btn) >> B_SEL & 1u) && !ui.sel_used) {
         if (seq_detail())                        /* the next step */
             vv_walk(1);
     }
-    if (full_page() && !seq_detail() && !arp_page()) {   /* an OCT held is a row, which the next frame's knobs start from */
+    if (ui.song_page == PAGE_SAVE) {             /* no page, so nothing to lose: the name's two shortcuts */
+        if (ui.ks_what != SAVE_PATTERN && pressed(btn, B_OCTDN))
+            save_name_clear();
+        else if (ui.ks_what != SAVE_PATTERN && pressed(btn, B_OCTUP))
+            save_name_make_up();
+        ui.redraw = 1;
+    } else if (full_page() && !seq_detail() && !arp_page()) {   /* an OCT held is a row, which the next frame's knobs start from */
         if ((btn ^ ui.btn) & (1u << B_OCTDN | 1u << B_OCTUP))
             ui.redraw = 1;
     } else if ((btn >> B_SEL & 1u) && (pressed(btn, B_OCTUP) || pressed(btn, B_OCTDN))) {
@@ -198,6 +207,8 @@ static void input(void)
         } else if (!tack_ext_sync()) {
             tack_post_run((uint8_t)!tack_running());
             ui.redraw = 1;
+        } else {                                 /* the clock's Start and Stop run it: a button that seems dead says why */
+            app_say("EXT CLOCK", "SEE GLO");
         }
     }
     if (pressed(btn, B_REC)) {
@@ -221,12 +232,15 @@ static void input(void)
         app_say("LOCKS", "CLEARED");
     }
     if (pressed(btn, B_SAVE)) {
-        if (btn >> B_SEL & 1u)
-            kit_page_open();
-        else if (ui.song_page == PAGE_KIT)
-            kit_bank_save();
-        else
+        if (btn >> B_SEL & 1u) {                 /* no questions: all that SAVE's page would list */
             save();
+            if (ui.song_page == PAGE_SAVE && !tack_running())
+                ui.song_page = 0;
+        } else if (ui.song_page == PAGE_SAVE) {
+            save_commit();
+        } else {
+            save_open();
+        }
         ui.redraw = 1;
     }
     if (pressed(btn, B_HOME) && (btn >> B_GLO & 1u)) {
@@ -260,8 +274,8 @@ static void input(void)
                 set_turn(k, e);
             } else if (vel_page()) {
                 vel_turn(k, e);
-            } else if (ui.song_page == PAGE_KIT) {
-                kit_turn(k, e);
+            } else if (ui.song_page == PAGE_SAVE) {
+                save_turn(k, e);
             } else if (ui.song_page == PAGE_EUCLID) {
                 eu_turn(k, e);
             } else if (ui.song_page == PAGE_LANE) {
@@ -290,7 +304,9 @@ static void input(void)
             ui.redraw = 1;
         }
     if ((e = plat_enc(EN_SELECT)) != 0) {
-        if (ui.held >= 0)
+        if (ui.song_page >= PAGE_SAVE)
+            save_slot(e);
+        else if (ui.held >= 0)
             recur_turn(e);
         else if (seq_detail())
             vv_walk(e);
@@ -308,7 +324,12 @@ static void input(void)
         step_turn(TACK_ST_NUDGE, POP_NUDGE, e);
         ui.redraw = 1;
     } else if ((e = plat_enc(EN_ALGO)) != 0) {
-        if (seq_detail()) {
+        if (ui.song_page >= PAGE_SAVE) {
+            ;
+        } else if (btn >> B_SEL & 1u) {
+            ui.sel_used = 1;
+            mutate_turn((uint32_t)ui.voice, e);
+        } else if (seq_detail()) {
             vv_turn(1u, e);
         } else if (ui.song_page == PAGE_LANE) {  /* steps on screen, and all of them */
             mark('N');
@@ -319,8 +340,14 @@ static void input(void)
         ui.redraw = 1;
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {
-        if (ui.held >= 0)
+        if (ui.song_page >= PAGE_SAVE)
+            ;
+        else if (ui.held >= 0)
             step_turn(TACK_ST_PROB, POP_CHANCE, e);
+        else if (btn >> B_SEL & 1u) {
+            ui.sel_used = 1;
+            mutate_turn(TACK_VOICES, e);
+        }
         else if (morph_held())
             morph_kit_step(e);
         else

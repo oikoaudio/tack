@@ -1332,9 +1332,17 @@ void seq_processFlam(uint8_t idx)
 			 * - current step data
 			 * - negative shifted data from the next step
 			 */
+#ifdef LXR_FM1_BUILD
+			/* before the first step, as after external clock's Stop, there is no step or one before it to look up, only hits
+			 * nudged early into the next */
+			uint32_t currentStepPattern = currentStep < NUM_STEPS ? seq_getShiftFlamPattern(track, currentStep, STEP_CURRENT) : 0;
+			uint32_t nextStepPattern 	= seq_getShiftFlamPattern(track, nextStep, STEP_NEXT);
+			uint32_t prevStepPattern 	= prevStep < NUM_STEPS ? seq_getShiftFlamPattern(track, prevStep, STEP_PREV) : 0;
+#else
 			uint32_t currentStepPattern = seq_getShiftFlamPattern(track, currentStep, STEP_CURRENT);
 			uint32_t nextStepPattern 	= seq_getShiftFlamPattern(track, nextStep, STEP_NEXT);
 			uint32_t prevStepPattern 	= seq_getShiftFlamPattern(track, prevStep, STEP_PREV);
+#endif
 #ifdef LXR_FM1_BUILD
 			if(seq_laneSub[track])
 				currentStepPattern = prevStepPattern = 0;

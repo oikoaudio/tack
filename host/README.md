@@ -96,11 +96,14 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   once. A `*` after the name means the kit was edited in the editor since it was loaded or saved; loading another kit
   replaces those edits without asking, as on the device. Tack tells the host which preset it loaded, and the
   project keeps the kit file's path, so the arrows carry on from there when the project is opened again.
-- **Saving kits:** the editor's "Save kit" button writes the kit as it is now to the "User" pack,
+- **Saving kits:** "Make one up" in the save box suggests a name. The editor's "Save kit" button writes the kit as it is now to the "User" pack,
   `Kits/User/<name>.SND`, where the preset browser lists it with the others. The file is what the device writes:
   a name of up to 8 characters from the device's character set, then the kit's parameters. The device finds kits by
   slot number, so on its SD card a kit needs a file name such as `05-NAME.SND`. Saving under the name of a kit
   that is already there asks before overwriting it. Hosts may only see a new kit once they rescan their presets.
+- **Mutating kits:** "Mutate kit" and "Mutate voice" make a small random change to the kit or the open tab's voice, and each click goes
+  further. "Back" retraces those steps exactly, and its number says how far you are from where you began, up to 99. Volume, pan, routing,
+  modulation targets, filter type and the FX stay. An edit or another kit starts again from there. A voice plugin has one "Mutate" button.
 - **Editor:** a tab per voice plus FX. Each tab shows the front panel's sub-pages as boxes of up to 4 x 2 controls,
   three boxes to a row (`clap/gui.cpp`): knobs for amounts (drag, Shift for fine, wheel steps, double-click resets
   to the init kit value) and drop-downs for options, with short labels and the full name as a tooltip. The FX tab

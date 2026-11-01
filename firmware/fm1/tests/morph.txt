@@ -46,17 +46,19 @@ expect kept215 1
 expect heard149 >-1
 shot morph_home.png
 
-# half way: a number between the two, a wave not yet changed. Past half way it goes to the other kit's
+# half way: a number between the two, and a wave too, as on the LXR. An FX type has none between, and changes past half way
 turn ALGO -21
 wait 60
 expect morph 64
 expect heard8 41
-expect heard1 50
+expect heard1 25
+expect heard234 50
 turn ALGO -1
 wait 60
 expect morph 61
 expect heard8 40
-expect heard1 0
+expect heard1 24
+expect heard234 0
 
 # a dial turned while morphing moves the kit, and the blend follows at once
 turn K1 6
@@ -208,7 +210,11 @@ wait 60
 expect heard8 50
 
 # saved, through a reboot
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 300
 reboot
 wait 600
@@ -216,6 +222,46 @@ expect morph 127
 expect morphkit 2
 expect heard8 50
 expect kitv8 40
+
+# a place between the two is a kit: K4 on SAVE comes to it before the kit, named after both, and the pattern stays on its two kits
+turn ALGO -21
+wait 60
+expect morph 64
+tap SAVE
+wait 40
+turn K4 1
+wait 40
+expect kitpage 1
+expect kitmorph 1
+expect kitletter0 75
+expect kitletter4 75
+shot kit_morph.png
+turn K4 1
+wait 40
+expect kitmorph 0
+turn K4 -1
+wait 40
+expect kitmorph 1
+tap SAVE
+wait 60
+expect kitpage 0
+expect bankname2 75
+expect morph 64
+expect morphkit 2
+expect kit 0
+expect kitv8 40
+expect heard8 45
+turn PRESET 2
+wait 60
+expect kit 2
+expect kitv8 45
+expect kitv149 40
+turn PRESET -2
+wait 60
+expect kit 0
+turn ALGO 21
+wait 60
+expect morph 127
 
 # HOME takes none of it back: the POLY key can go back to none
 key 22 down

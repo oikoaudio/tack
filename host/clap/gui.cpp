@@ -13,6 +13,7 @@
 #include <cstring>
 #include <strings.h>
 #include <cstdlib>
+#include <ctime>
 #include <algorithm>
 #include <vector>
 #include <pugl/pugl.h>
@@ -21,6 +22,7 @@
 #include "backends/imgui_impl_opengl3.h"
 
 #include "lxr_params.h"
+#include "kit_name.h"
 #include "presets.h"
 
 template<typename T> static T clampTo(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -771,6 +773,24 @@ static void drawHeader(TackGui* g)
 		ImGui::OpenPopup("###save");
 		puglGrabFocus(g->view);
 	}
+	ImGui::SameLine(0, 8);
+	if(ImGui::Button(g->host.voice < 0 ? "Mutate kit" : "Mutate")) g->host.mutate(g->host.ctx, -1, 1);
+	if(ImGui::IsItemHovered()) ImGui::SetTooltip("A small random change to the sound. Levels, pans and the FX stay");
+	if(g->host.voice < 0) {
+		ImGui::SameLine(0, 2);
+		ImGui::BeginDisabled(g->tab >= LXR_PARAMS_FX_VOICE);
+		if(ImGui::Button("Mutate voice")) g->host.mutate(g->host.ctx, g->tab, 1);
+		if(ImGui::IsItemHovered()) ImGui::SetTooltip("The same, for the voice on the open tab");
+		ImGui::EndDisabled();
+	}
+	const int mutated = g->host.mutateStep(g->host.ctx);
+	char back[32];
+	snprintf(back, sizeof back, mutated ? "Back (%d)###back" : "Back###back", mutated);
+	ImGui::SameLine(0, 2);
+	ImGui::BeginDisabled(!mutated);
+	if(ImGui::Button(back)) g->host.mutate(g->host.ctx, TACK_MUTATE_AGAIN, -1);
+	if(ImGui::IsItemHovered()) ImGui::SetTooltip("One step back along the way Mutate came");
+	ImGui::EndDisabled();
 	if(g->host.voice >= 0) {
 		// no tabs, and no play button: notes play the voice
 		ImGui::Separator();
@@ -858,6 +878,16 @@ static void drawSaveDialog(TackGui* g)
 	const bool enter = ImGui::InputText("Name", g->saveName, sizeof g->saveName,
 		ImGuiInputTextFlags_CallbackCharFilter | ImGuiInputTextFlags_EnterReturnsTrue, kitNameFilter);
 	if(ImGui::IsItemEdited()) g->saveExists = g->saveFailed = false;
+	ImGui::SameLine();
+	if(ImGui::Button("Make one up")) {
+		static uint32_t rolls;
+		char made[9] = {0};
+		kit_name_make_up((uint32_t)time(NULL) * 2654435761u + ++rolls * 40503u, made);
+		for(int i = 7; i >= 0 && made[i] == ' '; i--) made[i] = 0;
+		snprintf(g->saveName, sizeof g->saveName, "%s", made);
+		g->saveExists = g->saveFailed = false;
+		g->focusName = true;
+	}
 
 	// trailing spaces would only pad the name
 	char name[9];

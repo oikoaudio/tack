@@ -235,7 +235,11 @@ wait 60
 expect skips0 0
 
 # it is saved with the pattern
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 reboot
 wait 800

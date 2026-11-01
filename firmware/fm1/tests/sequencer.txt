@@ -42,7 +42,11 @@ expect running 1
 shot running.png
 wavstop
 # saving is refused while it runs: the flash stops the sound
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 40
 expect store_writes 0
 tap PLAY
@@ -207,7 +211,11 @@ tapkey 0
 wait 60
 release SEQ
 wait 60
+press SEL
+wait 20
 tap SAVE
+wait 20
+release SEL
 wait 200
 expect dirty 0
 expect saved 2
