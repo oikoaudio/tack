@@ -183,7 +183,9 @@ void seq_platform_lane_wrap(uint8_t track);
  * ends as a forward lane's does, and seq_stepIndex is the step that position plays. A slow lane holds a step for seq_laneSub's
  * count of ticks. Its nudges stay as long as they are: a step's own come in the first tick, the next step's in the last */
 uint8_t seq_laneMode[NUM_PATTERN][NUM_TRACKS];
+uint8_t seq_laneStart[NUM_PATTERN][NUM_TRACKS];	/* the step a pass starts from, the rest following round the lane */
 static int8_t seq_lanePos[NUM_TRACKS];
+static int8_t seq_laneBounce[NUM_TRACKS];			/* bounce: where it is on its way there and back, which is not a pass long */
 static uint8_t seq_laneSub[NUM_TRACKS];
 static int8_t seq_laneClock[NUM_TRACKS];			/* where the lane would be, forward at full speed: the pattern's length goes by this */
 static uint8_t seq_laneTurn[NUM_TRACKS];			/* ping-pong: an odd pass runs backwards */
@@ -211,19 +213,46 @@ static void seq_laneShuffle(const uint8_t track, const uint8_t len)
 	seq_laneFirst[track] = (uint8_t)(GetRngValue() % len);
 }
 
+static inline uint8_t seq_lanePlain(const uint8_t track)
+{
+	return !seq_laneMode[seq_activePattern][track] && !seq_laneStart[seq_activePattern][track];
+}
+
+static inline uint8_t seq_laneFrom(const uint8_t track, const uint8_t step, const uint8_t len)
+{
+	return (uint8_t)((step + seq_laneStart[seq_activePattern][track]) % len);
+}
+
+/* bounce turns on the end steps, so there and back is 2 * len - 2 ticks, and it drifts against a lane of len. move: ticks from now */
+static uint8_t seq_laneBounceAt(const uint8_t track, const int8_t move, const uint8_t len)
+{
+	const int16_t cycle = len > 1 ? (int16_t)(2 * len - 2) : 1;
+	const int16_t at = (int16_t)(((int16_t)seq_laneBounce[track] + move + 2 * cycle) % cycle);
+	return (uint8_t)(at < len ? at : cycle - at);
+}
+
 static uint8_t seq_laneStepAt(const uint8_t track, const uint8_t pos, const uint8_t len)
 {
+	uint8_t s;
 	switch(LANE_DIR(seq_laneMode[seq_activePattern][track]))
 	{
 		case LANE_REVERSE:
-			return (uint8_t)(len - 1u - pos);
+			s = (uint8_t)(len - 1u - pos);
+			break;
 		case LANE_PINGPONG:
-			return seq_laneTurn[track] ? (uint8_t)(len - 1u - pos) : pos;
+			s = seq_laneTurn[track] ? (uint8_t)(len - 1u - pos) : pos;
+			break;
+		case LANE_BOUNCE:
+			s = seq_laneBounceAt(track, (int8_t)((int8_t)pos - seq_lanePos[track]), len);
+			break;
 		case LANE_RANDOM:
-			return seq_laneOrder[track][pos];
+			s = seq_laneOrder[track][pos];
+			break;
 		default:
-			return pos;
+			s = pos;
+			break;
 	}
+	return seq_laneFrom(track, s, len);
 }
 
 /* the step after this one, which at a pass's end is the next pass's first */
@@ -235,13 +264,15 @@ static uint8_t seq_laneNext(const uint8_t track, const uint8_t len)
 	switch(LANE_DIR(seq_laneMode[seq_activePattern][track]))
 	{
 		case LANE_REVERSE:
-			return (uint8_t)(len - 1u);
+			return seq_laneFrom(track, (uint8_t)(len - 1u), len);
 		case LANE_PINGPONG:
 			return seq_laneStepAt(track, (uint8_t)(len - 1u), len);	/* it turns on the step it reached, which plays twice */
+		case LANE_BOUNCE:
+			return seq_laneFrom(track, seq_laneBounceAt(track, 1, len), len);
 		case LANE_RANDOM:
-			return seq_laneFirst[track] < len ? seq_laneFirst[track] : 0;
+			return seq_laneFrom(track, seq_laneFirst[track] < len ? seq_laneFirst[track] : 0, len);
 		default:
-			return 0;
+			return seq_laneFrom(track, 0, len);
 	}
 }
 
@@ -250,7 +281,7 @@ static uint8_t seq_lanePrev(const uint8_t track, const uint8_t len)
 	const int8_t pos = seq_lanePos[track];
 	if(pos > 0)
 		return seq_laneStepAt(track, (uint8_t)(pos - 1), len);
-	return seq_laneLast[track] < len ? seq_laneLast[track] : (uint8_t)(len - 1u);
+	return seq_laneLast[track] < len ? seq_laneLast[track] : seq_laneFrom(track, (uint8_t)(len - 1u), len);
 }
 
 /* a tick for the lane; 0 if a slow lane stays on its step */
@@ -264,6 +295,9 @@ static uint8_t seq_laneMove(const uint8_t track)
 		return 0;
 	seq_laneSub[track] = 0;
 	seq_lanePos[track]++;
+	seq_laneBounce[track]++;
+	if(seq_laneBounce[track] >= (len > 1 ? 2 * len - 2 : 1))
+		seq_laneBounce[track] = 0;
 	if(seq_lanePos[track] >= len || (seq_lanePos[track] & 0x3f) == 0)
 	{
 		seq_laneLast[track] = (uint8_t)seq_stepIndex[track];
@@ -977,6 +1011,17 @@ uint8_t seq_getLongestTrack()
 	return trackId;
 }
 
+#ifdef LXR_FM1_BUILD
+/* A nudge in pulses, of the 24 in a step, from what a step stores: single pulses near the grid, where a small move is a feel, then
+ * the LXR's 3 pulses a unit out to the same reach, so that every one of its positions is here too */
+int8_t seq_shiftPulses(uint8_t shift)
+{
+	static const int8_t PULSES[14] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15, 18, 21};
+	const int8_t n = (int8_t)shift - STEP_SHIFT_ZERO;
+	return n < 0 ? (int8_t)-PULSES[-n > 13 ? 13 : -n] : PULSES[n > 13 ? 13 : n];
+}
+#endif
+
 int8_t getShiftValue(uint8_t in)
 {
 	switch(in)
@@ -1133,7 +1178,11 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 
 
 		const  uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][step].flam;
+#ifdef LXR_FM1_BUILD
+		int8_t shiftCurrentStep = seq_shiftPulses(seq_patternSet.seq_stepTiming[seq_activePattern][track][step].shift);
+#else
 		int8_t shiftCurrentStep = getShiftValue(seq_patternSet.seq_stepTiming[seq_activePattern][track][step].shift);
+#endif
 
 		uint32_t stepPattern;
 
@@ -1158,8 +1207,10 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 		//add step pattern for active steps
 		stepPattern = flamIdxToPattern(flamCurrentStep);
 
+#ifndef LXR_FM1_BUILD
 		//we have 24 pulses per step (96ppq) but only 8 possible shift values (0-7)
 		shiftCurrentStep *= 3;
+#endif
 
 		//since we use this function to determine what to play at the current step, we have to look at different shifted sections depending of which step we calculate
 		//i.e. we only play the data from the previous step, that was shifted into the current(next) step
@@ -1229,6 +1280,19 @@ uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition
 
 uint8_t chokeCurrent=0;
 uint8_t chokeNext=0;
+#ifdef LXR_FM1_BUILD
+/* External clock starts a step when it says so, which can be before this step's last pulses have come round, as they are timed by
+ * the tempo that clock implies: often the last, and under shuffle many, as the step after a late one is short. A hit nudged there
+ * would never play, so what is left of the step runs here, a little early rather than not at all */
+void seq_finishStep(void)
+{
+	if(seq_lanePos[0] < 0 || seq_prescaleCounter == 0)	/* none ran, so no tempo yet: its first hit would play a step late */
+		return;
+	while(seq_prescaleCounter < 24)
+		seq_processFlam(seq_prescaleCounter++);
+}
+#endif
+
 void seq_processFlam(uint8_t idx)
 {
 	if(!seq_running)
@@ -1242,6 +1306,11 @@ void seq_processFlam(uint8_t idx)
 
 	for(uint8_t track=0;track<NUM_TRACKS;track++)
 	{
+#ifdef LXR_FM1_BUILD
+		/* The LXR keeps these from one pulse to the next and across the tracks, so a hit nudged early silences whatever is left of
+		 * this step on every lane. Here a hit only gives way to one on the same lane and the same pulse */
+		chokeCurrent = chokeNext = 0;
+#endif
 		//if track is not muted
 		if(!(seq_mutedTracks & (1<<track) ) )
 		{
@@ -1251,8 +1320,8 @@ void seq_processFlam(uint8_t idx)
 			const uint8_t currentStep = seq_stepIndex[track];
 #ifdef LXR_FM1_BUILD
 			const uint8_t laneMode = seq_laneMode[seq_activePattern][track];
-			const uint8_t nextStep = laneMode ? seq_laneNext(track, length) : (seq_stepIndex[track]+1)%length;
-			const uint8_t prevStep = laneMode ? seq_lanePrev(track, length) : seq_stepIndex[track] != 0 ? seq_stepIndex[track] - 1 : length-1;
+			const uint8_t nextStep = !seq_lanePlain(track) ? seq_laneNext(track, length) : (seq_stepIndex[track]+1)%length;
+			const uint8_t prevStep = !seq_lanePlain(track) ? seq_lanePrev(track, length) : seq_stepIndex[track] != 0 ? seq_stepIndex[track] - 1 : length-1;
 #else
 			const uint8_t nextStep = (seq_stepIndex[track]+1)%length;
 			const uint8_t prevStep = seq_stepIndex[track] != 0 ? seq_stepIndex[track] - 1 : length-1;
@@ -1826,6 +1895,9 @@ float seq_getElapsedStepTimePercent()
 			if(systick_ticks >= sync_delayedStepTimer)
 			{
 				sync_delayedStepTimer = 0;
+#ifdef LXR_FM1_BUILD
+				seq_finishStep();
+#endif
 				seq_nextStep();
 				seq_prescaleCounter=0;
 
@@ -2541,7 +2613,7 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 		const uint8_t laneMode = seq_laneMode[seq_activePattern][trackNr];
 		const uint8_t late = (seq_getElapsedStepTimePercent() >= 50.f) && seq_laneSub[trackNr] + 1u >= LANE_DIV(laneMode);
 		int8_t quantizedStep = !late ? seq_stepIndex[trackNr]
-		                     : laneMode ? (int8_t)seq_laneNext(trackNr, seq_trackLength(seq_activePattern, trackNr)) : seq_stepIndex[trackNr] + 1;
+		                     : !seq_lanePlain(trackNr) ? (int8_t)seq_laneNext(trackNr, seq_trackLength(seq_activePattern, trackNr)) : seq_stepIndex[trackNr] + 1;
 #else
 		int8_t quantizedStep = (seq_getElapsedStepTimePercent() >= 50.f) ? seq_stepIndex[trackNr] + 1 : seq_stepIndex[trackNr];
 #endif
@@ -2715,7 +2787,7 @@ void seq_clearTrack(uint8_t trackNr, uint8_t pattern)
 		seq_resetNote(&seq_patternSet.seq_subStepPattern[pattern][trackNr][k]);
 
 		seq_patternSet.seq_stepTiming[pattern][trackNr][k].flam = 0;
-		seq_patternSet.seq_stepTiming[pattern][trackNr][k].shift = 7;   // 7 = no shift
+		seq_patternSet.seq_stepTiming[pattern][trackNr][k].shift = STEP_SHIFT_ZERO;   // no shift
 
 		//every 1st step in a substep pattern active
 		if( (k%8) == 0)
@@ -2972,6 +3044,7 @@ static void seq_setStepIndexToStart()
 		seq_stepIndex[i] =  - 1;
 #ifdef LXR_FM1_BUILD
 		seq_lanePos[i] = -1;
+		seq_laneBounce[i] = -1;
 		seq_laneClock[i] = -1;
 		seq_laneSub[i] = 0;
 		seq_laneTurn[i] = 1;	/* the first step counts as a pass's start: pass 0 runs forward */

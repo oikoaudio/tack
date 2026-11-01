@@ -1,0 +1,200 @@
+# A pattern's own kit, and saving a kit to the bank: firmware/fm1/build/host/tack_host firmware/fm1/tests/patkit.txt OUTDIR
+# verify.sh writes kits.bin here: KITONE with every parameter 40 and KITTWO with every parameter 50
+wait 600
+data kits.bin 770048
+
+# a kit picked, an edit to it, and a step: the pattern's
+turn PRESET 1
+wait 60
+expect kit 1
+expect param0 50
+expect kitname0 75
+turn K1 7
+wait 60
+expect param0 57
+tapkey 0
+wait 40
+
+# a pattern with nothing in it plays on what is playing
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 60
+expect pattern 1
+expect param0 57
+
+# here another kit, edited too
+turn PRESET -1
+wait 60
+expect kit 0
+expect param0 40
+turn K1 -5
+wait 60
+expect param0 35
+tapkey 0
+wait 40
+
+# each comes back with its pattern, edits and name, which is the point
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+expect param0 57
+expect kit 1
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 60
+expect pattern 1
+expect param0 35
+expect kit 0
+
+# through a reboot, which here stays on the pattern it was on
+tap SAVE
+wait 300
+reboot
+wait 600
+expect pattern 1
+expect param0 35
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect param0 57
+
+# a copy takes the sound too
+key 25 down
+wait 40
+tapkey 4
+wait 60
+key 25 up
+wait 40
+press SEQ
+wait 30
+tapkey 4
+wait 30
+release SEQ
+wait 60
+expect pattern 2
+expect param0 57
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+
+# SEL with SAVE opens the kit page, on the first empty slot, with the kit's name
+press SEL
+wait 20
+tap SAVE
+wait 40
+release SEL
+wait 40
+expect kitpage 1
+expect kitslot 2
+expect kitletter0 75
+shot kit_page.png
+
+# the slot stops at the first empty one, and the white keys change no step
+turn K1 5
+wait 40
+expect kitslot 2
+tapkey 4
+wait 40
+expect step2 0
+
+# a letter at a time: K2 the place, K3 the letter
+turn K3 1
+wait 40
+expect kitletter0 76
+turn K2 7
+wait 40
+turn K3 -50
+wait 40
+expect kitletter7 32
+turn K3 26
+wait 40
+expect kitletter7 90
+shot kit_name.png
+
+# HOME leaves and writes nothing
+tap HOME
+wait 40
+expect kitpage 0
+expect bankname2 0
+
+# again, and SAVE writes it: the name, and this sound with its edit
+press SEL
+wait 20
+tap SAVE
+wait 40
+release SEL
+wait 40
+turn K3 1
+wait 40
+tap SAVE
+wait 60
+expect kitpage 0
+expect bankname2 76
+expect kitname0 76
+expect kit 2
+
+# from the bank again it is that sound, and the others are as they were
+turn PRESET -1
+wait 60
+expect param0 50
+expect bankname0 75
+expect bankname1 75
+turn PRESET 1
+wait 60
+expect kit 2
+expect param0 57
+expect kitname0 76
+
+# a slot in use says so and is replaced, and its neighbours in the sector stay
+press SEL
+wait 20
+tap SAVE
+wait 40
+release SEL
+wait 40
+turn K1 -3
+wait 40
+expect kitslot 0
+turn K3 3
+wait 40
+shot kit_replace.png
+tap SAVE
+wait 60
+expect bankname0 79
+expect bankname1 75
+expect bankname2 76
+expect kit 0
+
+# while it runs a flash write would stop the sound, so it waits
+press SEL
+wait 20
+tap SAVE
+wait 40
+release SEL
+wait 40
+tap PLAY
+wait 100
+tap SAVE
+wait 60
+expect kitpage 1
+tap PLAY
+wait 60
+tap HOME
+wait 40
+expect dropped 0

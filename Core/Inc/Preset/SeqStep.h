@@ -36,9 +36,20 @@ typedef struct StepStruct
 
 typedef struct StepTiming
 {
+#ifdef LXR_FM1_BUILD
+	uint8_t flam:3; // [0:5] => off, x2, x3, x4, x6, x8
+	uint8_t shift:5; // [-13:13], on seq_shiftPulses()'s scale
+#else
 	uint8_t flam:4; // [0:5] => off, x2, x3, x4, x6, x8
 	uint8_t shift:4; // [-7:7]
+#endif
 }StepTiming;
+
+#ifdef LXR_FM1_BUILD
+#define STEP_SHIFT_ZERO 13	/* the stored shift that is on the grid */
+#else
+#define STEP_SHIFT_ZERO 7
+#endif
 
 
 typedef enum StepPositionEnum

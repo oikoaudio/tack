@@ -192,10 +192,9 @@ wait 40
 expect popup 4
 expect bpm 124
 shot tempo.png
-turn ALGO 40
+turn SELECT 1
 wait 40
 expect popup 4
-shot tempo_swing.png
 wait 1000
 expect popup 4
 wait 700
@@ -204,7 +203,7 @@ shot tempo_gone.png
 turn SELECT -4
 wait 1800
 expect popup 0
-turn ALGO -40
+turn SELECT -1
 wait 1800
 tap ENV
 wait 40

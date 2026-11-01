@@ -21,7 +21,7 @@ static const char *const EN_NAME_7[] = {"SIN","TRI","SUP","SDN","SQR","RND","XUP
 #define EN_FW_OR_0_7 0
 static const char *const EN_NAME_8[] = {"OFF","4/1","2/1","1/1","1/2","1/3","1/4","1/6","1/8","12","16","32",};
 #define EN_FW_OR_0_8 0
-static const char *const EN_NAME_9[] = {"OFF","V1","V2","V3","V4","V5","V6",};
+static const char *const EN_NAME_9[] = {"OFF","D1","D2","D3","SN","CY","HH",};
 #define EN_FW_OR_0_9 0
 static const char *const EN_NAME_10[] = {"OFF","D2 OSC CRS","D2 OSC FINE","D2 OSC WAV","D2 OSC PW","D2 AMP ATK","D2 AMP DEC","D2 AMP SLP","D2 MOD DEC","D2 MOD SLP","D2 PITCH MOD AMT","D2 VEL DST","D2 VEL AMT","D2 VEL VOL MOD","D2 FM AMT","D2 FM FRQ","D2 FM WAV","D2 OSC MODE","D2 TRN WAV","D2 TRN VOL","D2 TRN FRQ","D2 FLT FRQ","D2 FLT RES","D2 FLT TYPE","D2 FLT DRV","D2 LFO FRQ","D2 LFO SYN","D2 LFO AMT","D2 LFO WAV","D2 LFO RTG","D2 LFO OFS","D2 VOL","D2 PAN","D2 SR","D2 DRV","FX DRV/FRQ/ATK/TIM","FX COLOR/DEC/RANGE","FX TONE/THRESHOLD","FX VOL/GAIN/FEEDBA",};
 static const uint8_t EN_FW_10[] = {0,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,};

@@ -120,9 +120,13 @@ wait 30
 turn SELECT 10
 wait 40
 expect bpm 130
-turn ALGO 20
+tap GLO
+wait 40
+turn K2 20
 wait 40
 expect shuffle 20
+tap HOME
+wait 40
 turn K3 5
 wait 40
 expect param2 15
@@ -444,7 +448,7 @@ wait 40
 expect st_3 100
 turn K2 9
 wait 40
-expect st_0 7
+expect st_0 18
 turn K2 -4
 wait 40
 key 0 up
@@ -455,10 +459,10 @@ expect locks0 0
 tap ARP
 wait 40
 expect lanepage 1
-turn K4 -2
+turn ALGO -2
 wait 40
-expect st_0 1
-expect lanenudge 1
+expect st_0 6
+expect lanenudge 6
 expect st_1 2
 tap HOME
 wait 40

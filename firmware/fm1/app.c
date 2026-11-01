@@ -54,7 +54,7 @@ static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
  * It always means which voice; grey is structure, and the theme's colour is for values */
 static const uint16_t VOICE_COLOUR[TACK_VOICES] = {RGB(224, 66, 52), RGB(224, 66, 52), RGB(224, 66, 52), RGB(240, 125, 36),
                                                      RGB(242, 194, 61), RGB(237, 230, 212), RGB(237, 230, 212)};
-enum { KEY_ROLL = TACK_VOICES, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices */
+enum { KEY_ROLL = TACK_VOICES, KEY_MORPH = TACK_VOICES + 2, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices */
 
 #define SET_MAGIC 0x4B544C31u            /* "KTL1" */
 #define KIT_SLOT 256u
@@ -112,6 +112,8 @@ static struct {
     uint8_t roll_voice;                  /* the voice ROLL went down on */
     uint8_t roll_on;                     /* ROLL is down */
     uint8_t copy_used;                   /* COPY went on to a white key: not a tap */
+    uint8_t ks_slot, ks_pos;             /* the kit page: the slot, and the letter being changed */
+    char ks_name[9];
     uint32_t clear_at, revert_at;        /* when SEL and EDIT, SEL and HOME went down together, 0 not */
     uint8_t group, sub;                  /* the sound page */
     uint32_t save_todo;                  /* patterns a SAVE still has to write, one a frame */
@@ -186,6 +188,9 @@ static void midi_in(void)
                 tack_note_now((uint8_t)(d1 - 60u), 60, (uint8_t)d2);
             else if (ch >= 1u && ch <= TACK_VOICES)
                 tack_note_now((uint8_t)(ch - 1u), (uint8_t)d1, (uint8_t)d2);
+        } else if (st == 0xB0u && d1 == 1u) {    /* the mod wheel, or a DAW's lane: how far morph goes */
+            midi_seen++;
+            tack_morph_now((uint8_t)d2);
         } else if ((st & 0xF0u) == 0x80u || (st & 0xF0u) == 0x90u) {
             uint32_t ch = st & 15u;
             if (ch == 0u && d1 >= 60u && d1 < 60u + TACK_VOICES)
@@ -259,19 +264,25 @@ static void load_saved(int running_audio)
     const int got = plat_store_load(OBJ_SETTINGS, &set, sizeof set);
     const int ok = got >= (int)SET_OLD_SIZE && set.magic == SET_MAGIC;
     tack_song_load(ok && got == (int)sizeof set ? set.song : 0, ok && got == (int)sizeof set && set.song_on);
-    if (ok) {
-        if (running_audio) {
-            while (tack_kit_busy())
-                ;
-            tack_post_kit(set.kit, TACK_KIT_NO_SLOT);
-        } else {
-            tack_load_kit(set.kit);
-        }
+    if (ok)
         tack_post_bpm(set.bpm);
-        tack_set_kit_now(set.kit_now);
-        ui.kit_seen = set.kit_now;
-        ui.kit = set.kit_now ? set.kit_now - 1 : 0;
-        memcpy(ui.kit_name, set.kit + SET_KIT_NAME, 8);
+    {                                    /* the pattern's own kit, or for one that has none the kit it was left on */
+        const uint32_t pat = (uint32_t)tack_pattern();
+        const uint8_t *own = tack_pattern_kit(pat), *values = own ? own : ok ? set.kit : 0;
+        const int now = own ? tack_pattern_kit_slot(pat) : ok ? set.kit_now : 0;
+        if (values) {
+            if (running_audio) {
+                while (tack_kit_busy())
+                    ;
+                tack_post_kit(values, TACK_KIT_NO_SLOT);
+            } else {
+                tack_load_kit(values);
+            }
+            tack_set_kit_name(own ? tack_pattern_kit_name(pat) : set.kit + SET_KIT_NAME);
+            tack_set_kit_now(now);
+            ui.kit_seen = now;
+            ui.kit = now ? now - 1 : 0;
+        }
     }
 }
 
@@ -425,18 +436,38 @@ static int seq_detail(void) { return voice_page() || note_view(); }
 #define PAGE_LANE 2u
 #define PAGE_EUCLID 3u
 #define PAGE_VEL 4u
+#define PAGE_KIT 5u                      /* SEL held with SAVE: where and under what name the kit goes in the bank */
 static int vel_page(void) { return ui.song_page == PAGE_VEL; }
-static int arp_page(void) { return ui.song_page >= PAGE_LANE; }
+static int arp_page(void) { return ui.song_page >= PAGE_LANE && ui.song_page <= PAGE_VEL; }
 
 static int keys_notes(uint32_t btn)             /* the keys play the voice: not where the keys are that page's own */
 {
     return ui.note_mode && !ui.song_page && !ui.fx_page && !ui.set_page && !(btn >> B_SEQ & 1u) && !(btn >> B_ARP & 1u);
 }
 
+/* the name of the kit morph goes to, without the spaces that pad it */
+static void morph_name(char *t)
+{
+    const int kit = tack_morph_kit();
+    const uint8_t *k = kit ? kit_slot((uint32_t)kit - 1u) : 0;
+    uint32_t n = 8u;
+    memcpy(t, k ? (const char *)k : "NONE    ", 8u);
+    while (n && (t[n - 1u] == ' ' || !t[n - 1u]))
+        n--;
+    t[n] = 0;
+}
+
+static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.keys >> BK[KEY_MORPH] & 1u); }
+
 static const char *key_word(void)
 {
+    static char morph[20] = "MORPH TO ";
     if (ui.roll_on)
         return "ROLL";
+    if (morph_held()) {
+        morph_name(morph + 9);
+        return morph;
+    }
     return !keys_notes(ui.btn) && ui.held < 0 && (ui.keys >> BK[KEY_COPY] & 1u) ? "COPY TO" : 0;
 }
 
@@ -623,6 +654,36 @@ static void set_turn(uint32_t slot, int32_t e)
     }
 }
 
+/* the kit to morph to, with the POLY key held: the bank in order, from none */
+static void morph_kit_step(int32_t e)
+{
+    const int32_t next = tack_morph_kit() + (e > 0 ? 1 : -1);
+    if (next < 0)
+        return;
+    if (next && (next > (int32_t)KIT_SLOTS || !kit_slot((uint32_t)next - 1u)))
+        app_say("KITS", kit_slot(0) ? "END" : "NONE LOADED");
+    else
+        tack_post_morph_kit((uint8_t)next);
+}
+
+#define MORPH_STEP 3                     /* a click, so that a good turn crosses the whole of it */
+
+/* ALGORITHM: the name of the kit is not there to say where this comes from, so it says how to get one */
+static void morph_turn(int32_t e)
+{
+    char t[4];
+    const int32_t v = clamp(tack_morph() + e * MORPH_STEP, 0, 127);
+    if (!tack_morph_kit()) {
+        app_say(kit_slot(0) ? "HOLD POLY" : "KITS", kit_slot(0) ? "TURN PRESET" : "NONE LOADED");
+        return;
+    }
+    tack_post_morph((uint8_t)v);
+    if (ui.voice_view || ui.group != TACK_G_MAIN || ui.fx_page || ui.set_page || ui.song_page) {
+        int_text(v, t);
+        app_say("MORPH", t);
+    }
+}
+
 /* ARP's first screen: how the lane plays. Nothing here rewrites a step */
 static void lane_turn(uint32_t slot, int32_t e)
 {
@@ -637,8 +698,7 @@ static void lane_turn(uint32_t slot, int32_t e)
     } else if (slot == 2u) {                     /* clockwise is faster: 1X is the first of the speeds */
         tack_post_lane(v, (uint32_t)dir, (uint32_t)clamp(speed - e, 0, TACK_LANE_SPEEDS - 1));
     } else {
-        mark('N');
-        tack_lane_nudge_turn(v, e);
+        tack_post_lane_start(v, (uint8_t)clamp(tack_lane_start(v) + e, 0, tack_length(v) - 1));
     }
 }
 
@@ -757,6 +817,87 @@ static void song_key(uint32_t k)
     song_write(ui.song_row, (uint8_t)k);
     if (ui.song_row < TACK_SONG_ROWS - 2u)
         ui.song_row++;
+}
+
+/* The kit page: a letter at a time, from what can be read on the screen. Anything else in a name shows as a space */
+static const char KIT_LETTERS[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+#define KIT_LETTER_N ((int32_t)sizeof KIT_LETTERS - 1)
+
+static int32_t kit_letter(char c)
+{
+    if (c >= 'a' && c <= 'z')
+        c = (char)(c - 'a' + 'A');
+    for (int32_t i = 0; i < KIT_LETTER_N; i++)
+        if (KIT_LETTERS[i] == c)
+            return i;
+    return 0;
+}
+
+/* the first empty slot: the bank has no gaps, as PRESET walks it to its first empty one */
+static uint32_t kit_free(void)
+{
+    uint32_t i = 0;
+    while (i < KIT_SLOTS && kit_slot(i))
+        i++;
+    return i;
+}
+
+static void kit_page_open(void)
+{
+    const uint32_t free = kit_free();
+    ui.ks_slot = (uint8_t)(free < KIT_SLOTS ? free : KIT_SLOTS - 1u);
+    ui.ks_pos = 0;
+    for (uint32_t i = 0; i < 8u; i++)
+        ui.ks_name[i] = KIT_LETTERS[kit_letter(ui.kit_name[i])];
+    ui.ks_name[8] = 0;
+    ui.song_page = PAGE_KIT;
+    ui.fx_page = ui.set_page = 0;
+}
+
+static void kit_turn(uint32_t slot, int32_t e)
+{
+    if (slot == 0u) {
+        const uint32_t free = kit_free();
+        ui.ks_slot = (uint8_t)clamp((int32_t)ui.ks_slot + e, 0, (int32_t)(free < KIT_SLOTS ? free : KIT_SLOTS - 1u));
+    } else if (slot == 1u) {
+        ui.ks_pos = (uint8_t)clamp((int32_t)ui.ks_pos + e, 0, 7);
+    } else if (slot == 2u) {
+        ui.ks_name[ui.ks_pos] = KIT_LETTERS[clamp(kit_letter(ui.ks_name[ui.ks_pos]) + e, 0, KIT_LETTER_N - 1)];
+    }
+}
+
+/* Writes the slot. Sixteen slots share a flash sector, so replacing one rewrites the other fifteen: a power cut in that moment
+ * would lose them from the bank, though never from a pattern, and a filled slot goes in with no erase at all */
+static void kit_bank_save(void)
+{
+    static uint8_t sector[0x1000];
+    const uint32_t slot = ui.ks_slot, base = KIT_BASE + slot / 16u * 0x1000u, at = slot % 16u * KIT_SLOT;
+    const uint8_t *now = plat_data(base);
+    uint8_t t[4];
+    int bad, fresh = 1;
+    if (tack_running()) {
+        app_say("STOP FIRST", "");
+        return;
+    }
+    if (!now || ui.save_todo || ui.save_hold || tack_kit_busy())
+        return;
+    memcpy(sector, now, sizeof sector);
+    for (uint32_t i = 0; i < KIT_SLOT; i++)
+        fresh &= sector[at + i] == 0xFFu;
+    memset(sector + at, 0, KIT_SLOT);
+    memcpy(sector + at, ui.ks_name, 8u);
+    memcpy(sector + at + 8u, tack_kit(), tack_kit_size());
+    mark('K');
+    bad = fresh ? plat_data_write(base + at, sector + at, KIT_SLOT) : plat_data_erase(base) || plat_data_write(base, sector, sizeof sector);
+    if (bad) {
+        app_say("KIT SAVE", "FAILED");
+        return;
+    }
+    tack_set_kit_name((const uint8_t *)ui.ks_name);
+    tack_post_kit_home((uint8_t)slot);
+    ui.song_page = 0;
+    int_text((int32_t)slot + 1, (char *)t);
+    app_say("KIT SAVED", (char *)t);
 }
 
 /* the chain playing, over the rows from the one being edited, as the white keys would write them */
@@ -1069,7 +1210,7 @@ static void input(void)
         tack_post_roll(ui.roll_voice, 0);
         ui.redraw = 1;
     }
-    if ((down | up) >> BK[KEY_COPY] & 1u)
+    if ((down | up) >> BK[KEY_COPY] & 1u || (down | up) >> BK[KEY_MORPH] & 1u)
         ui.redraw = 1;
     if (down >> BK[KEY_COPY] & 1u)
         ui.copy_used = 0;
@@ -1096,6 +1237,8 @@ static void input(void)
                 pattern_copy(k);
             } else if (ui.song_page == PAGE_SONG) {
                 song_key(k);
+            } else if (ui.song_page == PAGE_KIT) {
+                ;
             } else if (btn >> B_SEL & 1u) {      /* SEL held: the lane ends here */
                 tack_post_length((uint8_t)ui.voice, (uint8_t)(step_of(k) + 1));
                 app_say("LENGTH", "");
@@ -1226,8 +1369,15 @@ static void input(void)
         ui.held_used = 1;
         app_say("LOCKS", "CLEARED");
     }
-    if (pressed(btn, B_SAVE))
-        save();
+    if (pressed(btn, B_SAVE)) {
+        if (btn >> B_SEL & 1u)
+            kit_page_open();
+        else if (ui.song_page == PAGE_KIT)
+            kit_bank_save();
+        else
+            save();
+        ui.redraw = 1;
+    }
     if (pressed(btn, B_HOME) && (btn >> B_GLO & 1u)) {
         ui.glo_used = 1;
         ui.cpu_peak = 0;
@@ -1259,6 +1409,8 @@ static void input(void)
                 set_turn(k, e);
             } else if (vel_page()) {
                 vel_turn(k, e);
+            } else if (ui.song_page == PAGE_KIT) {
+                kit_turn(k, e);
             } else if (ui.song_page == PAGE_EUCLID) {
                 eu_turn(k, e);
             } else if (ui.song_page == PAGE_LANE) {
@@ -1307,15 +1459,19 @@ static void input(void)
     } else if ((e = plat_enc(EN_ALGO)) != 0) {
         if (seq_detail()) {
             vv_turn(1u, e);
+        } else if (ui.song_page == PAGE_LANE) {  /* steps on screen, and all of them */
+            mark('N');
+            tack_lane_nudge_turn((uint8_t)ui.voice, e);
         } else {
-            tack_post_shuffle((uint8_t)clamp((int32_t)tack_shuffle() + e, 0, 127));
-            tempo_show();
+            morph_turn(e);
         }
         ui.redraw = 1;
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {
         if (ui.held >= 0)
             step_turn(TACK_ST_PROB, POP_CHANCE, e);
+        else if (morph_held())
+            morph_kit_step(e);
         else
             kit_step(e);
         ui.redraw = 1;
@@ -1462,8 +1618,10 @@ static void lights(void)
         btn |= 1u << B_REC;
     if (ui.set_page)
         btn |= 1u << B_GLO;
-    if (ui.song_page)
+    if (arp_page() || ui.song_page == PAGE_SONG)
         btn |= 1u << (arp_page() ? B_ARP : B_SEQ);
+    if (ui.song_page == PAGE_KIT)
+        btn |= 1u << B_SAVE;
     if (tack_running())
         btn |= 1u << B_PLAY | LED_PLAY_GREEN;
     plat_lights(btn, keys, 0, dim, 1);
@@ -1805,7 +1963,7 @@ static void dir_arrow(int32_t x, int32_t y, int back, uint16_t c)
 
 static void dir_glyph(int32_t x, int32_t y, uint32_t dir, uint16_t c)
 {
-    if (dir == 3u) {                             /* random: a die's four */
+    if (dir == 4u) {                             /* random: a die's four */
         cv_rect(x, y, 3, 3, c);
         cv_rect(x + 5, y, 3, 3, c);
         cv_rect(x, y + 4, 3, 3, c);
@@ -1814,7 +1972,7 @@ static void dir_glyph(int32_t x, int32_t y, uint32_t dir, uint16_t c)
         if (dir != 0u)
             dir_arrow(x, y, 1, c);
         if (dir != 1u)
-            dir_arrow(dir == 2u ? x + 5 : x, y, 0, c);
+            dir_arrow(dir == 2u ? x + 5 : dir == 3u ? x + 3 : x, y, 0, c);
     }
 }
 
@@ -2296,6 +2454,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
 
 static void pg_top(void)
 {
+    static const char *const RETRIG_NAME[6] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "HI-HAT"};
     char t[16];
     cv_begin(240, 20, C_BLACK);
     cv_rect(0, 19, 240, 1, C_DIM);
@@ -2308,6 +2467,8 @@ static void pg_top(void)
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
         cv_text(5, 2, &FONT_B, page_label(row_now(), sl), C_WHITE);
+        if (name && v && same(sl->label, "RETRIG"))  /* the box has room for D1, and here there is for the voice */
+            name = RETRIG_NAME[(v - 1u) % 6u];
         if (!name)
             value_text(sl, v, t);
         cv_text(235 - text_w(&FONT_B, name ? name : t), 2, &FONT_B, name ? name : t, C_WHITE);
@@ -2324,8 +2485,8 @@ static void pg_top(void)
         for (int k = 0; k < len; k++)
             cv_rect(240 - (8 - k) * 16, 4, 12, 11, mask >> k & 1 ? C_HI : C_DIM);
     } else {
-        if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG)
-            cv_text(5, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : "SONG", C_HI);
+        if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG || ui.song_page == PAGE_KIT)
+            cv_text(5, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_KIT ? "SAVE KIT" : "SONG", C_HI);
         else
             cv_text(5, 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
         t[0] = 'P';
@@ -2396,7 +2557,7 @@ static void draw_tempo(void)
     }
     cv_rect(159, 72, 58, 4, C_WHITE);
     cv_text(60 - text_w(&FONT_B, "(SELECT)") / 2, 118, &FONT_B, "(SELECT)", C_GRAY);
-    cv_text(180 - text_w(&FONT_B, "(ALGO)") / 2, 118, &FONT_B, "(ALGO)", C_GRAY);
+    cv_text(180 - text_w(&FONT_B, "(GLO)") / 2, 118, &FONT_B, "(GLO)", C_GRAY);
     cv_blit(0, 52);
 }
 
@@ -2409,8 +2570,8 @@ static void draw_popup(void)
     cv_begin(212, POP_H, C_BLACK);
     outline(0, 0, 212, POP_H, 2, C_WHITE);
     if (ui.popup == POP_NUDGE) {
-        const int nudge = tack_step_get(v, st, TACK_ST_NUDGE);   /* a unit is 1/8 of a step: 3 of the sequencer's pulses */
-        const int32_t x = 106 + nudge * 13;
+        const int nudge = tack_step_get(v, st, TACK_ST_NUDGE);   /* in pulses, 24 to a step. A tick of the ruler is 3 */
+        const int32_t x = 106 + nudge * 13 / 3;
         pop_centre(8, &FONT_B, "MICRO TIMING", C_WHITE);
         for (int k = -7; k <= 7; k++) {
             const int32_t h = k == 0 ? 24 : k % 2 == 0 ? 16 : 10;
@@ -2426,7 +2587,7 @@ static void draw_popup(void)
             n = 0;
             while (t[n])
                 n++;
-            const char *const rest = nudge < 0 ? "/8 STEP EARLY" : "/8 STEP LATE";
+            const char *const rest = nudge < 0 ? "/24 STEP EARLY" : "/24 STEP LATE";
             for (uint32_t i = 0; rest[i]; i++)
                 t[n++] = rest[i];
             t[n] = 0;
@@ -2681,6 +2842,68 @@ static void pg_song_top(uint32_t *last)
     cv_blit(0, PG_Y);
 }
 
+static void pg_kit_top(uint32_t *last)
+{
+    const uint32_t key = rk(rk(rk(43u, ui.ks_slot), ui.ks_pos), (uint32_t)kit_letter(ui.ks_name[ui.ks_pos]));
+    char t[2] = {ui.ks_name[ui.ks_pos], 0};
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, tint(C_HI));
+    wd_value(0, ui.ks_slot + 1u, 0, 1, 0);
+    pg_column(0, "SLOT", 1);
+    wd_value(1, ui.ks_pos + 1u, 0, 1, 0);
+    pg_column(1, "PLACE", 1);
+    wd_box(PG_CW * 2 + PG_CW / 2, 0, t[0] == ' ' ? "SPACE" : t, C_HI);
+    pg_column(2, "LETTER", 1);
+    cv_blit(0, PG_Y);
+}
+
+/* the name, a box to each letter and the one being changed lit */
+static void pg_kit_name(uint32_t *last)
+{
+    uint32_t key = rk(47u, ui.ks_pos);
+    for (uint32_t i = 0; i < 8u; i++)
+        key = rk(key, (uint8_t)ui.ks_name[i]);
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, C_BLACK);
+    for (uint32_t i = 0; i < 8u; i++) {
+        const int32_t x = 6 + (int32_t)i * 29;
+        const char t[2] = {ui.ks_name[i], 0};
+        cv_rect(x, 12, 26, 44, i == ui.ks_pos ? C_HI : C_LINE);
+        cv_text(x + 13 - text_w(&FONT_M, t) / 2, 22, &FONT_M, t, i == ui.ks_pos ? C_BLACK : C_WHITE);
+    }
+    cv_blit(0, PG_Y + PG_RH);
+}
+
+/* what the slot holds, as it is about to go */
+static void pg_kit_note(uint32_t *last)
+{
+    const uint8_t *now = kit_slot(ui.ks_slot);
+    const uint32_t key = rk(rk(53u, ui.ks_slot), now != 0);
+    char t[20];
+    uint32_t n = 0;
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, C_BLACK);
+    if (now) {
+        memcpy(t, "REPLACES ", 9u);
+        memcpy(t + 9, now, 8u);
+        n = 17u;
+        while (n > 9u && (t[n - 1u] == ' ' || !t[n - 1u]))
+            n--;
+        t[n] = 0;
+    } else {
+        memcpy(t, "EMPTY SLOT", 11u);
+    }
+    cv_text(120 - text_w(&FONT_B, t) / 2, 10, &FONT_B, t, now ? C_HI : C_WHITE);
+    cv_text(120 - text_w(&FONT_XS, "SAVE WRITES IT, HOME LEAVES") / 2, 34, &FONT_XS, "SAVE WRITES IT, HOME LEAVES", C_GRAY);
+    cv_blit(0, PG_Y + 2u * PG_RH);
+}
+
 /* the rows around the one being edited, laid out as the white keys are; a line under the row playing */
 static void pg_song_rows(uint32_t line, uint32_t *last)
 {
@@ -2765,7 +2988,7 @@ static void vv_cell(int s, int32_t x, int len, int head, int low)
         cv_rect(x, VV_FOOT + 6, VV_W, 1, C_DIM);
         cv_rect(x + VV_W / 2 - 1, VV_FOOT + 3, 2, 7, C_GRAY);
         if (nudge)
-            cv_rect(x + VV_W / 2 - 2 + nudge * 10 / 7, VV_FOOT + 2, 4, 9, C_WHITE);
+            cv_rect(x + VV_W / 2 - 2 + (nudge * 10 + (nudge < 0 ? -20 : 20)) / 21, VV_FOOT + 2, 4, 9, C_WHITE);
         if (locks && !note_view()) {
             t[0] = 'L';
             int_text(locks, t + 1);
@@ -2832,7 +3055,7 @@ static void vv_nudge(uint32_t i, int value)
     cv_rect(x + 5, 41, 50, 2, C_LINE);
     cv_rect(x + 29, 38, 2, 8, C_GRAY);
     if (value)
-        cv_rect(x + 28 + value * 25 / 7, 38, 4, 8, VOICE_COLOUR[ui.voice]);
+        cv_rect(x + 28 + (value * 25 + (value < 0 ? -20 : 20)) / 21, 38, 4, 8, VOICE_COLOUR[ui.voice]);
 }
 
 /* the velocity page: the same bars, and what will be written into them */
@@ -2864,7 +3087,8 @@ static void pg_lane_dials(uint32_t *last)
     const int nudge = tack_lane_nudge_get(v), len = tack_length(v);
     const uint32_t dir = tack_lane_dir(v), speed = tack_lane_speed(v);
     char t[8];
-    const uint32_t key = rk(rk(rk(rk(rk(37u, v), (uint32_t)(nudge + 8)), (uint32_t)len), dir), speed);
+    const int start = tack_lane_start(v);
+    const uint32_t key = rk(rk(rk(rk(rk(rk(37u, v), (uint32_t)(nudge + 32)), (uint32_t)len), dir), speed), (uint32_t)start);
     if (key == *last)
         return;
     *last = key;
@@ -2873,10 +3097,14 @@ static void pg_lane_dials(uint32_t *last)
     vv_dial(0, "LENGTH", t, 1, len, TACK_BARS * 16);
     vv_dial(1, "DIRECTION", tack_lane_dir_name(dir), 1, 0, 0);
     vv_dial(2, "SPEED", tack_lane_speed_name(speed), 1, 0, 0);
-    t[0] = nudge < 0 ? '-' : '+';
-    int_text(nudge < 0 ? -nudge : nudge, nudge ? t + 1 : t);
-    vv_dial(3, "NUDGE", t, 1, 0, 0);
-    vv_nudge(3, nudge);
+    int_text(start + 1, t);
+    vv_dial(3, "START", t, 1, 0, 0);
+    if (nudge) {                                 /* ALGORITHM's: most lanes have none */
+        t[0] = nudge < 0 ? '-' : '+';
+        int_text(nudge < 0 ? -nudge : nudge, t + 1);
+        cv_text(5, 47, &FONT_XS, "NUDGE", C_GRAY);
+        cv_text(5 + text_w(&FONT_XS, "NUDGE") + 5, 47, &FONT_XS, t, C_WHITE);
+    }
     cv_blit(0, PG_Y + 2u * (VV_H + 2u));
 }
 
@@ -2969,14 +3197,18 @@ static void pg_screen(int invalid)
     static uint32_t rows[SCREEN_ROWS];
     static int was;
     const int now = ui.fx_page ? 1 : ui.set_page ? 2 : vel_page() ? 6 : ui.song_page == PAGE_LANE ? 7 : ui.song_page == PAGE_EUCLID ? 8
-                    : ui.song_page ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
+                    : ui.song_page == PAGE_KIT ? 9 : ui.song_page ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
     if (invalid || now != was) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
         rows[0] = rows[1] = rows[2] = 0xFFFFFFFFu;
         was = now;
     }
     pg_top();
-    if (now == 1) {
+    if (now == 9) {
+        pg_kit_top(&rows[0]);
+        pg_kit_name(&rows[1]);
+        pg_kit_note(&rows[2]);
+    } else if (now == 1) {
         pg_fx_sends(&rows[0]);
         pg_fx_row(1, &rows[1]);
         pg_fx_row(2, &rows[2]);
@@ -3030,7 +3262,17 @@ static void draw(void)
     }
     on_grid = 0;
     cv_begin(240, 52, C_BLACK);
-    cv_text(10, 4, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
+    if (tack_morph_kit() && !ui.msg_until && !key_word()) {   /* a crossfader between the two kits */
+        char to[9];
+        const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
+        morph_name(to);
+        cv_text(10, 0, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);
+        cv_text(112 - text_w(&FONT_XS, to), 0, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
+        cv_rect(10, 16, 102, 2, C_LINE);
+        cv_rect(10 + tack_morph() * 96 / 127, 14, 6, 6, C_HI);
+    } else {
+        cv_text(10, 4, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
+    }
     t[0] = 'P';
     int_text(tack_pattern() + 1, t + 1);
     cv_text(150, 4, &FONT_B, t, tack_running() ? C_HI : C_GRAY);
@@ -3142,7 +3384,8 @@ void app_frame(void)
     for (v = 0; v < TACK_VOICES; v++)          /* any lane's playhead moved */
         h = h * 67 + tack_playhead((uint8_t)v);
     h = h * 67 + tack_song_mode() * 256 + tack_song_pos();
-    h = h * 67 + tack_bits();
+    h = h * 67 + tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384;
+    h = h * 67 + tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64;
     h = h * 67 + tack_length((uint8_t)ui.voice) * 64 + (int)tack_lane_dir((uint8_t)ui.voice) * 4 + (int)tack_lane_speed((uint8_t)ui.voice);
     if (ui.note_mode || ui.held >= 0) {          /* a step's edit too */
         const uint8_t s = (uint8_t)(ui.held >= 0 ? step_of((uint32_t)ui.held) : (int)note_cursor());
@@ -3157,11 +3400,12 @@ void app_frame(void)
     save_frame();
     (void)tack_kit_busy();                     /* a kit that went in shows, whichever way it came */
     if (tack_kit_now() != ui.kit_seen) {
-        const uint8_t *k = tack_kit_now() ? kit_slot((uint32_t)tack_kit_now() - 1u) : 0;
         ui.kit_seen = tack_kit_now();
         ui.kit = ui.kit_seen ? ui.kit_seen - 1 : 0;
-        if (k)
-            memcpy(ui.kit_name, k, 8);
+        ui.redraw = 1;
+    }
+    if (memcmp(ui.kit_name, tack_kit_name(), 8u)) {   /* the pattern's own, which need be in no slot */
+        memcpy(ui.kit_name, tack_kit_name(), 8u);
         ui.redraw = 1;
     }
     lights();
@@ -3200,6 +3444,10 @@ void app_frame(void)
 }
 
 #ifdef PLAT_HOST
+uint8_t tack_heard(uint16_t param);
+int tack_morph_kept(uint16_t param);
+int tack_morph_differs(void);
+
 int app_expect(const char *what, int *got)
 {
     if (!strcmp(what, "voice"))
@@ -3264,6 +3512,28 @@ int app_expect(const char *what, int *got)
         *got = ui.fx_page;
     else if (!strcmp(what, "crush"))
         *got = tack_get_param(tack_rate_param());
+    else if (!strcmp(what, "kitpage"))
+        *got = ui.song_page == PAGE_KIT;
+    else if (!strcmp(what, "kitslot"))
+        *got = ui.ks_slot;
+    else if (!strncmp(what, "kitletter", 9))  /* kitletterN: the kit page's name */
+        *got = ui.ks_name[atoi(what + 9)];
+    else if (!strncmp(what, "kitname", 7))    /* kitnameN: the name of what is playing */
+        *got = ui.kit_name[atoi(what + 7)];
+    else if (!strncmp(what, "bankname", 8))   /* bankname0: the first letter in that slot, 0 empty */
+        *got = kit_slot((uint32_t)atoi(what + 8)) ? kit_slot((uint32_t)atoi(what + 8))[0] : 0;
+    else if (!strcmp(what, "morph"))
+        *got = tack_morph();
+    else if (!strcmp(what, "morphkit"))
+        *got = tack_morph_kit();
+    else if (!strcmp(what, "morphdiff"))     /* the parameters heard that are not the kit's */
+        *got = tack_morph_differs();
+    else if (!strncmp(what, "heard", 5))     /* heardN: parameter N as the voices have it */
+        *got = tack_heard((uint16_t)atoi(what + 5));
+    else if (!strncmp(what, "kept", 4))      /* keptN: morph leaves parameter N alone */
+        *got = tack_morph_kept((uint16_t)atoi(what + 4));
+    else if (!strncmp(what, "kitv", 4))      /* kitvN: parameter N as the kit has it */
+        *got = tack_get_param((uint16_t)atoi(what + 4));
     else if (!strcmp(what, "bits"))
         *got = tack_bits();
     else if (!strcmp(what, "bitslabel"))
@@ -3274,6 +3544,8 @@ int app_expect(const char *what, int *got)
         *got = ui.song_page == PAGE_EUCLID;
     else if (!strcmp(what, "lanedir"))
         *got = (int)tack_lane_dir((uint8_t)ui.voice);
+    else if (!strcmp(what, "lanestart"))
+        *got = tack_lane_start((uint8_t)ui.voice);
     else if (!strcmp(what, "lanespeed"))
         *got = (int)tack_lane_speed((uint8_t)ui.voice);
     else if (!strcmp(what, "head"))          /* the selected lane's step */
@@ -3281,7 +3553,7 @@ int app_expect(const char *what, int *got)
     else if (!strcmp(what, "patused"))
         *got = (int)tack_patterns_used();
     else if (!strcmp(what, "keyword"))       /* 1 ROLL, 2 COPY TO */
-        *got = !key_word() ? 0 : key_word()[0] == 'R' ? 1 : 2;
+        *got = !key_word() ? 0 : key_word()[0] == 'R' ? 1 : key_word()[0] == 'C' ? 2 : 3;
     else if (!strncmp(what, "st", 2) && what[2] == '_')   /* st_N: step 0's slot N on the selected voice */
         *got = tack_step_get((uint8_t)ui.voice, 0, (uint32_t)atoi(what + 3));
     else if (!strcmp(what, "lanenudge"))

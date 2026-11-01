@@ -8,7 +8,7 @@
 #define TACK_RATE 44100u       /* the FM-1's output; REAL_FS is set to match (fm1.toml) */
 #define TACK_PATTERNS 16u
 #define TACK_BARS 4u
-#define TACK_LOCKS_MAX 640u            /* in a pattern */
+#define TACK_LOCKS_MAX 500u            /* in a pattern: its record has room for more, kept for what comes next */
 #define TACK_STEP_LOCKS 8u             /* on a step: each costs two parameter updates when the step fires */
 
 void tack_init(void);
@@ -50,6 +50,14 @@ int tack_post_lock_clear(uint8_t voice, uint8_t step);
 #define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
 int tack_post_kit(const uint8_t *values, uint8_t slot);
 int tack_kit_busy(void);
+/* A pattern keeps its own kit with its edits, loaded as the pattern starts, so the bank is where kits come from. One with no steps
+ * and no edits has none yet and plays on what is playing */
+const uint8_t *tack_kit_name(void);                      /* the 8 characters of what is playing */
+void tack_set_kit_name(const uint8_t *name);
+const uint8_t *tack_pattern_kit(uint32_t pattern);       /* its kit's values, 0 none */
+const uint8_t *tack_pattern_kit_name(uint32_t pattern);
+int tack_pattern_kit_slot(uint32_t pattern);             /* the bank's slot + 1 it came from, 0 none */
+int tack_post_kit_home(uint8_t slot);                    /* the kit playing is now that slot's: saved there from the panel */
 /* where a pattern's kit is read from when the sequencer switches to it: the slot's parameters, in flash, 0 if empty. It
  * runs in the audio interrupt */
 typedef const uint8_t *(*TackKitFind)(uint32_t slot);
@@ -158,7 +166,8 @@ int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
 const char *tack_flam_name(int flam);
 /* The whole lane: every step's nudge moves by e, so a hit's own nudge stays relative. Get reads its first hit */
 /* How a lane plays: a direction and a speed, saved with the pattern. A pass starts and ends on the same bar in every direction,
- * ping-pong turns at each pass's end, and random plays every step once a pass in a new order. Half and quarter speed hold each
+ * ping-pong turns at each pass's end, so each end plays twice, bounce turns on the end steps, so it drifts, and random plays every
+ * step once a pass in a new order. Half and quarter speed hold each
  * step for 2 or 4 ticks. A pattern's length is its longest lane in steps at full speed: a slow lane runs on across the repeats
  * of its pattern, and a change of pattern cuts it off */
 uint32_t tack_lane_dir(uint8_t voice);
@@ -166,8 +175,19 @@ uint32_t tack_lane_speed(uint8_t voice);
 const char *tack_lane_dir_name(uint32_t dir);
 const char *tack_lane_speed_name(uint32_t speed);
 int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed);
-#define TACK_LANE_DIRS 4u
+#define TACK_LANE_DIRS 5u
+/* the step a pass starts from: the lane plays round from there, and no step moves */
+int tack_lane_start(uint8_t voice);
+int tack_post_lane_start(uint8_t voice, uint8_t start);
 #define TACK_LANE_SPEEDS 3u
+/* Morph blends the kit towards a second kit from the bank, saved with the pattern with how far it goes, 0 to 127. kit is the
+ * bank's slot + 1, 0 none. The kit's own values, on the dials and in a save, do not change */
+#define TACK_MORPH_KITS 128u
+int tack_morph(void);
+int tack_morph_kit(void);
+int tack_post_morph(uint8_t amount);
+int tack_post_morph_kit(uint8_t kit);
+void tack_morph_now(uint8_t amount);                     /* from the audio interrupt: MIDI in */
 uint32_t tack_patterns_used(void);                       /* a bit each: the patterns with a step set */
 int tack_lane_nudge_get(uint8_t voice);
 int tack_lane_nudge_turn(uint8_t voice, int32_t e);

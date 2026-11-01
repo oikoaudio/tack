@@ -190,8 +190,12 @@ tap HOME
 wait 40
 tapkey 1
 wait 40
-turn ALGO 24
-wait 1700
+tap GLO
+wait 40
+turn K2 24
+wait 40
+tap HOME
+wait 40
 key 25 down
 wait 40
 tapkey 2
@@ -217,3 +221,16 @@ wait 1140
 shot overview.png
 tap PLAY
 wait 60
+
+# morph: a second kit, whose name is made up. The script's folder needs a kits.bin, written by hand for these shots
+wait 40
+data kits.bin 770048
+key 22 down
+wait 40
+turn PRESET 1
+wait 40
+key 22 up
+wait 40
+turn ALGO 16
+wait 1200
+shot morph.png

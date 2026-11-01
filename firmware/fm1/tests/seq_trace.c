@@ -161,7 +161,15 @@ int seq_trace_run(uint32_t r)
     fresh("shifts");
     for (uint8_t s = 0; s < 16; s += 2) {
         step(0, 0, s, 100, 60);
+#ifdef LXR_FM1_BUILD                            /* the LXR's positions, on the FM-1's scale */
+        {
+            static const uint8_t WHERE[8] = {0, 3, 6, 9, 10, 11, 12, 13};
+            const int n = (int)(s & 15u) - 7;
+            seq_patternSet.seq_stepTiming[0][0][s].shift = (uint8_t)(STEP_SHIFT_ZERO + (n < 0 ? -WHERE[-n] : WHERE[n]));
+        }
+#else
         seq_patternSet.seq_stepTiming[0][0][s].shift = (uint8_t)(s & 15u);
+#endif
     }
     go();
     run_ms(4000);

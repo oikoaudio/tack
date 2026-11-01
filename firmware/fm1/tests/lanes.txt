@@ -94,6 +94,58 @@ wait 20
 tap PLAY
 wait 60
 
+# bounce: it turns on the end steps, which play once
+turn K2 1
+wait 40
+expect lanedir 3
+press PLAY
+wait 20
+expect head 0
+wait 125
+expect head 1
+wait 125
+expect head 2
+wait 125
+expect head 3
+wait 125
+expect head 2
+wait 125
+expect head 1
+wait 125
+expect head 0
+wait 125
+expect head 1
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K2 -3
+wait 40
+expect lanedir 0
+
+# START: the pass begins there and comes round, and no step moves
+turn K4 2
+wait 40
+expect lanestart 2
+expect step0 1
+press PLAY
+wait 20
+expect head 2
+wait 125
+expect head 3
+wait 125
+expect head 0
+wait 125
+expect head 1
+wait 125
+expect head 2
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K4 -2
+wait 40
+
 # half speed: each step holds for two, and clockwise is back to full. A step plays once in its two
 turn K2 -2
 wait 40
@@ -160,9 +212,9 @@ wait 1830
 tap PLAY
 wait 60
 expect fires1 17
-turn K2 1
+turn K2 2
 wait 40
-expect lanedir 3
+expect lanedir 4
 tap PLAY
 wait 1830
 tap PLAY
@@ -186,7 +238,7 @@ turn K3 1
 wait 40
 expect lanespeed 0
 
-# nudged early, reversed: the step after the first of the pass is the one before it by number. Drum 3, step 3, 7 early, in
+# nudged early, reversed: the step after the first of the pass is the one before it by number. Drum 3, step 3, 21 pulses early, in
 # the window of step 4, which plays first. Taken for step 1, it would never play
 tapkey 5
 wait 60
@@ -197,9 +249,9 @@ turn K1 -12
 wait 40
 turn K2 1
 wait 40
-turn K4 -7
+turn ALGO -13
 wait 40
-expect lanenudge -7
+expect lanenudge -21
 press PLAY
 wait 100
 expect fires2 2
@@ -207,12 +259,12 @@ release PLAY
 wait 20
 tap PLAY
 wait 60
-turn K4 7
+turn ALGO 13
 wait 40
 turn K2 -1
 wait 40
 
-# recurrence reversed: snare, step 4, plays on the second pass only, 7 early. It is the first of a reversed pass, so its early
+# recurrence reversed: snare, step 4, plays on the second pass only, 21 pulses early. It is the first of a reversed pass, so its early
 # hit, in the last step of the first pass, belongs to the pass about to start
 tapkey 8
 wait 60
@@ -228,7 +280,7 @@ wait 40
 tapkey 1
 wait 40
 expect recurmask3 2
-turn ALGO -7
+turn ALGO -13
 wait 40
 key 6 up
 wait 40
@@ -295,7 +347,7 @@ expect pattern 0
 expect lanespeed 1
 tapkey 3
 wait 60
-expect lanedir 3
+expect lanedir 4
 key 25 down
 wait 40
 tapkey 4
@@ -309,7 +361,7 @@ wait 30
 release SEQ
 wait 60
 expect pattern 2
-expect lanedir 3
+expect lanedir 4
 press SEQ
 wait 30
 tapkey 0
@@ -328,7 +380,7 @@ tapkey 3
 wait 60
 expect pattern 0
 expect len1 4
-expect lanedir 3
+expect lanedir 4
 tapkey 10
 wait 60
 expect lanespeed 1

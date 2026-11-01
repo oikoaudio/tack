@@ -1,0 +1,229 @@
+# Morph: firmware/fm1/build/host/tack_host firmware/fm1/tests/morph.txt OUTDIR
+# verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50. Parameter 8 is drum 1's
+# PITCH, 1 its wave, 149 its velocity's target and 215 its route. The init kit has 31 for parameter 8
+wait 600
+data kits.bin 770048
+
+# no kit to morph to: ALGORITHM says how to get one, and nothing moves
+expect morph 0
+expect morphkit 0
+turn ALGO 5
+wait 40
+expect morph 0
+expect morphdiff 0
+
+# the POLY key held names itself, and PRESET picks the kit, from none. PRESET alone is still the main kit
+key 22 down
+wait 40
+expect keyword 3
+shot morph_to.png
+turn PRESET 1
+wait 40
+expect morphkit 1
+turn PRESET 1
+wait 40
+expect morphkit 2
+turn PRESET 1
+wait 40
+expect morphkit 2
+expect kit 0
+key 22 up
+wait 40
+expect keyword 0
+
+# ALGORITHM crosses it in a good turn. What the voices hear moves, and the kit does not
+turn ALGO 42
+wait 60
+expect morph 126
+turn ALGO 1
+wait 60
+expect morph 127
+expect morphdiff >0
+expect heard8 50
+expect kitv8 31
+expect kept149 1
+expect kept215 1
+expect heard149 >-1
+shot morph_home.png
+
+# half way: a number between the two, a wave not yet changed. Past half way it goes to the other kit's
+turn ALGO -21
+wait 60
+expect morph 64
+expect heard8 41
+expect heard1 50
+turn ALGO -1
+wait 60
+expect morph 61
+expect heard8 40
+expect heard1 0
+
+# a dial turned while morphing moves the kit, and the blend follows at once
+turn K1 6
+wait 60
+expect kitv8 37
+expect sl0 37
+expect heard8 43
+
+# CC 1 on channel 1 sets it too, so a mod wheel or a DAW's lane can draw it. Another CC or channel does not
+midi USB B0 01 28
+wait 60
+expect morph 40
+midi USB B1 01 7F
+wait 40
+midi USB B0 07 7F
+wait 40
+expect morph 40
+midi USB B0 01 3D
+wait 60
+expect morph 61
+
+# none of the way back is exactly the kit
+turn ALGO -60
+wait 60
+expect morph 0
+expect morphdiff 0
+expect heard8 37
+turn K1 -6
+wait 60
+expect heard8 31
+
+# the pattern keeps both: another has none, and back they come
+turn ALGO 43
+wait 60
+expect morph 127
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 60
+expect pattern 1
+expect morph 0
+expect morphkit 0
+expect morphdiff 0
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+expect morph 127
+expect morphkit 2
+expect heard8 50
+
+# a copy takes them
+key 25 down
+wait 40
+tapkey 4
+wait 60
+key 25 up
+wait 40
+press SEQ
+wait 30
+tapkey 4
+wait 30
+release SEQ
+wait 60
+expect pattern 2
+expect morph 127
+expect morphkit 2
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+
+# on the sound pages too, and in a view with steps ALGORITHM still nudges
+tap EDIT
+wait 40
+turn ALGO -2
+wait 60
+expect morph 121
+turn ALGO 2
+wait 60
+tap HOME
+wait 40
+tapkey 0
+wait 40
+tap SEQ
+wait 40
+expect selstep 0
+turn ALGO 2
+wait 40
+expect selslot0 2
+expect morph 127
+turn ALGO -2
+wait 40
+tap HOME
+wait 40
+
+# a kit loaded under the morph is the new kit on the dials, not the blend
+turn PRESET 1
+wait 60
+expect kit 1
+expect sl0 50
+expect kitv8 50
+expect heard8 50
+turn ALGO -42
+wait 60
+expect morph 1
+turn ALGO -1
+wait 60
+expect morphdiff 0
+turn PRESET -1
+wait 60
+expect kit 0
+expect kitv8 40
+
+# a step with a lock under the morph, and the kit is unchanged by it. lock_test.c hears what a lock's end gives back
+turn ALGO 43
+wait 60
+expect morph 127
+tap SEQ
+wait 40
+tap EDIT
+wait 40
+tap HOME
+wait 40
+tapkey 2
+wait 40
+key 2 down
+wait 40
+tap EDIT
+wait 40
+turn K1 -9
+wait 40
+key 2 up
+wait 40
+tap HOME
+wait 40
+expect step1 1
+tap PLAY
+wait 2300
+tap PLAY
+wait 60
+expect heard8 50
+
+# saved, through a reboot
+tap SAVE
+wait 300
+reboot
+wait 600
+expect morph 127
+expect morphkit 2
+expect heard8 50
+expect kitv8 40
+
+# HOME takes none of it back: the POLY key can go back to none
+key 22 down
+wait 40
+turn PRESET -2
+wait 40
+expect morphkit 0
+key 22 up
+wait 60
+expect morphdiff 0
+expect dropped 0

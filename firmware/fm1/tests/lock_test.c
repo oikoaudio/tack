@@ -344,17 +344,17 @@ static void step_tests(void)
     tack_post_step(v, 4, 1);
     run(3);
     const int base = first_hit(1200);
-    tack_step_turn(v, 4, 0, 4);            /* 4 eighths of a step later: 125 ms, 86 blocks */
+    tack_step_turn(v, 4, 0, 10);           /* 12 pulses later, half a step: 125 ms, 86 blocks */
     run(3);
     const int late = first_hit(1200);
-    tack_step_turn(v, 4, 0, -8);
+    tack_step_turn(v, 4, 0, -20);
     run(3);
     const int early = first_hit(1200);
-    tack_step_turn(v, 4, 0, 4);
-    tack_lane_nudge_turn(v, 2);            /* 43 blocks */
+    tack_step_turn(v, 4, 0, 10);
+    tack_lane_nudge_turn(v, 6);            /* 6 pulses: 43 blocks */
     run(3);
     const int lane = first_hit(1200);
-    tack_lane_nudge_turn(v, -2);
+    tack_lane_nudge_turn(v, -6);
     run(3);
     check("a nudged hit comes 125 ms late", abs(late - base - 86) <= PULSE, base, late);
     check("and 125 ms early", abs(base - early - 86) <= PULSE, base, early);
@@ -418,10 +418,9 @@ uint32_t tack_lane_speed(uint8_t voice);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);
 
-/* Saved patterns from older builds: as a current one, without the bytes added since and with the older magic. Each loads
- * whole, with what it lacks at its default, and a current one keeps its modes and BITS */
+/* What a pattern holds beside its steps comes back from its image, and what is out of range is refused */
 #define IMAGE_LANES (6u + 3u * 448u + 448u + 4u * 7u * 2u + 7u + 2u)
-static uint8_t lane_image[3840], image_old[3840];
+static uint8_t lane_image[3840];
 static void lane_format_tests(void)
 {
     uint32_t len;
@@ -430,35 +429,282 @@ static void lane_format_tests(void)
     tack_post_bits(100);
     run(2);
     len = tack_pattern_export(0, lane_image);
-    check("the image holds the lane's mode", lane_image[3] == '4' && lane_image[IMAGE_LANES + 2u] == (3u | 2u << 2), lane_image[3], lane_image[IMAGE_LANES + 2u]);
-    check("and BITS", lane_image[IMAGE_LANES + 7u] == 27, 27, lane_image[IMAGE_LANES + 7u]);
-    memcpy(image_old, lane_image, IMAGE_LANES);
-    memcpy(image_old + IMAGE_LANES, lane_image + IMAGE_LANES + 10u, len - IMAGE_LANES - 10u);
-    image_old[3] = '2';
-    check("the KPT2 image loads", tack_load_pattern(0, image_old, len - 10u) == 0, 0, 0);
-    check("its lanes play forward at full speed", tack_lane_dir(2) == 0 && tack_lane_speed(2) == 0, tack_lane_dir(2), tack_lane_speed(2));
-    check("with BITS off", tack_bits() == 127, 127, tack_bits());
-    check("and it keeps the length", tack_length(2) == 12, 12, tack_length(2));
-    memcpy(image_old, lane_image, IMAGE_LANES + 7u);
-    memcpy(image_old + IMAGE_LANES + 7u, lane_image + IMAGE_LANES + 10u, len - IMAGE_LANES - 10u);
-    image_old[3] = '3';
-    check("the KPT3 image loads", tack_load_pattern(0, image_old, len - 3u) == 0, 0, 0);
-    check("with its modes and BITS off", tack_lane_dir(2) == 3 && tack_bits() == 127, tack_lane_dir(2), tack_bits());
-    check("the current image loads", tack_load_pattern(0, lane_image, len) == 0, 0, 0);
+    check("the image holds the lane's mode", lane_image[3] == '7' && lane_image[IMAGE_LANES + 2u] == (3u | 2u << 3), lane_image[3], lane_image[IMAGE_LANES + 2u]);
+    check("and BITS", lane_image[IMAGE_LANES + 14u] == 27, 27, lane_image[IMAGE_LANES + 14u]);
+    check("the image loads", tack_load_pattern(0, lane_image, len) == 0, 0, 0);
     check("and keeps its modes", tack_lane_dir(2) == 3 && tack_lane_speed(2) == 2, tack_lane_dir(2), tack_lane_speed(2));
     check("and BITS", tack_bits() == 100, 100, tack_bits());
-    lane_image[IMAGE_LANES + 2u] = 12;
+    lane_image[IMAGE_LANES + 2u] = 7;
     check("a mode out of range is refused", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
-    lane_image[IMAGE_LANES + 2u] = (3u | 2u << 2);
-    lane_image[IMAGE_LANES + 7u] = 128;
+    lane_image[IMAGE_LANES + 2u] = (3u | 2u << 3);
+    lane_image[IMAGE_LANES + 14u] = 128;
     check("BITS out of range is refused", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
-    lane_image[IMAGE_LANES + 7u] = 27;
-    lane_image[3] = '1';
-    check("and so is any other magic", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
+    lane_image[IMAGE_LANES + 14u] = 27;
+    lane_image[IMAGE_LANES + 17u] = 2;
+    check("and a kit flag", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
+    lane_image[IMAGE_LANES + 17u] = 1;
+    lane_image[3] = '6';
+    check("and so is an image of an earlier build", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
     tack_post_bits(127);
     tack_post_lane(2, 0, 0);
     tack_post_length(2, 16);
     run(2);
+}
+
+int tack_post_morph(uint8_t amount);
+int tack_post_morph_kit(uint8_t kit);
+/* Morph, heard: the filter moves to the second kit's, the kit does not change, a lock on a step takes over for that step, and
+ * its end hands back the blend and not the kit's own value */
+static void morph_tests(void)
+{
+    const int fp = probe_param_filter1();
+    float a, b, locked, after;
+    memcpy(bank[1], tack_kit(), (size_t)probe_kit_size());
+    bank[1][fp] = 20;
+    tack_post_param((uint16_t)fp, 120);
+    run(4);
+    a = probe_filter(0);
+    tack_post_morph_kit(2);
+    tack_post_morph(127);
+    run(40);
+    b = probe_filter(0);
+    check("morph moves the filter", b != a, a, b);
+    check("and leaves the kit's value", tack_get_param((uint16_t)fp) == 120, 120, tack_get_param((uint16_t)fp));
+    tack_post_step(0, 0, 1);
+    tack_post_step(0, 1, 1);
+    tack_post_length(0, 2);
+    tack_post_lock(0, 0, (uint16_t)fp, 60);
+    run(2);
+    tack_post_run(1);
+    run(40);
+    locked = probe_filter(0);
+    check("a lock takes over under the morph", locked != b && locked != a, locked, b);
+    run(86);
+    after = probe_filter(0);
+    check("and its end gives back the blend", fabsf(after - b) < 1e-6f, after, b);
+    tack_post_run(0);
+    tack_post_lock_clear(0, 0);
+    tack_post_step(0, 0, 0);
+    tack_post_step(0, 1, 0);
+    tack_post_length(0, 16);
+    tack_post_morph(0);
+    tack_post_morph_kit(0);
+    run(40);
+    check("back to the kit's filter", fabsf(probe_filter(0) - a) < 1e-6f, probe_filter(0), a);
+}
+
+int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
+int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot);
+int tack_post_ext_sync(uint8_t on);
+int tack_post_bpm(uint16_t bpm);
+int tack_post_shuffle(uint8_t amount);
+void tack_midi_realtime(uint8_t status);
+uint8_t tack_voice_fires(uint8_t voice);
+
+/* Every nudge fires, once a pass. A lane of 27 hits, each with its own nudge from all the way early to all the way late and a
+ * rest between them, so that no two touch. Counted over one whole pass, after a pass to settle */
+#define NUDGE_STEPS 54u
+static int32_t ext_left;
+static uint32_t ext_at;
+static void nudge_blocks(uint32_t n, uint32_t period, int jitter)
+{
+    for (uint32_t i = 0; i < n; i++) {
+        run(1);
+        if (!period)
+            continue;
+        ext_left += TACK_BLOCK;
+        while (ext_left >= (int32_t)period) {       /* a jittery clock: a block early, on time, a block late, averaging out */
+            const int32_t wobble = jitter ? (int32_t)(ext_at++ % 3u) - 1 : 0;
+            ext_left -= (int32_t)period + wobble * TACK_BLOCK;
+            tack_midi_realtime(0xF8);
+        }
+    }
+}
+
+static uint32_t nudge_steps = NUDGE_STEPS, nudge_want = 27u;
+static int nudge_slack;
+int tack_post_lane_start(uint8_t voice, uint8_t start);
+static void nudge_case(const char *name, uint32_t bpm, int external, uint32_t shuffle, int jitter)
+{
+    const uint32_t step_frames = 44100u * 15u / bpm, period = external ? step_frames / 6u : 0u;
+    const uint32_t pass = nudge_steps * step_frames / TACK_BLOCK;
+    uint8_t a, b;
+    char label[80];
+    tack_post_bpm((uint16_t)bpm);
+    tack_post_shuffle((uint8_t)shuffle);
+    tack_post_ext_sync((uint8_t)external);
+    run(4);
+    ext_left = 0;
+    if (external)
+        tack_midi_realtime(0xFA);
+    else
+        tack_post_run(1);
+    nudge_blocks(pass + 40u, period, jitter);
+    a = tack_voice_fires(0);
+    nudge_blocks(pass, period, jitter);
+    b = tack_voice_fires(0);
+    if (external)
+        tack_midi_realtime(0xFC);
+    else
+        tack_post_run(0);
+    run(4);
+    snprintf(label, sizeof label, "every nudge fires: %s", name);
+    check(label, abs((int)(uint8_t)(b - a) - (int)nudge_want) <= nudge_slack, nudge_want, (uint8_t)(b - a));
+}
+
+/* Hits that cross, an early hit landing before a late one: across two lanes, and on one. Neither silences the other */
+static void nudge_cross(const char *name, uint8_t early_voice, uint8_t late_voice)
+{
+    uint8_t a0, a1, b0, b1;
+    tack_post_length(early_voice, 16);
+    tack_post_length(late_voice, 16);
+    tack_post_step(late_voice, 4, 1);
+    tack_post_step(early_voice, 5, 1);
+    run(2);
+    tack_step_turn(late_voice, 4, 0, 12);      /* 18 pulses late */
+    tack_step_turn(early_voice, 5, 0, -13);    /* 21 pulses early, so 3 pulses into step 4 */
+    run(2);
+    tack_post_run(1);
+    run(400);
+    a0 = tack_voice_fires(early_voice);
+    a1 = tack_voice_fires(late_voice);
+    run(1378);                                   /* 2 s, a pass */
+    b0 = tack_voice_fires(early_voice);
+    b1 = tack_voice_fires(late_voice);
+    tack_post_run(0);
+    run(4);
+    tack_step_turn(late_voice, 4, 0, -12);
+    tack_step_turn(early_voice, 5, 0, 13);
+    tack_post_step(late_voice, 4, 0);
+    tack_post_step(early_voice, 5, 0);
+    run(2);
+    check(name, early_voice == late_voice ? (uint8_t)(b0 - a0) == 2u : (uint8_t)(b0 - a0) + (uint8_t)(b1 - a1) == 2u, 2,
+          (uint8_t)(b0 - a0) + (early_voice == late_voice ? 0 : (uint8_t)(b1 - a1)));
+}
+
+static void nudge_tests(void)
+{
+    static const int PULSES[27] = {-21, -18, -15, -12, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15, 18, 21};
+    nudge_cross("an early hit leaves another voice's late hit", 0, 1);
+    nudge_cross("and so does it on its own lane", 0, 0);
+    tack_post_length(0, NUDGE_STEPS);
+    run(2);
+    for (int i = 0; i < 27; i++) {
+        tack_post_step(0, (uint8_t)(2 * i), 1);
+        run(1);
+        tack_step_turn(0, (uint8_t)(2 * i), 0, i - 13);
+        run(1);
+    }
+    int ok = 1;
+    for (int i = 0; i < 27; i++)
+        ok &= tack_step_get(0, (uint8_t)(2 * i), 0) == PULSES[i];
+    check("a nudge's clicks reach these pulses", ok, 1, ok);
+    nudge_case("internal 60 BPM", 60, 0, 0, 0);
+    nudge_case("internal 120 BPM", 120, 0, 0, 0);
+    nudge_case("internal 200 BPM", 200, 0, 0, 0);
+    nudge_case("internal 120 BPM with shuffle", 120, 0, 60, 0);
+    nudge_case("external 60 BPM", 60, 1, 0, 0);
+    nudge_case("external 120 BPM", 120, 1, 0, 0);
+    nudge_case("external 200 BPM", 200, 1, 0, 0);
+    nudge_case("external 120 BPM with shuffle", 120, 1, 60, 0);
+    nudge_case("external 120 BPM, an uneven clock", 120, 1, 0, 1);
+    nudge_case("external 180 BPM, an uneven clock", 180, 1, 0, 1);
+
+    /* round the lane from another step, and the same with each direction that changes which step is next */
+    tack_post_lane_start(0, 7);
+    run(2);
+    nudge_case("internal, from step 8", 120, 0, 0, 0);
+    nudge_case("external, from step 8", 120, 1, 0, 0);
+    tack_post_lane(0, 1, 0);
+    run(2);
+    nudge_case("reversed, from step 8", 120, 0, 0, 0);
+    /* random, over 8 passes: a pass's hits move about inside it, so the ends of the count can each gain or lose one, and two hits
+     * of a lane can land on one pulse, which is one hit */
+    tack_post_lane(0, 4, 0);
+    run(2);
+    nudge_steps = 8u * NUDGE_STEPS;
+    nudge_want = 216u;
+    nudge_slack = 3;
+    nudge_case("random, from step 8", 120, 0, 0, 0);
+    nudge_case("random on external clock", 120, 1, 0, 0);
+    nudge_steps = NUDGE_STEPS;
+    nudge_want = 27u;
+    nudge_slack = 0;
+
+    /* bounce: there and back is 106 steps, step 1 played once and the other 26 hits twice */
+    tack_post_lane_start(0, 0);
+    tack_post_lane(0, 3, 0);
+    run(2);
+    nudge_steps = 106u;
+    nudge_want = 53u;
+    nudge_case("bounce", 120, 0, 0, 0);
+    nudge_case("bounce on external clock", 120, 1, 0, 0);
+    tack_post_lane_start(0, 9);
+    run(2);
+    nudge_case("bounce from step 10", 120, 0, 0, 0);
+    nudge_steps = NUDGE_STEPS;
+    nudge_want = 27u;
+    tack_post_lane_start(0, 0);
+    tack_post_lane(0, 0, 0);
+    run(2);
+    tack_post_ext_sync(0);
+    tack_post_bpm(120);
+    tack_post_shuffle(0);
+    for (int i = 0; i < 27; i++) {
+        tack_step_turn(0, (uint8_t)(2 * i), 0, 13 - i);
+        tack_post_step(0, (uint8_t)(2 * i), 0);
+        run(1);
+    }
+    tack_post_length(0, 16);
+    run(2);
+}
+
+/* The hats are one voice, so each cuts the other. An open hat's sound, a long way into its decay, by the steps that hit it: -1 none.
+ * A step is 86 blocks at 120 BPM, and this measures the fifth */
+static double hat_tail(int open_step, int closed_step)
+{
+    int32_t lr[TACK_BLOCK * 2];
+    double sum = 0.0;
+    if (open_step >= 0)
+        tack_post_step(6, (uint8_t)open_step, 1);
+    if (closed_step >= 0)
+        tack_post_step(5, (uint8_t)closed_step, 1);
+    run(2);
+    tack_post_run(1);
+    run(4u * 86u);
+    for (uint32_t b = 0; b < 86u; b++) {
+        tack_render(lr, TACK_BLOCK, 4096);
+        for (uint32_t i = 0; i < TACK_BLOCK * 2u; i++)
+            sum += (double)lr[i] * (double)lr[i];
+    }
+    tack_post_run(0);
+    if (open_step >= 0)
+        tack_post_step(6, (uint8_t)open_step, 0);
+    if (closed_step >= 0)
+        tack_post_step(5, (uint8_t)closed_step, 0);
+    run(600);
+    return sqrt(sum / (86.0 * TACK_BLOCK * 2.0));
+}
+
+static void hat_tests(void)
+{
+    const uint16_t closed = tack_slot(5, 0, 0, 2)->par, open = tack_slot(6, 0, 0, 2)->par;
+    const uint8_t was_closed = tack_get_param(closed), was_open = tack_get_param(open);
+    double alone, cut, rings, both;
+    tack_post_param(closed, 20);
+    tack_post_param(open, 115);
+    run(4);
+    alone = hat_tail(0, -1);
+    cut = hat_tail(0, 2);
+    rings = hat_tail(2, 0);
+    both = hat_tail(0, 0);
+    check("an open hat rings on alone", alone > 100.0, 100, alone);
+    check("a closed hat cuts it", cut < alone * 0.1, alone * 0.1, cut);
+    check("an open hat after a closed one rings on", rings > alone * 0.5, alone * 0.5, rings);
+    check("on one pulse the open hat is the one heard", both > alone * 0.5, alone * 0.5, both);
+    tack_post_param(closed, was_closed);
+    tack_post_param(open, was_open);
+    run(4);
 }
 
 static void pattern_tests(void)
@@ -558,7 +804,7 @@ static void pattern_tests(void)
 
 /* the list of locks: more than the sequencer's two slots, in any order, and only good images come back from the store */
 static uint8_t image[3840], broken[3840];
-#define IMG_LOCKS 1873u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 + 7 + 3 */
+#define IMG_LOCKS 2137u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 + 2 * 7 + 4 + 256 */
 #define IMG_LEN 1854u
 
 static uint32_t mutate(uint32_t len, void (*f)(uint8_t *))
@@ -737,7 +983,7 @@ static void list_tests(void)
                     run(2);
             }
     run(4);
-    check("a pattern holds 640", tack_lock_count() == 640, 640, tack_lock_count());
+    check("a pattern holds 500", tack_lock_count() == 500, 500, tack_lock_count());
     check("and then says so", tack_lock_room(6, 60, 80) == TACK_LOCK_PATTERN_FULL, TACK_LOCK_PATTERN_FULL, tack_lock_room(6, 60, 80));
     check("recurrence shares that room", !tack_recur_room(6, 60), 0, tack_recur_room(6, 60));
     len = tack_pattern_export(5, image);
@@ -980,6 +1226,9 @@ int main(void)
     step_tests();
     pattern_tests();
     lane_format_tests();
+    morph_tests();
+    nudge_tests();
+    hat_tests();
 
     ul_tests();
 

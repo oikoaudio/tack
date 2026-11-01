@@ -203,7 +203,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -233,6 +233,7 @@ static volatile uint8_t mute_mask;
 static volatile uint8_t stress;
 static volatile uint32_t dirty;          /* patterns changed since they were saved */
 static void kit_for_pattern(uint8_t kit);
+static uint8_t morph_a[LXR_HOST_NUM_PARAMS];    /* the kit as it is, unblended: the engine's own array holds what is heard */
 extern uint8_t activeParameters[];
 
 static int apply_locks(uint8_t track, uint8_t step);
@@ -244,6 +245,13 @@ static uint8_t wheel_on, wheel_over;            /* the flywheel below is running
 static uint8_t clock_w, clock_held;             /* external clock: the next slot, the times held */
 static int recur_plays(uint8_t track, uint8_t step, int8_t position);
 static uint8_t bits_of[NUM_PATTERN];            /* how far each pattern takes BITS: 0 not at all, 127 the fewest bits */
+static uint8_t morph_of[NUM_PATTERN];           /* how far each pattern is morphed: 0 not at all, 127 all the way */
+static uint8_t morph_kit_of[NUM_PATTERN];       /* the bank's kit it morphs to: slot + 1, 0 none */
+_Static_assert(LXR_HOST_NUM_PARAMS <= 248u, "a kit's slot in the bank, and in a pattern");
+typedef struct { uint8_t name[8], v[248]; } PatternKit;
+static void morph_kinds(void);
+static void morph_capture(void);
+static void morph_after_kit(void);
 static void lane_wrap(uint8_t track);
 static void lanes_reset(void);
 
@@ -267,6 +275,8 @@ void tack_init(void)
     }
     for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
         shadow[i] = lxr_host_getParam((uint16_t)i);
+    morph_kinds();
+    morph_capture();
 }
 
 int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel) { return post(EV_NOTE, voice, note, vel); }
@@ -304,6 +314,7 @@ int tack_post_chain(uint8_t index, uint8_t pattern) { return post(EV_CHAIN, inde
 int tack_post_song_row(uint8_t row, uint8_t value) { return post(EV_SONG_ROW, row, value, 0); }
 int tack_post_song_on(uint8_t on) { return post(EV_SONG_ON, on, 0, 0); }
 int tack_post_bits(uint8_t value) { return post(EV_BITS, value, 0, 0); }
+int tack_post_kit_home(uint8_t slot) { return post(EV_KIT_HOME, slot, 0, 0); }
 int tack_post_chain_to_song(uint8_t row) { return post(EV_CHAIN_SONG, row, 0, 0); }
 int tack_post_mute(uint8_t voice, uint8_t muted) { return post(EV_MUTE, voice, muted, 0); }
 int tack_post_record(uint8_t on)
@@ -367,14 +378,14 @@ void tack_euclid_length(uint8_t voice, uint32_t length)
         u[TACK_EU_ROTATE] = (uint8_t)(u[TACK_EU_LENGTH] - 1u);
 }
 _Static_assert(sizeof(StepTiming) == 1u, "the backup buffer copies step timing as bytes");
-#define SHIFT_ZERO 7                     /* a stored shift of 7 is on the grid */
+#define SHIFT_ZERO STEP_SHIFT_ZERO
 #define FLAMS 6
 int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot)
 {
     const Step *p = &seq_patternSet.seq_subStepPattern[seq_activePattern][voice][step];
     const StepTiming *t = &seq_patternSet.seq_stepTiming[seq_activePattern][voice][step];
     switch (slot) {
-    case TACK_ST_NUDGE: return (int)t->shift - SHIFT_ZERO;
+    case TACK_ST_NUDGE: return seq_shiftPulses(t->shift);
     case TACK_ST_FLAM: return t->flam;
     case TACK_ST_PROB: return p->prob;
     case TACK_ST_NOTE: return p->note;
@@ -383,10 +394,10 @@ int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot)
 }
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e)
 {
-    static const int8_t LOW[TACK_ST_SLOTS] = {-SHIFT_ZERO, 0, 0, 0, 0}, TOP[TACK_ST_SLOTS] = {SHIFT_ZERO, FLAMS - 1, 100, 127, 127};
-    int32_t v = tack_step_get(voice, step, slot) + e;
-    v = v < LOW[slot] ? LOW[slot] : v > TOP[slot] ? TOP[slot] : v;
-    return post5(EV_STEP_EDIT, voice, step, (uint8_t)slot, (uint8_t)(slot == TACK_ST_NUDGE ? v + SHIFT_ZERO : v));
+    static const int8_t TOP[TACK_ST_SLOTS] = {2 * SHIFT_ZERO, FLAMS - 1, 100, 127, 127};
+    int32_t v = (slot == TACK_ST_NUDGE ? (int32_t)seq_patternSet.seq_stepTiming[seq_activePattern][voice][step].shift : tack_step_get(voice, step, slot)) + e;
+    v = v < 0 ? 0 : v > TOP[slot] ? TOP[slot] : v;
+    return post5(EV_STEP_EDIT, voice, step, (uint8_t)slot, (uint8_t)v);
 }
 const char *tack_flam_name(int flam)
 {
@@ -403,8 +414,8 @@ int tack_lane_nudge_get(uint8_t voice)
 }
 int tack_lane_nudge_turn(uint8_t voice, int32_t e)
 {
-    e = e < -14 ? -14 : e > 14 ? 14 : e;
-    return post(EV_LANE_NUDGE, voice, (uint8_t)(e + 14), 0);
+    e = e < -2 * SHIFT_ZERO ? -2 * SHIFT_ZERO : e > 2 * SHIFT_ZERO ? 2 * SHIFT_ZERO : e;
+    return post(EV_LANE_NUDGE, voice, (uint8_t)(e + 2 * SHIFT_ZERO), 0);
 }
 int tack_post_copy(uint8_t dst) { return post(EV_COPY, dst, 0, 0); }
 int tack_post_clear(uint8_t voice) { return post(EV_CLEAR, voice, 0, 0); }
@@ -425,18 +436,52 @@ int tack_kit_now(void) { return kit_now; }
 void tack_set_kit_now(int kit) { kit_now = kit; }
 void tack_set_kit_find(TackKitFind fn) { kit_find = fn; }
 
-/* The sequencer is switching patterns, and has just turned the FX off to save cycles, as the LXR does around a kit load.
- * The pattern's own kit, unless it has none or it is the one playing, whose edits stay: then the FX goes back */
+/* Each pattern keeps its own copy of its kit, so that a sound comes back with the pattern, edits and all, whatever happens to the
+ * bank. kitNr says which of the bank's kits it came from, for a revert. morph_a is the sound of kit_pattern */
+static PatternKit kit_of[NUM_PATTERN];
+static uint16_t kit_has;                         /* a bit each: the pattern has one */
+static uint8_t kit_pattern;
+static uint8_t kit_name_now[8];
+
+static void kit_keep(uint32_t pattern)
+{
+    memcpy(kit_of[pattern].v, morph_a, sizeof morph_a);
+    memcpy(kit_of[pattern].name, kit_name_now, sizeof kit_name_now);
+    kit_has = (uint16_t)(kit_has | 1u << pattern);
+}
+
+static int pattern_has_steps(uint32_t pattern)
+{
+    for (uint32_t v = 0; v < NUM_TRACKS; v++)
+        for (uint32_t b = 0; b < NUM_BARS; b++)
+            if (seq_patternSet.seq_mainSteps[b][pattern][v])
+                return 1;
+    return 0;
+}
+
+const uint8_t *tack_kit_name(void) { return kit_name_now; }
+void tack_set_kit_name(const uint8_t *name) { memcpy(kit_name_now, name, sizeof kit_name_now); }
+const uint8_t *tack_pattern_kit(uint32_t pattern) { return kit_has >> pattern & 1u ? kit_of[pattern].v : 0; }
+const uint8_t *tack_pattern_kit_name(uint32_t pattern) { return kit_of[pattern].name; }
+int tack_pattern_kit_slot(uint32_t pattern) { return seq_patternSet.kitNr[pattern]; }
+
+/* The sequencer is switching patterns, and has just turned the FX off to save cycles, as the LXR does around a kit load */
 static void kit_for_pattern(uint8_t kit)
 {
-    const uint8_t *k = kit && kit != kit_now && kit_find ? kit_find(kit - 1u) : 0;
-    if (k) {
-        lxr_host_loadKit(k);
+    const uint32_t was = kit_pattern, now = seq_activePattern;
+    if (was != now && (kit_has >> was & 1u || dirty >> was & 1u || pattern_has_steps(was)))
+        kit_keep(was);                           /* what is playing is the pattern's: its edits go with it */
+    kit_pattern = (uint8_t)now;
+    if (was != now && kit_has >> now & 1u) {
+        lxr_host_loadKit(kit_of[now].v);
+        morph_capture();
+        memcpy(kit_name_now, kit_of[now].name, sizeof kit_name_now);
         kit_now = kit;
         kit_applied++;
-    } else {
+    } else {                                     /* none of its own yet, as a new pattern: it plays on what is playing */
         fxBus.fxType = lxr_host_getParam(PAR_FX_TYPE);
     }
+    morph_after_kit();                           /* before this step's hits read the parameters */
 }
 
 int tack_post_kit(const uint8_t *values, uint8_t slot)
@@ -454,8 +499,7 @@ int tack_kit_busy(void)
 {
     if (kit_seen != kit_applied) {             /* the kit is in: the main loop's view follows */
         kit_seen = kit_applied;
-        for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
-            shadow[i] = lxr_host_getParam((uint16_t)i);
+        memcpy(shadow, morph_a, sizeof shadow);
     }
     return kit_pending != 0;
 }
@@ -668,17 +712,14 @@ const uint8_t *tack_kit(void) { return shadow; }
 uint32_t tack_kit_size(void) { return sizeof shadow; }
 
 /* A pattern as the store holds it, little-endian: the magic, u16 the count of locks, then for each track and step volume,
- * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes, BITS and two bytes kept, the locks, and in what is left the steps
+ * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes and starts, BITS, morph and its kit, the pattern's own kit, the locks, and in what is left the steps
  * with recurrence, 3 bytes each: the key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as
  * they need to be. Anything else is refused whole: patterns of older builds, and whatever a bad write or a bad file left */
-#define IMAGE_MAGIC 0x3454504Bu          /* "KPT4" */
-#define IMAGE_MAGIC_3 0x3354504Bu        /* "KPT3": as this, without the pattern's settings after the modes */
-#define IMAGE_MAGIC_2 0x3254504Bu        /* "KPT2": and without the lanes' modes after the kit, so forward at full speed */
+#define IMAGE_MAGIC 0x3754504Bu          /* "KPT7" */
 #define IMAGE_STEPS (NUM_TRACKS * NUM_STEPS)
-#define IMAGE_HEAD_2 (6u + 3u * IMAGE_STEPS + IMAGE_STEPS + NUM_BARS * NUM_TRACKS * 2u + NUM_TRACKS + 2u)
-#define IMAGE_HEAD_3 (IMAGE_HEAD_2 + NUM_TRACKS)
-#define IMAGE_SETTINGS 3u                /* BITS, and two bytes kept for morph: zero until then */
-#define IMAGE_HEAD (IMAGE_HEAD_3 + IMAGE_SETTINGS)
+#define IMAGE_SETTINGS 4u                /* BITS, how far morph goes, its kit, and whether a kit follows */
+#define IMAGE_HEAD (6u + 3u * IMAGE_STEPS + IMAGE_STEPS + NUM_BARS * NUM_TRACKS * 2u + NUM_TRACKS + 2u + 2u * NUM_TRACKS + IMAGE_SETTINGS + \
+                    sizeof(PatternKit))
 #define IMAGE_MAX (IMAGE_HEAD + TACK_LOCKS_MAX * sizeof(Lock))
 _Static_assert(IMAGE_MAX <= 3840u, "a pattern is one store object (PLAT_STORE_MAX)");
 _Static_assert(NUM_TRACKS == TACK_VOICES && NUM_STEPS == 64, "the image's size and its keys");
@@ -713,9 +754,16 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     *o++ = seq_patternSet.kitNr[pattern];
     memcpy(o, seq_laneMode[pattern], NUM_TRACKS);
     o += NUM_TRACKS;
+    memcpy(o, seq_laneStart[pattern], NUM_TRACKS);
+    o += NUM_TRACKS;
     *o++ = bits_of[pattern];
-    *o++ = 0;
-    *o++ = 0;
+    *o++ = morph_of[pattern];
+    *o++ = morph_kit_of[pattern];
+    if (pattern == kit_pattern && (kit_has >> pattern & 1u || dirty >> pattern & 1u))   /* its kit as it is now */
+        kit_keep(pattern);
+    *o++ = kit_has >> pattern & 1u;
+    memcpy(o, &kit_of[pattern], sizeof(PatternKit));
+    o += sizeof(PatternKit);
     memcpy(o, p->l, p->n * sizeof(Lock));
     o += p->n * sizeof(Lock);
     {
@@ -735,27 +783,17 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     }
 }
 
-/* the bytes before the locks, 0 for anything that is not a pattern */
-static uint32_t image_head(const uint8_t *in, uint32_t len)
-{
-    uint32_t magic;
-    if (len < 4u)
-        return 0;
-    magic = (uint32_t)in[0] | (uint32_t)in[1] << 8 | (uint32_t)in[2] << 16 | (uint32_t)in[3] << 24;
-    return magic == IMAGE_MAGIC ? IMAGE_HEAD : magic == IMAGE_MAGIC_3 ? IMAGE_HEAD_3 : magic == IMAGE_MAGIC_2 ? IMAGE_HEAD_2 : 0u;
-}
-
 static int image_ok(const uint8_t *in, uint32_t len)
 {
     const uint8_t *q;
-    const uint32_t head = image_head(in, len);
     uint32_t n, c, last = 0, run = 0;
-    if (!head || len < head)
+    if (len < IMAGE_HEAD || (uint32_t)in[0] << 0 != (IMAGE_MAGIC & 0xFFu) || in[1] != (uint8_t)(IMAGE_MAGIC >> 8) ||
+        in[2] != (uint8_t)(IMAGE_MAGIC >> 16) || in[3] != (uint8_t)(IMAGE_MAGIC >> 24))
         return 0;
     n = (uint32_t)in[4] | (uint32_t)in[5] << 8;
-    if (n > TACK_LOCKS_MAX || len < head + n * sizeof(Lock) || (len - head) % sizeof(Lock))
+    if (n > TACK_LOCKS_MAX || len < IMAGE_HEAD + n * sizeof(Lock) || (len - IMAGE_HEAD) % sizeof(Lock))
         return 0;
-    c = (len - head) / sizeof(Lock) - n;
+    c = (len - IMAGE_HEAD) / sizeof(Lock) - n;
     if (n + c > TACK_LOCKS_MAX)
         return 0;
     q = in + 6;
@@ -765,7 +803,7 @@ static int image_ok(const uint8_t *in, uint32_t len)
     for (uint32_t i = 0; i < IMAGE_STEPS; i++, q++) {
         StepTiming t;
         memcpy(&t, q, 1);
-        if (t.shift > 14u || t.flam > 5u)
+        if (t.shift > 2u * SHIFT_ZERO || t.flam > 5u)
             return 0;
     }
     q += NUM_BARS * NUM_TRACKS * 2u;
@@ -775,15 +813,15 @@ static int image_ok(const uint8_t *in, uint32_t len)
     if (q[0] > 127u || q[1] > 128u)
         return 0;
     q += 2;
-    if (head >= IMAGE_HEAD_3)
-        for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
-            if (*q >= LANE_MODE(0u, LANE_SPEEDS))
-                return 0;
-    if (head == IMAGE_HEAD) {
-        if (q[0] > 127u)
+    for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
+        if (LANE_DIR(*q) >= LANE_DIRECTIONS || *q >= LANE_MODE(0u, LANE_SPEEDS))
             return 0;
-        q += IMAGE_SETTINGS;
-    }
+    for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
+        if (*q >= NUM_STEPS)
+            return 0;
+    if (q[0] > 127u || q[1] > 127u || q[2] > TACK_MORPH_KITS || q[3] > 1u)
+        return 0;
+    q += IMAGE_SETTINGS + sizeof(PatternKit);
     for (uint32_t i = 0; i < n; i++, q += sizeof(Lock)) {
         Lock l;
         memcpy(&l, q, sizeof l);
@@ -809,7 +847,6 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
 {
     const uint8_t *in = image;
     LockList *p = &lock_list[pattern];
-    const uint32_t head = image_head(in, len);
     uint32_t n;
     if (!image_ok(in, len))
         return -1;
@@ -834,20 +871,21 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
     in += NUM_TRACKS;
     seq_patternSet.shuffle[pattern] = *in++;
     seq_patternSet.kitNr[pattern] = *in++;
-    memset(seq_laneMode[pattern], 0, NUM_TRACKS);
-    bits_of[pattern] = 0;
-    if (head >= IMAGE_HEAD_3) {
-        memcpy(seq_laneMode[pattern], in, NUM_TRACKS);
-        in += NUM_TRACKS;
-    }
-    if (head == IMAGE_HEAD) {
-        bits_of[pattern] = in[0];
-        in += IMAGE_SETTINGS;
-    }
+    memcpy(seq_laneMode[pattern], in, NUM_TRACKS);
+    in += NUM_TRACKS;
+    memcpy(seq_laneStart[pattern], in, NUM_TRACKS);
+    in += NUM_TRACKS;
+    bits_of[pattern] = in[0];
+    morph_of[pattern] = in[1];
+    morph_kit_of[pattern] = in[2];
+    kit_has = (uint16_t)(in[3] ? kit_has | 1u << pattern : kit_has & ~(1u << pattern));
+    in += IMAGE_SETTINGS;
+    memcpy(&kit_of[pattern], in, sizeof(PatternKit));
+    in += sizeof(PatternKit);
     memcpy(p->l, in, n * sizeof(Lock));
     p->n = (uint16_t)n;
     in += n * sizeof(Lock);
-    for (uint32_t i = (len - head) / sizeof(Lock) - n; i; i--, in += 3) {
+    for (uint32_t i = (len - IMAGE_HEAD) / sizeof(Lock) - n; i; i--, in += 3) {
         const uint32_t key = (uint32_t)(in[2] >> 7) << 8 | in[0];
         Step *st = &seq_patternSet.seq_subStepPattern[pattern][key >> 6][key & 63u];
         st->param1Nr = (uint8_t)((in[2] & 0x7Fu) + 1u);
@@ -862,7 +900,10 @@ void tack_clear_pattern(uint8_t pattern)
     seq_clearPattern(pattern);
     seq_patternSet.kitNr[pattern] = 0;
     memset(seq_laneMode[pattern], 0, NUM_TRACKS);
-    bits_of[pattern] = 0;
+    memset(seq_laneStart[pattern], 0, NUM_TRACKS);
+    bits_of[pattern] = morph_of[pattern] = morph_kit_of[pattern] = 0;
+    kit_has = (uint16_t)(kit_has & ~(1u << pattern));
+    memset(&kit_of[pattern], 0, sizeof(PatternKit));
     lock_list[pattern].n = 0;
     seq_copyPatternToBackupBuffer(seq_activePattern);
 }
@@ -975,6 +1016,124 @@ int tack_lane_used(uint8_t voice)
 
 /* a bit each: the patterns with a step set */
 int tack_bits(void) { return 127 - bits_of[seq_activePattern]; }
+
+/* Morph blends the kit towards a second kit from the bank, as the LXR's does. The kit itself stays as it is, in morph_a and the
+ * main loop's shadow, so a save writes it and the dials show it. What the voices hear is written a few parameters a block, and only
+ * those that changed. Only what a page shows is blended: a wave, a type and the like changes at half way, and modulation targets,
+ * routing and anything no page has stay the kit's. A lock's end hands back what was last written, so the blended value */
+enum { MORPH_KEEP, MORPH_BLEND, MORPH_SWITCH };
+#define MORPH_PER_BLOCK 16u
+static uint8_t morph_kind[LXR_HOST_NUM_PARAMS], morph_b[LXR_HOST_NUM_PARAMS], morph_sent[LXR_HOST_NUM_PARAMS];
+static uint8_t morph_kit_in, morph_kit_ok, morph_now, morph_dirty;
+static uint32_t morph_at, morph_clean;
+
+static void morph_kinds(void)
+{
+    for (uint32_t v = 0; v < TACK_VOICES; v++)
+        for (uint32_t g = TACK_G_MAIN; g <= TACK_G_LFO; g++)
+            for (int sub = 0; sub < tack_pages(v, g); sub++)
+                for (uint32_t n = 0; n < 4u; n++) {
+                    const TackSlot *s = tack_slot(v, g, (uint32_t)sub, n);
+                    if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6))
+                        morph_kind[s->par] = s->en ? MORPH_SWITCH : MORPH_BLEND;
+                }
+    for (uint32_t k = 0; k < sizeof FX_KIND / sizeof FX_KIND[0]; k++)
+        for (uint32_t n = 0; n < 5u; n++)
+            if (FX_KIND[k].s[n].max)
+                morph_kind[FX_KIND[k].s[n].par] = FX_KIND[k].s[n].max >= 126u ? MORPH_BLEND : MORPH_SWITCH;
+    morph_kind[PAR_FX_TYPE] = MORPH_SWITCH;
+    morph_kind[PAR_FX_DRY_WET] = MORPH_BLEND;
+    morph_kind[PAR_VOICE_DECIMATION_ALL] = MORPH_BLEND;
+}
+
+static uint8_t morph_value(uint32_t p, uint8_t a)
+{
+    const int32_t m = morph_now, b = morph_b[p];
+    if (!m || !morph_kit_ok || morph_kind[p] == MORPH_KEEP)
+        return a;
+    if (morph_kind[p] == MORPH_SWITCH)
+        return m >= 64 ? (uint8_t)b : a;
+    {
+        const int32_t d = (b - (int32_t)a) * m;
+        return (uint8_t)((int32_t)a + (d + (d < 0 ? -63 : 63)) / 127);
+    }
+}
+
+/* something changed: a whole pass with nothing to write ends it */
+static void morph_touch(void)
+{
+    morph_dirty = 1;
+    morph_clean = 0;
+}
+
+/* what is in the engine is now the kit: at boot, and after a kit went in */
+static void morph_capture(void)
+{
+    for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
+        morph_a[i] = morph_sent[i] = lxr_host_getParam((uint16_t)i);
+    morph_touch();
+}
+
+static void morph_sync(void)
+{
+    const uint8_t kit = morph_kit_of[seq_activePattern], amount = morph_of[seq_activePattern];
+    if (kit != morph_kit_in) {
+        const uint8_t *k = kit && kit_find ? kit_find(kit - 1u) : 0;
+        if (k)
+            memcpy(morph_b, k, sizeof morph_b);
+        morph_kit_ok = k != 0;
+        morph_kit_in = kit;
+        morph_touch();
+    }
+    if (amount != morph_now) {
+        morph_now = amount;
+        morph_touch();
+    }
+}
+
+static void morph_write(uint32_t budget)
+{
+    while (morph_dirty && budget) {
+        const uint32_t p = morph_at;
+        const uint8_t v = morph_value(p, morph_a[p]);
+        morph_at = p + 1u < LXR_HOST_NUM_PARAMS ? p + 1u : 0u;
+        if (morph_kind[p] != MORPH_KEEP && v != morph_sent[p]) {
+            lxr_host_setParam((uint16_t)p, v);
+            morph_sent[p] = v;
+            morph_clean = 0;
+            budget--;
+        } else if (++morph_clean >= LXR_HOST_NUM_PARAMS) {
+            morph_dirty = 0;
+        }
+    }
+}
+
+static void morph_after_kit(void)
+{
+    morph_sync();
+    morph_write(LXR_HOST_NUM_PARAMS);
+}
+
+int tack_morph(void) { return morph_of[seq_activePattern]; }
+int tack_morph_kit(void) { return morph_kit_of[seq_activePattern]; }
+int tack_post_morph(uint8_t amount) { return post(EV_MORPH, amount, 0, 0); }
+void tack_morph_now(uint8_t amount)
+{
+    morph_of[seq_activePattern] = amount & 0x7Fu;
+    dirty |= 1u << seq_activePattern;
+}
+int tack_post_morph_kit(uint8_t kit) { return post(EV_MORPH_KIT, kit, 0, 0); }
+#ifdef PLAT_HOST
+uint8_t tack_heard(uint16_t param) { return lxr_host_getParam(param); }
+int tack_morph_kept(uint16_t param) { return morph_kind[param] == MORPH_KEEP; }
+int tack_morph_differs(void)
+{
+    int n = 0;
+    for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
+        n += lxr_host_getParam((uint16_t)i) != morph_a[i];
+    return n;
+}
+#endif
 uint32_t tack_patterns_used(void)
 {
     uint32_t used = 0;
@@ -991,7 +1150,7 @@ uint32_t tack_lane_dir(uint8_t voice) { return LANE_DIR(seq_laneMode[seq_activeP
 uint32_t tack_lane_speed(uint8_t voice) { return LANE_SPEED(seq_laneMode[seq_activePattern][voice]); }
 const char *tack_lane_dir_name(uint32_t dir)
 {
-    static const char *const NAME[LANE_DIRECTIONS] = {"FWD", "REV", "PONG", "RAND"};
+    static const char *const NAME[LANE_DIRECTIONS] = {"FWD", "REV", "PONG", "BNCE", "RAND"};
     return NAME[dir < LANE_DIRECTIONS ? dir : 0];
 }
 const char *tack_lane_speed_name(uint32_t speed)
@@ -999,6 +1158,8 @@ const char *tack_lane_speed_name(uint32_t speed)
     static const char *const NAME[LANE_SPEEDS] = {"1X", "1/2", "1/4"};
     return NAME[speed < LANE_SPEEDS ? speed : 0];
 }
+int tack_lane_start(uint8_t voice) { return seq_laneStart[seq_activePattern][voice]; }
+int tack_post_lane_start(uint8_t voice, uint8_t start) { return post(EV_LANE_START, voice, start, 0); }
 int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed)
 {
     if (voice >= NUM_TRACKS || dir >= LANE_DIRECTIONS || speed >= LANE_SPEEDS)
@@ -1036,6 +1197,7 @@ void tack_load_kit(const uint8_t *values)
     lxr_host_loadKit(values);
     for (uint32_t i = 0; i < LXR_HOST_NUM_PARAMS; i++)
         shadow[i] = lxr_host_getParam((uint16_t)i);
+    morph_capture();
 }
 
 /* a pattern change restores the pattern it leaves from the backup buffer, discarding what is not in it: on the LXR
@@ -1204,9 +1366,17 @@ static void drain(void)
         case EV_NOTE_OFF:
             tack_note_off_now(e.a, e.b);
             break;
-        case EV_PARAM:
-            lxr_host_setParam((uint16_t)(e.a | e.b << 8), e.c);
+        case EV_PARAM: {
+            const uint16_t p = (uint16_t)(e.a | e.b << 8);
+            const uint8_t v = p < LXR_HOST_NUM_PARAMS ? morph_value(p, e.c) : e.c;
+            lxr_host_setParam(p, v);
+            if (p < LXR_HOST_NUM_PARAMS) {
+                morph_a[p] = e.c;
+                morph_sent[p] = v;
+                dirty |= 1u << seq_activePattern;        /* the pattern's kit */
+            }
             break;
+        }
         case EV_STEP:
             set_step(e.a, e.b, e.c);
             break;
@@ -1237,6 +1407,24 @@ static void drain(void)
             break;
         case EV_SONG_ROW:
             song_row(e.a, e.b);
+            break;
+        case EV_LANE_START:
+            if (e.a < NUM_TRACKS && e.b < NUM_STEPS) {
+                seq_laneStart[seq_activePattern][e.a] = e.b;
+                commit_active();
+            }
+            break;
+        case EV_KIT_HOME:
+            kit_now = e.a + 1;
+            seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(e.a + 1u);
+            dirty |= 1u << seq_activePattern;
+            break;
+        case EV_MORPH:
+            tack_morph_now(e.a);
+            break;
+        case EV_MORPH_KIT:
+            morph_kit_of[seq_activePattern] = e.a;
+            dirty |= 1u << seq_activePattern;
             break;
         case EV_BITS:
             bits_of[seq_activePattern] = (uint8_t)(127u - e.a);
@@ -1312,9 +1500,15 @@ static void drain(void)
         case EV_COPY:
             if (e.a < NUM_PATTERN && e.a != seq_activePattern)
 {
+                kit_keep(seq_activePattern);
+                kit_of[e.a] = kit_of[seq_activePattern];
+                kit_has = (uint16_t)(kit_has | 1u << e.a);
                 seq_copyPattern(seq_activePattern, e.a);
                 memcpy(seq_laneMode[e.a], seq_laneMode[seq_activePattern], NUM_TRACKS);
+                memcpy(seq_laneStart[e.a], seq_laneStart[seq_activePattern], NUM_TRACKS);
                 bits_of[e.a] = bits_of[seq_activePattern];
+                morph_of[e.a] = morph_of[seq_activePattern];
+                morph_kit_of[e.a] = morph_kit_of[seq_activePattern];
                 lock_list[e.a].n = lock_list[seq_activePattern].n;
                 memcpy(lock_list[e.a].l, lock_list[seq_activePattern].l, lock_list[e.a].n * sizeof(Lock));
                 dirty |= 1u << e.a;
@@ -1365,7 +1559,7 @@ static void drain(void)
             break;
         case EV_LANE_NUDGE:
             if (e.a < NUM_TRACKS) {
-                const int32_t d = (int32_t)e.b - 14;
+                const int32_t d = (int32_t)e.b - 2 * SHIFT_ZERO;
                 for (uint32_t s = 0; s < NUM_STEPS; s++) {
                     StepTiming *t = &seq_patternSet.seq_stepTiming[seq_activePattern][e.a][s];
                     const int32_t v = (int32_t)t->shift + d;
@@ -1377,13 +1571,17 @@ static void drain(void)
         case EV_KIT:
             if (kit_pending) {
                 lxr_host_loadKit(kit_pending);
+                morph_capture();
                 kit_applied++;
-                if (e.a != TACK_KIT_NO_SLOT) {
+                if (e.a != TACK_KIT_NO_SLOT) {         /* a bank slot is its name, then what was posted */
+                    memcpy(kit_name_now, kit_pending - sizeof kit_name_now, sizeof kit_name_now);
                     kit_now = e.a + 1;
                     seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(e.a + 1u);
+                    kit_keep(seq_activePattern);
                     commit_active();
                 }
                 kit_pending = 0;
+                morph_after_kit();
             }
             break;
         }
@@ -1636,6 +1834,8 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
         seq_tick();
         mixer_tapOn = app_ul_want;
         lxr_host_renderBlock(dac1, dac2);
+        morph_sync();
+        morph_write(MORPH_PER_BLOCK);
         if (bits_now != bits_of[seq_activePattern])
             bits_set(bits_of[seq_activePattern]);
         for (i = 0; i < TACK_BLOCK * 2; i++) {

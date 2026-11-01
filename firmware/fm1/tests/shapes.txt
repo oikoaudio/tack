@@ -195,10 +195,12 @@ expect len0 16
 expect step4 1
 
 # HOME says what is queued: a pattern picked while running, until it arrives
+tap GLO
+wait 40
+turn K2 20
+wait 40
 tap HOME
 wait 40
-turn ALGO 20
-wait 1600
 expect homenext -1
 tap PLAY
 wait 200

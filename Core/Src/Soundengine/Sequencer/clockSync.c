@@ -62,6 +62,9 @@ void sync_pulse()
 		}
 		else
 		{
+#ifdef LXR_FM1_BUILD
+			seq_finishStep();
+#endif
 			seq_nextStep();
 			seq_prescaleCounter=0;
 			seq_MidiSyncQueue(0);

@@ -109,6 +109,8 @@ static int enum_of(const LxrParamInfo *p)
             strcpy(t, "SQR");
         else if (!strcmp(t, "PWM"))
             strcpy(t, "PULSE");
+        else if (t[0] == 'V' && t[1] >= '1' && t[1] <= '6' && !t[2])   /* the voice an LFO restarts with: lfo_retrigger() */
+            strcpy(t, (const char *const[]){"D1", "D2", "D3", "SN", "CY", "HH"}[t[1] - '1']);
         printf("\"%s\",", t);
     }
     printf("};\n");
