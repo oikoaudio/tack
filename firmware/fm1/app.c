@@ -112,6 +112,7 @@ static struct {
     uint32_t note_held;                  /* keys down as notes: they end as notes, whatever the page is by then */
     int8_t note_oct;
     uint8_t key_note[NKEYS];             /* what each key played, for its note-off */
+    uint8_t key_voice[NKEYS];            /* and on which voice, as another may be picked before it comes up */
     uint8_t seq_voice;                   /* SEQ held picked a voice: no mode change on release */
     uint8_t bad_patterns;                /* patterns the store held that were refused */
     uint8_t roll_voice;                  /* the voice ROLL went down on */

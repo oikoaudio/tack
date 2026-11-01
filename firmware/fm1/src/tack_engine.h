@@ -132,6 +132,8 @@ int tack_page_graph(uint32_t voice, uint32_t group, uint32_t sub);
 const TackSlot *tack_graph_slot(uint32_t voice, int graph, uint32_t slot);
 uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e);  /* value after e detents */
 const char *tack_slot_text(const TackSlot *s, uint8_t value);         /* its name, 0 for a plain number */
+int tack_slot_turn(const TackSlot *s, int32_t e);                     /* a dial that doesn't just set its value: 1 if it took the turn */
+int tack_slot_toggles(const TackSlot *s);                             /* it is on or off */
 
 /* Roll: the voice repeats at the roll rate while on, and once if the sequencer is stopped */
 #define TACK_ROLL_RATES 6
@@ -191,6 +193,7 @@ void tack_kit_blended(uint8_t *values);                  /* the kit as morph has
  * loop only. An edit or another kit starts a new walk, and voice TACK_VOICES or above is the whole kit */
 int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed);
 uint8_t tack_lfo_sync(uint32_t voice);          /* its clock sync, 0 free */
+int tack_lfo_once(uint32_t voice);              /* it plays once on a retrigger */
 int tack_post_morph(uint8_t amount);
 int tack_post_morph_kit(uint8_t kit);
 void tack_morph_now(uint8_t amount);                     /* from the audio interrupt: MIDI in */

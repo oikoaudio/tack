@@ -67,6 +67,9 @@ void lxr_host_queueSeparateOutputs(uint32_t frame, bool on);
  */
 void lxr_host_setSoloVoice(int voice);
 
+/** The host's tempo, which LFOs in sync follow. Whole BPM. */
+void lxr_host_setTempo(double bpm);
+
 /** Channels per frame of lxr_host_process() output: LXR_HOST_OUT_CHANNELS, or 2 with a solo voice. */
 uint32_t lxr_host_outChannels(void);
 

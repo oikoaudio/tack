@@ -338,6 +338,8 @@ const ModTarg modTargets[] ={
 {TEXT_FX_P2,PAR_FX_P2},
 {TEXT_FX_P3,PAR_FX_P3},
 {TEXT_FX_P4,PAR_FX_P4},						//228
+// past every voice: a kit stores these as indices, so nothing above moves
+{TEXT_FX_P4,PAR_FX_DRY_WET},				//229
 
 };
 

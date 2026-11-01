@@ -54,7 +54,7 @@ static void pg_draw_picture(int page, int kind, uint32_t first, uint32_t n, uint
 {
     const int32_t x = (int32_t)first * PG_CW + 10, w = (int32_t)n * PG_CW - 20;
     const int g = tack_page_graph((uint32_t)ui.voice, ui.group, (uint32_t)page);
-    float v[3];
+    float v[4];
     if (kind == PIC_ENV) {
         wd_env(x, 0, w, g, c);
     } else if (kind == PIC_OSC) {
@@ -65,6 +65,7 @@ static void pg_draw_picture(int page, int kind, uint32_t first, uint32_t n, uint
         v[0] = (float)graph_value(g, 1, 0) / 127.0f;
         v[1] = graph_value(g, 3, 0);
         v[2] = lfo_cycles();
+        v[3] = (float)tack_lfo_once((uint32_t)ui.voice);
         wd_curve(x, 0, w, lfo_picture, v, c);
     } else {
         v[0] = (float)tack_get_param(page_slot(page, 0)->par) / 127.0f;
@@ -93,6 +94,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     RKEY(voice);
     RKEY(ui.held >= 0);
     RKEY(tack_lfo_sync(voice));                /* the picture on the row above it */
+    RKEY(tack_lfo_once(voice));
     for (uint32_t i = 0; page != NO_PAGE && i < TACK_NP; i++) {
         RKEY(pulse_idle(page, i));
         const TackSlot *sl = page_slot(page, i);
@@ -137,8 +139,8 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
             wd_target(x, 0, name, lit ? C_HI : c);
         else if (sl->en == EN_OSC_WAVE || sl->en == EN_LFO_WAVE)
             wd_wave(x, 0, sl->en, value, lit ? C_HI : c);
-        else if (sl->max == 1u && name && name[0] == 'O')   /* OFF, ON. FM and MIX say which */
-            wd_toggle(x, 0, value != 0u, lit ? C_HI : c);
+        else if (tack_slot_toggles(sl) && name && name[0] == 'O')   /* OFF, ON. FM and MIX say which */
+            wd_toggle(x, 0, name[1] == 'N', lit ? C_HI : c);
         else if (name)
             wd_box(x, 0, name, lit ? C_HI : c);
         else if (is_signed(sl))

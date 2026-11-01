@@ -125,6 +125,7 @@ typedef struct
 	char kitPath[KIT_PATH_SIZE];	// the kit file it was loaded from or saved to; empty for the init kit or unknown
 	int kitVoice;	// voice plugins: the voice of that kit file it plays; -1 for the whole kit
 	bool kitEdited;	// in the editor, since it was loaded or saved
+	_Atomic float tempo;	// the host's, 0 until it has said; the editor's Sync goes by it
 	KitWalk walk;	// the editor's Mutate
 	bool walkFromEdited;	// back at the walk's start, the kit is as edited as it was then
 
@@ -453,6 +454,10 @@ static clap_process_status tackProcess(const clap_plugin_t* plugin, const clap_p
 	const int separate = atomic_exchange(&k->pendingSeparateOutputs, -1);
 	if(separate >= 0) k->engine.api->setSeparateOutputs(separate);
 	applyGuiEvents(k, p->out_events, true);
+	if(p->transport && (p->transport->flags & CLAP_TRANSPORT_HAS_TEMPO)) {
+		k->engine.api->setTempo(p->transport->tempo);
+		atomic_store(&k->tempo, (float)p->transport->tempo);
+	}
 
 	// events are scheduled at their exact time and come out lxr_host_latency() frames later
 	for(uint32_t e = 0; e < numEvents; e++)
@@ -928,6 +933,12 @@ static int guiMutate(void* ctx, int voice, int steps)
 	return step;
 }
 
+static float guiTempo(void* ctx)
+{
+	const float t = atomic_load(&((Tack*)ctx)->tempo);
+	return t > 0 ? t : 120.f;
+}
+
 static int guiMutateStep(void* ctx)
 {
 	Tack* k = ctx;
@@ -990,7 +1001,7 @@ static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloat
 	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || (!TACK_GUI_OWN_TIMER && !k->hostTimer)) return false;
 	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiAudition, guiKitName, guiSaveKit,
 		guiKitPath, guiKitEdited, guiLoadKit, k->type->voice, guiHasParam, guiOffersValue, guiValueText, guiKitVoice,
-		guiModulation, guiLoadVoice, guiMutate, guiMutateStep };
+		guiModulation, guiLoadVoice, guiMutate, guiMutateStep, guiTempo };
 	k->gui = tack_guiCreate(&host);
 	if(!k->gui) return false;
 	if(!TACK_GUI_OWN_TIMER && !k->hostTimer->register_timer(k->host, GUI_TIMER_MS, &k->guiTimer)) {

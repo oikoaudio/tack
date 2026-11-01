@@ -72,6 +72,10 @@ uint16_t lxr_params_fxTypeParam(void);
  */
 void lxr_params_mutateTable(uint8_t* top, uint8_t* voice);
 
+/** An LFO's two speed parameters: the Sync of a Freq, the Freq of a Sync, or -1 if param isn't one. */
+int lxr_params_lfoSyncOf(uint16_t param);
+int lxr_params_lfoFreqOf(uint16_t param);
+
 /** Whether a parameter is a modulation destination (velocity or LFO). */
 bool lxr_params_isTarget(uint16_t param);
 

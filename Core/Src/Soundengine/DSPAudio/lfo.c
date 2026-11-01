@@ -32,6 +32,8 @@ void lfo_init(Lfo *lfo)
 	lfo->sync			= 0;
 	lfo->freq			= 1;
 	lfo->modNodeValue	= 1;
+	lfo->once			= 0;
+	lfo->ended			= 0;
 
 	modNode_init(&lfo->modTarget);
 }
@@ -41,8 +43,14 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 	uint32_t oldPhase 		= lfo->phase;
 	float inc = lfo->phaseInc*lfo->modNodeValue;
 	uint32_t incInt = inc;
-	lfo->phase 			   += incInt;//lfo->phaseInc*lfo->modNodeValue;
+	if(!lfo->ended)
+		lfo->phase 		   += incInt;//lfo->phaseInc*lfo->modNodeValue;
 	const uint8_t overflow 	= oldPhase>lfo->phase;
+	if(overflow && lfo->once)
+	{
+		lfo->phase = 0xffffffff;
+		lfo->ended = 1;
+	}
 
 	switch(lfo->waveform)
 	{
@@ -105,10 +113,39 @@ IN_ITCM_RAM float lfo_calc(Lfo *lfo)
 	return 0;
 }
 //-------------------------------------------------------------
+// where a wave ends: a sine at its middle, and random has no end to speak of
+static float lfo_endValue(const Lfo* lfo)
+{
+	switch(lfo->waveform)
+	{
+		case LFO_SAW_UP:
+		case LFO_REC:
+		case LFO_EXP_UP:
+			return 1.f;
+		case LFO_TRI:
+		case LFO_SAW_DOWN:
+		case LFO_EXP_DOWN:
+			return 0.f;
+		default:
+			return 0.5f;
+	}
+}
+//-------------------------------------------------------------
+// Modulation moves a parameter both ways around where it is set, with 0.5 leaving it alone. Once, the wave is measured from its end
+// instead, so it finishes on the value set: a rising wave dips and recovers, a falling one rises and returns
 void lfo_dispatchNextValue(Lfo* lfo)
 {
 	float val = lfo_calc(lfo);
+	if(lfo->once)
+		val = lfo->ended ? 0.5f : (val - lfo_endValue(lfo) + 1.f) * 0.5f;
 	modNode_updateValue(&lfo->modTarget,val);
+}
+//-------------------------------------------------------------
+void lfo_setRetrigger(Lfo* lfo, uint8_t value)
+{
+	lfo->once = value > 6;
+	lfo->ended = lfo->once;
+	lfo->retrigger = lfo->once ? value - 6 : value;
 }
 //-------------------------------------------------------------
 IN_ITCM_RAM uint32_t lfo_calcPhaseInc(float freq, uint8_t sync)
@@ -225,6 +262,7 @@ void lfo_recalcSync()
 static void lfo_retriggerOne(Lfo *lfo)
 {
 	lfo->phase = lfo->phaseOffset;
+	lfo->ended = 0;
 	if(lfo->waveform == LFO_NOISE)
 	{
 		lfo->rnd = GetRngValue() / (float)0xffffffff;
@@ -235,6 +273,7 @@ static void lfo_retriggerOne(Lfo *lfo)
 static void lfo_retriggerOne(Lfo *lfo)
 {
 	lfo->phase = lfo->phaseOffset;
+	lfo->ended = 0;
 }
 #endif
 void lfo_retrigger(uint8_t voice)

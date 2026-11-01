@@ -14,14 +14,14 @@ static const uint8_t EN_FW_4[] = {0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,1
 #define EN_FW_OR_0_4 EN_FW_4
 static const char *const EN_NAME_5[] = {"OFF","ON",};
 #define EN_FW_OR_0_5 0
-static const char *const EN_NAME_6[] = {"OFF","D1 OSC CRS","D1 OSC FINE","D1 OSC WAV","D1 OSC PW","D1 AMP ATK","D1 AMP DEC","D1 AMP SLP","D1 MOD DEC","D1 MOD SLP","D1 PITCH MOD AMT","D1 VEL DST","D1 VEL AMT","D1 VEL VOL MOD","D1 FM AMT","D1 FM FRQ","D1 FM WAV","D1 OSC MODE","D1 TRN WAV","D1 TRN VOL","D1 TRN FRQ","D1 FLT FRQ","D1 FLT RES","D1 FLT TYPE","D1 FLT DRV","D1 LFO FRQ","D1 LFO SYN","D1 LFO AMT","D1 LFO WAV","D1 LFO RTG","D1 LFO OFS","D1 VOL","D1 PAN","D1 SR","D1 DRV","FX DRV/FRQ/ATK/TIM","FX COLOR/DEC/RANGE","FX TONE/THRESHOLD","FX VOL/GAIN/FEEDBA","D2 OSC CRS","D2 OSC FINE","D2 OSC WAV","D2 OSC PW","D2 AMP ATK","D2 AMP DEC","D2 AMP SLP","D2 MOD DEC","D2 MOD SLP","D2 PITCH MOD AMT","D2 VEL DST","D2 VEL AMT","D2 VEL VOL MOD","D2 FM AMT","D2 FM FRQ","D2 FM WAV","D2 OSC MODE","D2 TRN WAV","D2 TRN VOL","D2 TRN FRQ","D2 FLT FRQ","D2 FLT RES","D2 FLT TYPE","D2 FLT DRV","D2 LFO FRQ","D2 LFO SYN","D2 LFO AMT","D2 LFO WAV","D2 LFO RTG","D2 LFO OFS","D2 VOL","D2 PAN","D2 SR","D2 DRV","D3 OSC CRS","D3 OSC FINE","D3 OSC WAV","D3 OSC PW","D3 AMP ATK","D3 AMP DEC","D3 AMP SLP","D3 MOD DEC","D3 MOD SLP","D3 PITCH MOD AMT","D3 VEL DST","D3 VEL AMT","D3 VEL VOL MOD","D3 FM AMT","D3 FM FRQ","D3 FM WAV","D3 OSC MODE","D3 TRN WAV","D3 TRN VOL","D3 TRN FRQ","D3 FLT FRQ","D3 FLT RES","D3 FLT TYPE","D3 FLT DRV","D3 LFO FRQ","D3 LFO SYN","D3 LFO AMT","D3 LFO WAV","D3 LFO RTG","D3 LFO OFS","D3 VOL","D3 PAN","D3 SR","D3 DRV","SN OSC CRS","SN OSC FINE","SN NOISE FRQ","SN NOISE/OSC MIX","SN OSC WAV","SN OSC PW","SN AMP ATK","SN AMP DEC","SN AMP RPT","SN AMP SLP","SN MOD DEC","SN MOD SLP","SN PITCH MOD AMT","SN VEL DST","SN VEL AMT","SN VEL VOL MOD","SN TRN WAV","SN TRN VOL","SN TRN FRQ","SN FLT FRQ","SN FLT RES","SN FLT TYPE","SN FLT DRV","SN LFO FRQ","SN LFO SYN","SN LFO AMT","SN LFO WAV","SN LFO RTG","SN LFO OFS","SN VOL","SN PAN","SN SR","SN DRV","CY OSC CRS","CY OSC FINE","CY OSC WAV","CY OSC PW","CY AMP ATK","CY AMP DEC","CY AMP RPT","CY AMP SLP","CY VEL DST","CY VEL AMT","CY VEL VOL MOD","CY MOD OSC FRQ 1","CY MOD OSC FRQ 2","CY MOD OSC GAIN 1","CY MOD OSC GAIN 2","CY MOD OSC WAV 1","CY MOD OSC WAV 2","CY TRN WAV","CY TRN VOL","CY TRN FRQ","CY FLT FRQ","CY FLT RES","CY FLT TYPE","CY FLT DRV","CY LFO FRQ","CY LFO SYN","CY LFO AMT","CY LFO WAV","CY LFO RTG","CY LFO OFS","CY VOL","CY PAN","CY SR","CY DRV","HH OSC CRS","HH OSC FINE","HH OSC WAV","HH OSC PW","HH AMP ATK","HH AMP DEC CLOSED","HH AMP DEC OPEN","HH AMP SLP","HH VEL DST","HH VEL AMT","HH VEL VOL MOD","HH MOD OSC FRQ 1","HH MOD OSC FRQ 2","HH MOD OSC GAIN 1","HH MOD OSC GAIN 2","HH MOD OSC WAV 1","HH MOD OSC WAV 2","HH TRN WAV","HH TRN VOL","HH TRN FRQ","HH FLT FRQ","HH FLT RES","HH FLT TYPE","HH FLT DRV","HH LFO FRQ","HH LFO SYN","HH LFO AMT","HH LFO WAV","HH LFO RTG","HH LFO OFS","HH VOL","HH PAN","HH SR","HH DRV",};
-static const uint8_t EN_FW_6[] = {0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,};
+static const char *const EN_NAME_6[] = {"OFF","D1 OSC CRS","D1 OSC FINE","D1 OSC WAV","D1 OSC PW","D1 AMP ATK","D1 AMP DEC","D1 AMP SLP","D1 MOD DEC","D1 MOD SLP","D1 PITCH MOD AMT","D1 VEL DST","D1 VEL AMT","D1 VEL VOL MOD","D1 FM AMT","D1 FM FRQ","D1 FM WAV","D1 OSC MODE","D1 TRN WAV","D1 TRN VOL","D1 TRN FRQ","D1 FLT FRQ","D1 FLT RES","D1 FLT TYPE","D1 FLT DRV","D1 LFO FRQ","D1 LFO SYN","D1 LFO AMT","D1 LFO WAV","D1 LFO RTG","D1 LFO OFS","D1 VOL","D1 PAN","D1 SR","D1 DRV","FX DRV/FRQ/ATK/TIM","FX COLOR/DEC/RANGE","FX TONE/THRESHOLD","FX VOL/GAIN/FEEDBA","D2 OSC CRS","D2 OSC FINE","D2 OSC WAV","D2 OSC PW","D2 AMP ATK","D2 AMP DEC","D2 AMP SLP","D2 MOD DEC","D2 MOD SLP","D2 PITCH MOD AMT","D2 VEL DST","D2 VEL AMT","D2 VEL VOL MOD","D2 FM AMT","D2 FM FRQ","D2 FM WAV","D2 OSC MODE","D2 TRN WAV","D2 TRN VOL","D2 TRN FRQ","D2 FLT FRQ","D2 FLT RES","D2 FLT TYPE","D2 FLT DRV","D2 LFO FRQ","D2 LFO SYN","D2 LFO AMT","D2 LFO WAV","D2 LFO RTG","D2 LFO OFS","D2 VOL","D2 PAN","D2 SR","D2 DRV","D3 OSC CRS","D3 OSC FINE","D3 OSC WAV","D3 OSC PW","D3 AMP ATK","D3 AMP DEC","D3 AMP SLP","D3 MOD DEC","D3 MOD SLP","D3 PITCH MOD AMT","D3 VEL DST","D3 VEL AMT","D3 VEL VOL MOD","D3 FM AMT","D3 FM FRQ","D3 FM WAV","D3 OSC MODE","D3 TRN WAV","D3 TRN VOL","D3 TRN FRQ","D3 FLT FRQ","D3 FLT RES","D3 FLT TYPE","D3 FLT DRV","D3 LFO FRQ","D3 LFO SYN","D3 LFO AMT","D3 LFO WAV","D3 LFO RTG","D3 LFO OFS","D3 VOL","D3 PAN","D3 SR","D3 DRV","SN OSC CRS","SN OSC FINE","SN NOISE FRQ","SN NOISE/OSC MIX","SN OSC WAV","SN OSC PW","SN AMP ATK","SN AMP DEC","SN AMP RPT","SN AMP SLP","SN MOD DEC","SN MOD SLP","SN PITCH MOD AMT","SN VEL DST","SN VEL AMT","SN VEL VOL MOD","SN TRN WAV","SN TRN VOL","SN TRN FRQ","SN FLT FRQ","SN FLT RES","SN FLT TYPE","SN FLT DRV","SN LFO FRQ","SN LFO SYN","SN LFO AMT","SN LFO WAV","SN LFO RTG","SN LFO OFS","SN VOL","SN PAN","SN SR","SN DRV","CY OSC CRS","CY OSC FINE","CY OSC WAV","CY OSC PW","CY AMP ATK","CY AMP DEC","CY AMP RPT","CY AMP SLP","CY VEL DST","CY VEL AMT","CY VEL VOL MOD","CY MOD OSC FRQ 1","CY MOD OSC FRQ 2","CY MOD OSC GAIN 1","CY MOD OSC GAIN 2","CY MOD OSC WAV 1","CY MOD OSC WAV 2","CY TRN WAV","CY TRN VOL","CY TRN FRQ","CY FLT FRQ","CY FLT RES","CY FLT TYPE","CY FLT DRV","CY LFO FRQ","CY LFO SYN","CY LFO AMT","CY LFO WAV","CY LFO RTG","CY LFO OFS","CY VOL","CY PAN","CY SR","CY DRV","HH OSC CRS","HH OSC FINE","HH OSC WAV","HH OSC PW","HH AMP ATK","HH AMP DEC CLOSED","HH AMP DEC OPEN","HH AMP SLP","HH VEL DST","HH VEL AMT","HH VEL VOL MOD","HH MOD OSC FRQ 1","HH MOD OSC FRQ 2","HH MOD OSC GAIN 1","HH MOD OSC GAIN 2","HH MOD OSC WAV 1","HH MOD OSC WAV 2","HH TRN WAV","HH TRN VOL","HH TRN FRQ","HH FLT FRQ","HH FLT RES","HH FLT TYPE","HH FLT DRV","HH LFO FRQ","HH LFO SYN","HH LFO AMT","HH LFO WAV","HH LFO RTG","HH LFO OFS","HH VOL","HH PAN","HH SR","HH DRV","FX MIX",};
+static const uint8_t EN_FW_6[] = {0,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,229,};
 #define EN_FW_OR_0_6 EN_FW_6
 static const char *const EN_NAME_7[] = {"SIN","TRI","SAW UP","SAW DN","SQR","RND","EXP UP","EXP DN",};
 #define EN_FW_OR_0_7 0
 static const char *const EN_NAME_8[] = {"OFF","4/1","2/1","1/1","1/2","1/3","1/4","1/6","1/8","1/12","1/16","1/32",};
 #define EN_FW_OR_0_8 0
-static const char *const EN_NAME_9[] = {"OFF","D1","D2","D3","SN","CY","HH",};
+static const char *const EN_NAME_9[] = {"OFF","D1","D2","D3","SN","CY","HH","V1 ONCE","V2 ONCE","V3 ONCE","V4 ONCE","V5 ONCE","V6 ONCE",};
 #define EN_FW_OR_0_9 0
 static const char *const EN_NAME_10[] = {"OFF","D2 OSC CRS","D2 OSC FINE","D2 OSC WAV","D2 OSC PW","D2 AMP ATK","D2 AMP DEC","D2 AMP SLP","D2 MOD DEC","D2 MOD SLP","D2 PITCH MOD AMT","D2 VEL DST","D2 VEL AMT","D2 VEL VOL MOD","D2 FM AMT","D2 FM FRQ","D2 FM WAV","D2 OSC MODE","D2 TRN WAV","D2 TRN VOL","D2 TRN FRQ","D2 FLT FRQ","D2 FLT RES","D2 FLT TYPE","D2 FLT DRV","D2 LFO FRQ","D2 LFO SYN","D2 LFO AMT","D2 LFO WAV","D2 LFO RTG","D2 LFO OFS","D2 VOL","D2 PAN","D2 SR","D2 DRV","FX DRV/FRQ/ATK/TIM","FX COLOR/DEC/RANGE","FX TONE/THRESHOLD","FX VOL/GAIN/FEEDBA",};
 static const uint8_t EN_FW_10[] = {0,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,};
@@ -64,12 +64,12 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "FM", 5, {{"AMOUNT", 82, 127, 0, 0, 0},{"FREQ", 83, 127, 0, 0, 60},{"WAVE", 20, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 37, 127, 0, 0, 0},{"RES", 43, 127, 0, 0, 0},{"TYPE", 191, 7, 3, 0, 0},{"DRIVE", 128, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 197, 127, 0, 0, 0},{"SAMPLE", 203, 13, 4, 0, 0},{"PITCH", 209, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 94, 127, 0, 0, 63},{"DRIVE", 102, 127, 0, 0, 0},{"RATE", 108, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 94, 127, 0, 0, 63},{"DIST", 102, 127, 0, 0, 0},{"RATE", 108, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 49, 127, 0, 0, 0},{"DECAY", 50, 127, 0, 0, 0},{"CURVE", 62, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "MOD EG", 2, {{"DECAY", 70, 127, 0, 0, 0},{"CURVE", 78, 127, 0, 0, 0},{"PITCH", 74, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 149, 38, 5, 1, 0},{"AMOUNT", 143, 127, 0, 0, 0},{"VOLUME", 137, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 167, 207, 7, 1, 0},{"AMOUNT", 121, 127, 0, 0, 0},{"FREQ", 115, 127, 0, 0, 0},{"WAVE", 155, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 179, 11, 9, 0, 0},{"RETRIG", 173, 6, 10, 0, 0},{"PHASE", 185, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 167, 208, 7, 1, 0},{"AMOUNT", 121, 127, 0, 0, 0},{"FREQ", 115, 127, 0, 0, 0},{"WAVE", 155, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 179, 11, 9, 0, 0},{"RETRIG", 173, 12, 10, 0, 0},{"PHASE", 185, 127, 0, 0, 0},{"ONCE", 173, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 10, 127, 0, 0, 60},{"FILTER", 38, 127, 0, 0, 0},{"DECAY", 52, 127, 0, 0, 0},{"VOLUME", 89, 127, 0, 0, 0},}},
@@ -77,12 +77,12 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "FM", 5, {{"AMOUNT", 84, 127, 0, 0, 0},{"FREQ", 85, 127, 0, 0, 60},{"WAVE", 21, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 38, 127, 0, 0, 0},{"RES", 44, 127, 0, 0, 0},{"TYPE", 192, 7, 3, 0, 0},{"DRIVE", 129, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 198, 127, 0, 0, 0},{"SAMPLE", 204, 13, 4, 0, 0},{"PITCH", 210, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 95, 127, 0, 0, 63},{"DRIVE", 103, 127, 0, 0, 0},{"RATE", 109, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 95, 127, 0, 0, 63},{"DIST", 103, 127, 0, 0, 0},{"RATE", 109, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 51, 127, 0, 0, 0},{"DECAY", 52, 127, 0, 0, 0},{"CURVE", 63, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "MOD EG", 2, {{"DECAY", 71, 127, 0, 0, 0},{"CURVE", 79, 127, 0, 0, 0},{"PITCH", 75, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 150, 38, 11, 1, 0},{"AMOUNT", 144, 127, 0, 0, 0},{"VOLUME", 138, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 168, 207, 7, 1, 0},{"AMOUNT", 122, 127, 0, 0, 0},{"FREQ", 116, 127, 0, 0, 0},{"WAVE", 156, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 180, 11, 9, 0, 0},{"RETRIG", 174, 6, 10, 0, 0},{"PHASE", 186, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 168, 208, 7, 1, 0},{"AMOUNT", 122, 127, 0, 0, 0},{"FREQ", 116, 127, 0, 0, 0},{"WAVE", 156, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 180, 11, 9, 0, 0},{"RETRIG", 174, 12, 10, 0, 0},{"PHASE", 186, 127, 0, 0, 0},{"ONCE", 174, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 12, 127, 0, 0, 60},{"FILTER", 39, 127, 0, 0, 0},{"DECAY", 54, 127, 0, 0, 0},{"VOLUME", 90, 127, 0, 0, 0},}},
@@ -90,12 +90,12 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "FM", 5, {{"AMOUNT", 86, 127, 0, 0, 0},{"FREQ", 87, 127, 0, 0, 60},{"WAVE", 22, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 39, 127, 0, 0, 0},{"RES", 45, 127, 0, 0, 0},{"TYPE", 193, 7, 3, 0, 0},{"DRIVE", 130, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 199, 127, 0, 0, 0},{"SAMPLE", 205, 13, 4, 0, 0},{"PITCH", 211, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 96, 127, 0, 0, 63},{"DRIVE", 104, 127, 0, 0, 0},{"RATE", 110, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 96, 127, 0, 0, 63},{"DIST", 104, 127, 0, 0, 0},{"RATE", 110, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 53, 127, 0, 0, 0},{"DECAY", 54, 127, 0, 0, 0},{"CURVE", 64, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "MOD EG", 2, {{"DECAY", 72, 127, 0, 0, 0},{"CURVE", 80, 127, 0, 0, 0},{"PITCH", 76, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 151, 38, 12, 1, 0},{"AMOUNT", 145, 127, 0, 0, 0},{"VOLUME", 139, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 169, 207, 7, 1, 0},{"AMOUNT", 123, 127, 0, 0, 0},{"FREQ", 117, 127, 0, 0, 0},{"WAVE", 157, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 181, 11, 9, 0, 0},{"RETRIG", 175, 6, 10, 0, 0},{"PHASE", 187, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 169, 208, 7, 1, 0},{"AMOUNT", 123, 127, 0, 0, 0},{"FREQ", 117, 127, 0, 0, 0},{"WAVE", 157, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 181, 11, 9, 0, 0},{"RETRIG", 175, 12, 10, 0, 0},{"PHASE", 187, 127, 0, 0, 0},{"ONCE", 175, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 14, 127, 0, 0, 60},{"FILTER", 40, 127, 0, 0, 0},{"DECAY", 56, 127, 0, 0, 0},{"VOLUME", 91, 127, 0, 0, 0},}},
@@ -103,12 +103,12 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "NOISE", 0, {{"NOISE", 27, 127, 0, 0, 0},{"N MIX", 28, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 40, 127, 0, 0, 0},{"RES", 46, 127, 0, 0, 0},{"TYPE", 194, 7, 3, 0, 0},{"DRIVE", 131, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 200, 127, 0, 0, 0},{"SAMPLE", 206, 13, 4, 0, 0},{"PITCH", 212, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 99, 127, 0, 0, 63},{"DRIVE", 105, 127, 0, 0, 0},{"RATE", 111, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 99, 127, 0, 0, 63},{"DIST", 105, 127, 0, 0, 0},{"RATE", 111, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 55, 127, 0, 0, 0},{"DECAY", 56, 127, 0, 0, 0},{"CURVE", 65, 127, 0, 0, 0},{"REPEAT", 68, 127, 0, 0, 0},}},
     {2, "MOD EG", 2, {{"DECAY", 73, 127, 0, 0, 0},{"CURVE", 81, 127, 0, 0, 0},{"PITCH", 77, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 152, 37, 13, 1, 0},{"AMOUNT", 146, 127, 0, 0, 0},{"VOLUME", 140, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 170, 207, 7, 1, 0},{"AMOUNT", 124, 127, 0, 0, 0},{"FREQ", 118, 127, 0, 0, 0},{"WAVE", 158, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 182, 11, 9, 0, 0},{"RETRIG", 176, 6, 10, 0, 0},{"PHASE", 188, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 170, 208, 7, 1, 0},{"AMOUNT", 124, 127, 0, 0, 0},{"FREQ", 118, 127, 0, 0, 0},{"WAVE", 158, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 182, 11, 9, 0, 0},{"RETRIG", 176, 12, 10, 0, 0},{"PHASE", 188, 127, 0, 0, 0},{"ONCE", 176, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 16, 127, 0, 0, 60},{"FILTER", 41, 127, 0, 0, 0},{"DECAY", 58, 127, 0, 0, 0},{"VOLUME", 92, 127, 0, 0, 0},}},
@@ -117,11 +117,11 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "MOD WAVE", 6, {{"WAVE 1", 23, 5, 1, 0, 0},{"WAVE 2", 24, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 41, 127, 0, 0, 0},{"RES", 47, 127, 0, 0, 0},{"TYPE", 195, 7, 3, 0, 0},{"DRIVE", 132, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 201, 127, 0, 0, 0},{"SAMPLE", 207, 13, 4, 0, 0},{"PITCH", 213, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 100, 127, 0, 0, 63},{"DRIVE", 106, 127, 0, 0, 0},{"RATE", 112, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 100, 127, 0, 0, 63},{"DIST", 106, 127, 0, 0, 0},{"RATE", 112, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 57, 127, 0, 0, 0},{"DECAY", 58, 127, 0, 0, 0},{"CURVE", 66, 127, 0, 0, 0},{"REPEAT", 69, 127, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 153, 38, 14, 1, 0},{"AMOUNT", 147, 127, 0, 0, 0},{"VOLUME", 141, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 171, 207, 7, 1, 0},{"AMOUNT", 125, 127, 0, 0, 0},{"FREQ", 119, 127, 0, 0, 0},{"WAVE", 159, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 183, 11, 9, 0, 0},{"RETRIG", 177, 6, 10, 0, 0},{"PHASE", 189, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 171, 208, 7, 1, 0},{"AMOUNT", 125, 127, 0, 0, 0},{"FREQ", 119, 127, 0, 0, 0},{"WAVE", 159, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 183, 11, 9, 0, 0},{"RETRIG", 177, 12, 10, 0, 0},{"PHASE", 189, 127, 0, 0, 0},{"ONCE", 177, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 18, 127, 0, 0, 60},{"FILTER", 42, 127, 0, 0, 0},{"DECAY", 60, 127, 0, 0, 0},{"VOLUME", 93, 127, 0, 0, 0},}},
@@ -130,11 +130,11 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "MOD WAVE", 6, {{"WAVE 1", 25, 5, 1, 0, 0},{"WAVE 2", 26, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 42, 127, 0, 0, 0},{"RES", 48, 127, 0, 0, 0},{"TYPE", 196, 7, 3, 0, 0},{"DRIVE", 133, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 202, 127, 0, 0, 0},{"SAMPLE", 208, 13, 4, 0, 0},{"PITCH", 214, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 101, 127, 0, 0, 63},{"DRIVE", 107, 127, 0, 0, 0},{"RATE", 113, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 101, 127, 0, 0, 63},{"DIST", 107, 127, 0, 0, 0},{"RATE", 113, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 59, 127, 0, 0, 0},{"DECAY", 60, 127, 0, 0, 0},{"CURVE", 67, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 154, 38, 15, 1, 0},{"AMOUNT", 148, 127, 0, 0, 0},{"VOLUME", 142, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 172, 207, 7, 1, 0},{"AMOUNT", 126, 127, 0, 0, 0},{"FREQ", 120, 127, 0, 0, 0},{"WAVE", 160, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 184, 11, 9, 0, 0},{"RETRIG", 178, 6, 10, 0, 0},{"PHASE", 190, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 172, 208, 7, 1, 0},{"AMOUNT", 126, 127, 0, 0, 0},{"FREQ", 120, 127, 0, 0, 0},{"WAVE", 160, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 184, 11, 9, 0, 0},{"RETRIG", 178, 12, 10, 0, 0},{"PHASE", 190, 127, 0, 0, 0},{"ONCE", 178, 12, 10, 0, 0},}},
   },
   {
     {0, "", 1, {{"PITCH", 18, 127, 0, 0, 60},{"FILTER", 42, 127, 0, 0, 0},{"DECAY", 61, 127, 0, 0, 0},{"VOLUME", 93, 127, 0, 0, 0},}},
@@ -143,11 +143,11 @@ static const TackPage TACK_PAGE[TACK_VOICES][14] = {
     {1, "MOD WAVE", 6, {{"WAVE 1", 25, 5, 1, 0, 0},{"WAVE 2", 26, 5, 1, 0, 0},{0, 0, 0, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {1, "FILTER", 0, {{"FILTER", 42, 127, 0, 0, 0},{"RES", 48, 127, 0, 0, 0},{"TYPE", 196, 7, 3, 0, 0},{"DRIVE", 133, 127, 0, 0, 0},}},
     {1, "TRANSIENT", 0, {{"VOLUME", 202, 127, 0, 0, 0},{"SAMPLE", 208, 13, 4, 0, 0},{"PITCH", 214, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {1, "OUTPUT", 0, {{"PAN", 101, 127, 0, 0, 63},{"DRIVE", 107, 127, 0, 0, 0},{"RATE", 113, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {1, "OUTPUT", 0, {{"PAN", 101, 127, 0, 0, 63},{"DIST", 107, 127, 0, 0, 0},{"RATE", 113, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "AMP EG", 1, {{"ATTACK", 59, 127, 0, 0, 0},{"DECAY", 61, 127, 0, 0, 0},{"CURVE", 67, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
     {2, "VELOCITY", 0, {{"TARGET", 154, 38, 15, 1, 0},{"AMOUNT", 148, 127, 0, 0, 0},{"VOLUME", 142, 1, 6, 0, 0},{0, 0, 0, 0, 0, 0},}},
-    {3, "LFO", 3, {{"TARGET", 172, 207, 7, 1, 0},{"AMOUNT", 126, 127, 0, 0, 0},{"FREQ", 120, 127, 0, 0, 0},{"WAVE", 160, 7, 8, 0, 0},}},
-    {3, "LFO SYNC", 3, {{"SYNC", 184, 11, 9, 0, 0},{"RETRIG", 178, 6, 10, 0, 0},{"PHASE", 190, 127, 0, 0, 0},{0, 0, 0, 0, 0, 0},}},
+    {3, "LFO", 3, {{"TARGET", 172, 208, 7, 1, 0},{"AMOUNT", 126, 127, 0, 0, 0},{"FREQ", 120, 127, 0, 0, 0},{"WAVE", 160, 7, 8, 0, 0},}},
+    {3, "LFO SYNC", 3, {{"SYNC", 184, 11, 9, 0, 0},{"RETRIG", 178, 12, 10, 0, 0},{"PHASE", 190, 127, 0, 0, 0},{"ONCE", 178, 12, 10, 0, 0},}},
   },
 };
 static const uint8_t TACK_PAGE_N[TACK_VOICES] = {11,11,11,11,11,11,11,};

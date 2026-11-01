@@ -190,7 +190,9 @@ static void wd_env(int32_t x, int32_t y, int32_t w, int graph, uint16_t c)
     up = (int32_t)((float)span * ta / (ta + td));
     if (attack && up < 3)
         up = 3;
-    for (int32_t i = 0; i <= span; i += 2) {
+    if (up > span - 6)                           /* a decay can't be seen in less */
+        up = span - 6;
+    for (int32_t k = 0, i = 0; k <= span + 1; k += 2, i = k < span ? k : span) {   /* to the very end: a steep curve falls all at once */
         const float v = i < up ? eg_shape((float)i / (float)up, inv)
                                : eg_shape(1.0f - (float)(i - up) / (float)(span - up), s);
         const float nx = (float)x + 1.0f + (float)i, ny = top + h - v * h;
@@ -243,9 +245,11 @@ static float osc_picture(float p, const float *v)
     return 0.5f + 0.5f * osc_shape((uint32_t)v[0], q - (float)(int32_t)q, v[1], (int32_t)(p * 200.0f));
 }
 
-/* the LFO, as far as its amount. v: amount, wave, cycles */
+/* the LFO, as far as its amount. v: amount, wave, cycles, and once: a pass as long as a cycle, then where it ended */
 static float lfo_picture(float p, const float *v)
 {
-    const float q = p * v[2];
+    float q = (p < 1.0f ? p : 0.9999f) * v[2];
+    if (v[3] != 0.0f && q >= 1.0f)
+        q = 0.9999f;
     return 0.5f + 0.5f * v[0] * lfo_shape((uint32_t)v[1], q - (float)(int32_t)q);
 }

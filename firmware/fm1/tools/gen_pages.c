@@ -23,12 +23,12 @@ static const Page PAGE[] = {
     {EDIT, "MOD WAVE", {{"WAVE 1", "Mod Osc Waveform 1"}, {"WAVE 2", "Mod Osc Waveform 2"}, {0, 0}, {0, 0}}, G_MODWAVE},
     {EDIT, "FILTER", {{"FILTER", "Filter Frequency"}, {"RES", "Filter Resonance"}, {"TYPE", "Filter Type"}, {"DRIVE", "Filter Overdrive"}}},
     {EDIT, "TRANSIENT", {{"VOLUME", "Transient Volume"}, {"SAMPLE", "Transient Waveform"}, {"PITCH", "Transient Frequency"}, {0, 0}}},
-    {EDIT, "OUTPUT", {{"PAN", "Panning"}, {"DRIVE", "Overdrive"}, {"RATE", "Sample Rate"}, {0, 0}}},
+    {EDIT, "OUTPUT", {{"PAN", "Panning"}, {"DIST", "Overdrive"}, {"RATE", "Sample Rate"}, {0, 0}}},
     {ENV, "AMP EG", {{"ATTACK", "Amp EG Attack"}, {"DECAY", "Amp EG Decay"}, {"CURVE", "Amp EG Slope"}, {"REPEAT", "Amp EG Repeat Count"}}, G_AMP},
     {ENV, "MOD EG", {{"DECAY", "Mod EG Decay"}, {"CURVE", "Mod EG Slope"}, {"PITCH", "Pitch Mod Amount"}, {0, 0}}, G_MOD},
     {ENV, "VELOCITY", {{"TARGET", "Velocity Destination"}, {"AMOUNT", "Velocity Amount"}, {"VOLUME", "Velocity Volume Mod"}, {0, 0}}},
     {LFO, "LFO", {{"TARGET", "LFO Destination"}, {"AMOUNT", "LFO Amount"}, {"FREQ", "LFO Frequency"}, {"WAVE", "LFO Waveform"}}, G_LFO},
-    {LFO, "LFO SYNC", {{"SYNC", "LFO Clock Sync"}, {"RETRIG", "LFO Retrigger"}, {"PHASE", "LFO Offset"}, {0, 0}}, G_LFO},
+    {LFO, "LFO SYNC", {{"SYNC", "LFO Clock Sync"}, {"RETRIG", "LFO Retrigger"}, {"PHASE", "LFO Offset"}, {"ONCE", "LFO Retrigger"}}, G_LFO},
 };
 #define NPAGE (sizeof PAGE / sizeof PAGE[0])
 static const char *const VOICE[7] = {"Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Hi-hat"};
@@ -76,7 +76,7 @@ static const char *const WORD[][2] = {
     {"REC", "SQR"}, {"PWM", "PULSE"}, {"NOI", "NOISE"}, {"SUP", "SAW UP"}, {"SDN", "SAW DN"}, {"XUP", "EXP UP"}, {"XDN", "EXP DN"},
     {"12", "1/12"}, {"16", "1/16"}, {"32", "1/32"}, {"NCH", "NOTCH"}, {"PEK", "PEAK"}, {"SNP", "SNAP"}, {"OFS", "OFFSET"},
     {"CLK", "CLICK"}, {"CK2", "CLICK2"}, {"TIK", "TICK"}, {"KIK", "KICK"}, {"DRP", "DROP"}, {"CLP", "CLAP"}, {"KK2", "KICK2"},
-    {"SNR", "SNARE"}, {"SP2", "SNAP2"},
+    {"SNR", "SNARE"}, {"SP2", "SNAP2"}, {"FX DRY/WET", "FX MIX"},
 };
 
 /* the value that reads as 0, from the text the desktop shows and the LXR's menu: its lowest value reads minus that */

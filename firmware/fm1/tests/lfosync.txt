@@ -1,0 +1,82 @@
+# An LFO's sync is on or off, FREQ is a rate or a fraction, and each turn of SYNC takes the other's nearest speed
+# firmware/fm1/build/host/tack_host firmware/fm1/tests/lfosync.txt OUTDIR
+wait 600
+tap LFO
+wait 60
+
+# FREQ 80 is 51 Hz. At 120 the nearest fraction is 1/32, 16 Hz, as the fastest there is
+turn K3 80
+wait 40
+expect kitv115 80
+expect kitv179 0
+press OCT-
+wait 30
+turn K1 1
+wait 40
+release OCT-
+wait 40
+expect kitv179 11
+expect kitv115 80
+
+# FREQ is the fraction now, and stops at both ends
+turn K3 3
+wait 40
+expect kitv179 11
+expect kitv115 80
+turn K3 -5
+wait 40
+expect kitv179 6
+turn K3 -9
+wait 40
+expect kitv179 1
+shot lfo_fraction.png
+turn K3 5
+wait 40
+expect kitv179 6
+
+# off: 1/4 at 120 is 2 Hz, FREQ 27. Off again does nothing
+press OCT-
+wait 30
+turn K1 -1
+wait 40
+turn K1 -1
+wait 40
+release OCT-
+wait 40
+expect kitv179 0
+expect kitv115 27
+
+# and on from there comes back to the same fraction
+press OCT-
+wait 30
+turn K1 1
+wait 40
+turn K1 1
+wait 40
+release OCT-
+wait 40
+expect kitv179 6
+expect kitv115 27
+
+# ONCE lives in RETRIG's value: on with no voice takes its own, and the voice can change with it on
+press OCT-
+wait 30
+expect kitv173 0
+turn K4 1
+wait 40
+expect kitv173 7
+turn K2 1
+wait 40
+expect kitv173 8
+turn K4 -1
+wait 40
+expect kitv173 2
+turn K4 1
+wait 40
+expect kitv173 8
+turn K2 -9
+wait 40
+expect kitv173 0
+release OCT-
+wait 40
+expect dropped 0

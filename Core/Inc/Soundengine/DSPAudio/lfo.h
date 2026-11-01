@@ -53,12 +53,15 @@ typedef struct LfoStruct
 	float 		freq;
 	ModulationNode modTarget;
 	float		modNodeValue;
+	uint8_t		once;		// plays start to end on a retrigger, then leaves its target as set
+	uint8_t		ended;
 } Lfo;
 //-------------------------------------------------------------
 void lfo_init(Lfo *lfo);
 void lfo_dispatchNextValue(Lfo* lfo);
 void lfo_setFreq(Lfo *lfo, float f);
 void lfo_setSync(Lfo* lfo, uint8_t sync);
+void lfo_setRetrigger(Lfo* lfo, uint8_t value);	// 0 none, 1-6 that voice, 7-12 that voice and once
 void lfo_recalcSync();
 void lfo_retrigger(uint8_t voiceNr);
 

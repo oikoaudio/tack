@@ -234,9 +234,9 @@ const char nextPatternNames[][4]  =
 	{"r8"},
 };
 //-----------------------------------------------------------------
-const char retriggerNames[][4]  =
+const char retriggerNames[][8]  =
 {
-	{7},		//number of entries
+	{13},		//number of entries
 	{"off"},
 	{"v1"},
 	{"v2"},
@@ -244,6 +244,12 @@ const char retriggerNames[][4]  =
 	{"v4"},
 	{"v5"},
 	{"v6"},
+	{"v1 once"},
+	{"v2 once"},
+	{"v3 once"},
+	{"v4 once"},
+	{"v5 once"},
+	{"v6 once"},
 };
 //-----------------------------------------------------------------
 const char lfoWaveNames[][4]  =

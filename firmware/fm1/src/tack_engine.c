@@ -2,6 +2,7 @@
 #include "tack_engine.h"
 #include "lxr_core.h"
 #include "kit_mutate.h"
+#include "lfo_speed.h"
 #include "Parameters.h"
 #include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/Sequencer/clockSync.h"
@@ -113,8 +114,68 @@ uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e)
     }
     return en->fw ? en->fw[v] : (uint8_t)v;
 }
+/* An LFO's two settings are one idea on the panel: SYNC is on or off, and FREQ is a rate or a fraction of the bar */
+static uint8_t shadow[LXR_HOST_NUM_PARAMS];
+
+static int lfo_freq_slot(const TackSlot *s) { return s->par >= PAR_FREQ_LFO1 && s->par <= PAR_FREQ_LFO6; }
+static int lfo_sync_slot(const TackSlot *s) { return s->par >= PAR_SYNC_LFO1 && s->par <= PAR_SYNC_LFO6; }
+
+/* RETRIG's value holds both: 1-6 a voice, 7-12 the same voice once, as once means nothing without a voice to start it */
+static int lfo_retrig_par(const TackSlot *s) { return s->par >= PAR_RETRIGGER_LFO1 && s->par <= PAR_RETRIGGER_LFO6; }
+static int lfo_once_slot(const TackSlot *s) { return lfo_retrig_par(s) && s->label[0] == 'O'; }
+
+int tack_slot_toggles(const TackSlot *s) { return s->max == 1u || lfo_sync_slot(s) || lfo_once_slot(s); }
+
+int tack_slot_turn(const TackSlot *s, int32_t e)
+{
+    if (lfo_freq_slot(s)) {
+        const uint16_t sync = (uint16_t)(PAR_SYNC_LFO1 + (s->par - PAR_FREQ_LFO1));
+        const int32_t now = shadow[sync], to = now + e;
+        if (!now)
+            return 0;
+        tack_post_param(sync, (uint8_t)(to < 1 ? 1 : to >= (int32_t)LFO_SPEED_FRACTIONS ? (int32_t)LFO_SPEED_FRACTIONS - 1 : to));
+        return 1;
+    }
+    if (lfo_once_slot(s)) {
+        const uint8_t now = shadow[s->par];
+        if (e > 0 && now <= 6u)                  /* with no voice to start it, its own */
+            tack_post_param(s->par, (uint8_t)((now ? now : s->par - PAR_RETRIGGER_LFO1 + 1u) + 6u));
+        else if (e < 0 && now > 6u)
+            tack_post_param(s->par, (uint8_t)(now - 6u));
+        return 1;
+    }
+    if (lfo_retrig_par(s)) {
+        const int32_t now = shadow[s->par], once = now > 6, to = (once ? now - 6 : now) + e;
+        const int32_t voice = to < 0 ? 0 : to > 6 ? 6 : to;
+        tack_post_param(s->par, (uint8_t)(voice && once ? voice + 6 : voice));
+        return 1;
+    }
+    if (lfo_sync_slot(s)) {
+        const uint16_t freq = (uint16_t)(PAR_FREQ_LFO1 + (s->par - PAR_SYNC_LFO1));
+        const uint8_t now = shadow[s->par];
+        if (e > 0 && !now) {
+            tack_post_param(s->par, lfo_sync_near(shadow[freq], (float)tack_bpm()));
+        } else if (e < 0 && now) {
+            tack_post_param(freq, lfo_freq_near(now, (float)tack_bpm()));
+            tack_post_param(s->par, 0);
+        }
+        return 1;
+    }
+    return 0;
+}
+
 const char *tack_slot_text(const TackSlot *s, uint8_t value)
 {
+    if (lfo_freq_slot(s)) {
+        const uint8_t sync = shadow[PAR_SYNC_LFO1 + (s->par - PAR_FREQ_LFO1)];
+        return sync ? lfo_fraction_name(sync) : 0;
+    }
+    if (lfo_sync_slot(s))
+        return value ? "ON" : "OFF";
+    if (lfo_once_slot(s))
+        return value > 6u ? "ON" : "OFF";
+    if (lfo_retrig_par(s) && value > 6u)
+        value = (uint8_t)(value - 6u);
     if (!s->en)
         return 0;
     const TackEnum *en = &TACK_ENUM[s->en - 1];
@@ -226,7 +287,6 @@ static int post(uint8_t kind, uint8_t a, uint8_t b, uint8_t c) { return post5(ki
 
 /* the main loop's view of the kit: a value posted reads back at once, before the audio interrupt has applied it, so
  * the screen is never a step behind and a fast encoder's detents build on each other. The other values likewise */
-static uint8_t shadow[LXR_HOST_NUM_PARAMS];
 static uint16_t ui_bpm = 120;
 static uint8_t ui_shuffle, ui_record, ui_ext;
 static uint8_t ui_roll = 5;              /* the sequencer's default, 1/16 */
@@ -1135,6 +1195,7 @@ void tack_kit_blended(uint8_t *values)
 }
 
 uint8_t tack_lfo_sync(uint32_t voice) { return shadow[PAR_SYNC_LFO1 + (voice < 5u ? voice : 5u)]; }
+int tack_lfo_once(uint32_t voice) { return shadow[PAR_RETRIGGER_LFO1 + (voice < 5u ? voice : 5u)] > 6u; }
 
 int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed)
 {

@@ -101,6 +101,10 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   a name of up to 8 characters from the device's character set, then the kit's parameters. The device finds kits by
   slot number, so on its SD card a kit needs a file name such as `05-NAME.SND`. Saving under the name of a kit
   that is already there asks before overwriting it. Hosts may only see a new kit once they rescan their presets.
+- **LFO sync:** an LFO's Sync switch makes Freq a fraction of the bar at the host's tempo, in whole BPM. Each way, the other control jumps
+  to the nearest speed. To the host these stay two parameters, Freq and a Clock Sync list, so automation can reach all the fractions.
+- **LFO once:** Retrig's list has each voice twice, the second as once. The LFO then plays start to end when that voice fires, and finishes
+  on the value the target is set to, so a rising wave ducks and recovers. FX Dry/Wet is a target, so an LFO can duck the FX.
 - **Mutating kits:** "Mutate kit" and "Mutate voice" make a small random change to the kit or the open tab's voice, and each click goes
   further. "Back" retraces those steps exactly, and its number says how far you are from where you began, up to 99. Volume, pan, routing,
   modulation targets, filter type and the FX stay. An edit or another kit starts again from there. A voice plugin has one "Mutate" button.

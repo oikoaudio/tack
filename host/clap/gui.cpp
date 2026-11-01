@@ -23,6 +23,7 @@
 
 #include "lxr_params.h"
 #include "kit_name.h"
+#include "lfo_speed.h"
 #include "presets.h"
 
 template<typename T> static T clampTo(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -171,7 +172,10 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	const ImVec2 pos = ImGui::GetCursorScreenPos();
 	const double v = value(g, p->param);
-	const double range = p->max - p->min;
+	// an LFO in sync: this is its Freq, turning through the fractions. 0 is the Sync switch's
+	const bool fraction = lxr_params_lfoFreqOf(p->param) >= 0;
+	const int lo = fraction ? 1 : p->min;
+	const double range = p->max - lo;
 
 	// dimmed, but still editable, while it has no effect
 	const bool inactive = isPulseWidth(p) && !voiceUsesPwm(g, p->voice);
@@ -191,16 +195,16 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 		// the full range over about 200 pixels, five times finer with Shift
 		const float perPixel = (float)range / (io.KeyShift ? 1000.f : 200.f);
 		float acc = store->GetFloat(accumId, (float)v) - io.MouseDelta.y * perPixel;
-		acc = clampTo(acc, (float)p->min, (float)p->max);
+		acc = clampTo(acc, (float)lo, (float)p->max);
 		store->SetFloat(accumId, acc);
 		const double stepped = std::round(acc);
 		if(stepped != v) g->host.setValue(g->host.ctx, p->param, stepped);
 	}
 	if(ImGui::IsItemDeactivated()) g->host.endEdit(g->host.ctx, p->param);
-	if(hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+	if(hovered && !fraction && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 		edit(g, p->param, lxr_params_default(p->param));
 	if(hovered && io.MouseWheel != 0 && !ImGui::IsItemActive()) {
-		const double nv = clampTo(v + (io.MouseWheel > 0 ? 1 : -1), (double)p->min, (double)p->max);
+		const double nv = clampTo(v + (io.MouseWheel > 0 ? 1 : -1), (double)lo, (double)p->max);
 		if(nv != v) edit(g, p->param, nv);
 	}
 
@@ -208,7 +212,7 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	const ImVec2 c(pos.x + cellW * 0.5f, pos.y + KNOB * 0.5f + 4);
 	const float r = KNOB * 0.5f;
 	const float a0 = 0.75f * PI, a1 = 2.25f * PI;
-	const float t = range > 0 ? (float)((v - p->min) / range) : 0;
+	const float t = range > 0 ? (float)((v - lo) / range) : 0;
 	const float a = a0 + (a1 - a0) * t;
 	const ImU32 track = ImGui::GetColorU32(ImGuiCol_FrameBg);
 	const ImU32 accent = ImGui::GetColorU32(ImGui::IsItemActive() ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
@@ -220,7 +224,7 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	// the host's modulation: a thin ring outside the track, from the value to where the modulation takes it
 	const double m = g->host.modulation(g->host.ctx, p->param);
 	if(m != 0 && range > 0) {
-		const float tm = (float)clampTo((v + m - p->min) / range, 0.0, 1.0);
+		const float tm = (float)clampTo((v + m - lo) / range, 0.0, 1.0);
 		const float am = a0 + (a1 - a0) * tm;
 		dl->PathArcTo(c, r + 1.5f, std::min(a, am), std::max(a, am), 32);
 		dl->PathStroke(ImGui::GetColorU32(ImGuiCol_PlotHistogram), ImDrawFlags_None, 2.f);
@@ -228,7 +232,8 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 
 	// label and value, centred and clipped to the cell
 	char text[64];
-	valueText(g, p->param, (uint16_t)v, text, sizeof text);
+	if(fraction) snprintf(text, sizeof text, "%s", lfo_fraction_name((uint8_t)v));
+	else valueText(g, p->param, (uint16_t)v, text, sizeof text);
 	drawLabel(label, ImVec2(pos.x, pos.y + KNOB + 8), ImGui::GetColorU32(ImGuiCol_Text));
 	const ImVec4 clip(pos.x, pos.y, pos.x + cellW, pos.y + CELL_H);
 	const float vw = ImGui::CalcTextSize(text).x;
@@ -240,6 +245,34 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	}
 	ImGui::PopID();
 	if(inactive) ImGui::PopStyleVar();
+}
+
+// An LFO's Sync: on or off, and each way the other control takes the nearest speed at the host's tempo
+static void syncSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
+{
+	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	const uint8_t v = (uint8_t)value(g, p->param);
+	const uint16_t freq = (uint16_t)lxr_params_lfoFreqOf(p->param);
+	const float tempo = g->host.tempo(g->host.ctx);
+	ImGui::PushID(p->param);
+	ImGui::BeginGroup();
+	drawLabel(label, pos, ImGui::GetColorU32(ImGuiCol_Text));
+	ImGui::SetCursorScreenPos(ImVec2(pos.x + 2, pos.y + LABEL_H + 6));
+	if(v) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+	if(ImGui::Button(v ? "On" : "Off", ImVec2(cellW - 4, 0))) {
+		if(v) {
+			edit(g, freq, lfo_freq_near(v, tempo));
+			edit(g, p->param, 0);
+		} else {
+			edit(g, p->param, lfo_sync_near((uint8_t)value(g, freq), tempo));
+		}
+	}
+	if(v) ImGui::PopStyleColor();
+	tooltip("Sync: Freq follows the tempo as a fraction of the bar", nullptr);
+	ImGui::SetCursorScreenPos(pos);
+	ImGui::Dummy(ImVec2(cellW, CELL_H));
+	ImGui::EndGroup();
+	ImGui::PopID();
 }
 
 // a drop-down list for parameters with named values
@@ -290,7 +323,10 @@ static void box(TackGui* g, const char* title, const LxrParamInfo* const* params
 	for(int i = 0; i < n; i++)
 	{
 		if(i) ImGui::SameLine(0, 0);
-		if(params[i]->isEnum) selector(g, params[i], labels[i]);
+		const int sync = lxr_params_lfoSyncOf(params[i]->param);
+		if(lxr_params_lfoFreqOf(params[i]->param) >= 0) syncSwitch(g, params[i], labels[i]);
+		else if(params[i]->isEnum) selector(g, params[i], labels[i]);
+		else if(sync >= 0 && value(g, (uint32_t)sync) != 0) knob(g, lxr_params_info(lxr_params_indexOf((uint16_t)sync)), labels[i]);
 		else knob(g, params[i], labels[i]);
 	}
 	ImGui::EndChild();

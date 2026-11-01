@@ -81,6 +81,7 @@ add_library(lxr_engine STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/../engine/lxr_core.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../engine/kit_name.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../engine/kit_mutate.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../engine/lfo_speed.c
     src/lxr_host.c
     src/lxr_files.c
     src/lxr_params.c
@@ -116,6 +117,9 @@ target_link_libraries(list_params PRIVATE lxr_engine)
 
 add_executable(mutate_test tools/mutate_test.c)
 target_link_libraries(mutate_test PRIVATE lxr_engine)
+
+add_executable(lfo_test tools/lfo_test.c)
+target_link_libraries(lfo_test PRIVATE lxr_engine)
 
 add_executable(make_kit tools/make_kit.c)
 target_link_libraries(make_kit PRIVATE lxr_engine)

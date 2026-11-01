@@ -521,6 +521,8 @@ void lxr_params_copyVoice(const uint8_t* fromKit, int fromVoice, uint8_t* toKit,
 		// an LFO retriggered by its own voice (v1-v6) stays retriggered by its voice
 		else if(isMenu(from, MENU_RETRIGGER) && value == fromVoice + 1)
 			value = toVoice + 1;
+		else if(isMenu(from, MENU_RETRIGGER) && value == fromVoice + 7)
+			value = toVoice + 7;
 		toKit[to] = value;
 	}
 }
@@ -589,4 +591,14 @@ void lxr_params_mutateTable(uint8_t* top, uint8_t* voice)
 			voice[p->param] = p->voice;
 		}
 	}
+}
+
+int lxr_params_lfoSyncOf(uint16_t param)
+{
+	return param >= PAR_FREQ_LFO1 && param <= PAR_FREQ_LFO6 ? PAR_SYNC_LFO1 + (param - PAR_FREQ_LFO1) : -1;
+}
+
+int lxr_params_lfoFreqOf(uint16_t param)
+{
+	return param >= PAR_SYNC_LFO1 && param <= PAR_SYNC_LFO6 ? PAR_FREQ_LFO1 + (param - PAR_SYNC_LFO1) : -1;
 }

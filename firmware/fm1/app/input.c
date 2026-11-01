@@ -299,7 +299,7 @@ static void input(void)
                 if (sl == tack_send_slot((uint32_t)ui.voice)) {
                     mark('F');
                     tack_post_fx_send((uint32_t)ui.voice, e > 0);
-                } else if (sl) {
+                } else if (sl && !tack_slot_turn(sl, e)) {
                     tack_post_param(sl->par, tack_slot_step(sl, tack_get_param(sl->par), e));
                 }
                 touch(k);

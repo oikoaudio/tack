@@ -28,6 +28,7 @@ typedef struct
 	void (*queueSeparateOutputs)(uint32_t frame, bool on);
 	void (*setSeparateOutputs)(bool on);
 	void (*setSoloVoice)(int voice);
+	void (*setTempo)(double bpm);
 	uint32_t (*outChannels)(void);
 	void (*process)(float* out, uint32_t frames);
 	void (*shutdown)(void);

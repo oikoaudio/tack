@@ -62,6 +62,8 @@ typedef struct
 	int (*mutate)(void* ctx, int voice, int steps);
 	/** how far the kit is along that walk; 0 once it has been edited or another kit loaded */
 	int (*mutateStep)(void* ctx);
+	/** the host's tempo, or 120 until it has said */
+	float (*tempo)(void* ctx);
 } TackGuiHost;
 
 #define TACK_MUTATE_AGAIN (-2)

@@ -1222,7 +1222,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				}
 				else
 				{
-					voiceArray[msg.data1-CC2_RETRIGGER_LFO1].lfo.retrigger = value.itg;
+					lfo_setRetrigger(&voiceArray[msg.data1-CC2_RETRIGGER_LFO1].lfo, value.itg);
 				}
 				break;
 			case CC2_RETRIGGER_LFO4:
@@ -1233,7 +1233,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				}
 				else
 				{
-					snareVoice.lfo.retrigger = value.itg;
+					lfo_setRetrigger(&snareVoice.lfo, value.itg);
 				}
 				break;
 
@@ -1245,7 +1245,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				}
 				else
 				{
-					cymbalVoice.lfo.retrigger = value.itg;
+					lfo_setRetrigger(&cymbalVoice.lfo, value.itg);
 				}
 				break;
 
@@ -1257,7 +1257,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				}
 				else
 				{
-					hatVoice.lfo.retrigger = value.itg;
+					lfo_setRetrigger(&hatVoice.lfo, value.itg);
 				}
 				break;
 
@@ -1389,7 +1389,8 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				fxBus.audioRouting = value.itg;
 				break;
 			case CC2_FX_AMOUNT:
-				fxBus.dryWet = value.itg/100.f;
+				// a modulator's value is the parameter's own over 127, and the parameter goes to 100
+				fxBus.dryWet = isFloatModulator ? (value.flt * 1.27f > 1.f ? 1.f : value.flt * 1.27f) : value.itg/100.f;
 				break;
 
 			case CC2_FX_DIST_TYPE:

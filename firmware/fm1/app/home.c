@@ -210,6 +210,8 @@ static void draw_env(int graph)
     int32_t up = (int32_t)((float)w * ta / (ta + td)), x;
     if (attack && up < 2)
         up = 2;
+    if (up > w - 6)                              /* a decay can't be seen in less */
+        up = w - 6;
     for (x = 0; x < w; x++) {
         const float y = x < up ? eg_shape((float)x / (float)up, inv)
                                : eg_shape(1.0f - (float)(x - up) / (float)(w - up), s);
@@ -246,10 +248,13 @@ static float lfo_cycles(void)
 static void draw_lfo(void)
 {
     const float amount = (float)graph_value(TACK_GRAPH_LFO, 1, 0) / 127.0f, cycles = lfo_cycles();
+    const int once = tack_lfo_once((uint32_t)ui.voice);
     const uint32_t wave = graph_value(TACK_GRAPH_LFO, 3, 0);
     int32_t x;
     for (x = 0; x < graph_w; x++) {
-        const float q = (float)x * cycles / (float)graph_w;
+        float q = (float)x * cycles / (float)graph_w;
+        if (once && q >= 1.0f)
+            q = 0.9999f;
         graph_column(x, 0.5f + 0.5f * amount * lfo_shape(wave, q - (float)(int32_t)q));
     }
 }
@@ -422,6 +427,7 @@ static void draw_bottom(void)
         KEY(graph_value(graph, 2, 0));
         KEY(graph_value(graph, 3, 0));
         KEY(tack_lfo_sync((uint32_t)ui.voice));
+        KEY(tack_lfo_once((uint32_t)ui.voice));
     } else if (graph) {
         for (i = 0; i < 3; i++)
             KEY(graph_value(graph, (uint32_t)i, 0));
