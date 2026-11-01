@@ -159,8 +159,10 @@ static const TackSlot *page_slot(int page, uint32_t i)
         return i ? tack_slot((uint32_t)ui.voice, TACK_G_ENV, 1, MOD_EG[i - 1u])
                  : tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 0);
     }
-    if (ui.group == TACK_G_EDIT && page == 0 && i == (tack_pages((uint32_t)ui.voice, ui.group) < 6 ? 0u : 3u))
-        return tack_slot((uint32_t)ui.voice, TACK_G_MAIN, 0, 0);   /* PITCH beside the wave. Five pages: FINE under it, with what moves it */
+    if (ui.group == TACK_G_EDIT && page == 0 && i == 0u)
+        return tack_slot((uint32_t)ui.voice, TACK_G_MAIN, 0, 0);   /* PITCH beside the wave, on every voice */
+    if (ui.group == TACK_G_EDIT && page == 0 && i == 3u && tack_pages((uint32_t)ui.voice, ui.group) >= 6)
+        return tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 0);   /* six pages have no row for FINE under it */
     if (ui.group == TACK_G_EDIT && i == 3u && same(tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)page), "OUTPUT"))
         return tack_send_slot((uint32_t)ui.voice);
     if (ui.group == TACK_G_ENV && i == 3u) {

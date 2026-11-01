@@ -13,10 +13,12 @@
  */
 
 
+#include "Soundengine/Sequencer/sequencer.h"
 #include "Soundengine/DSPAudio/FX/Delay.h"
 
 void Delay_init(Delay* d)
 {
+	d->sync = 0;
 
 
 	d->pendingDelayTime = 0.f;
@@ -290,6 +292,26 @@ float calcDelayTime(Delay* d, float timeCv)
 
 }
 
+static const char* const fractionName[DELAY_FRACTIONS] = {"1/32", "1/16", "1/12", "1/8", "1/6", "3/16", "1/4", "1/3", "3/8", "1/2"};
+static const float fractionOfBar[DELAY_FRACTIONS] = {1/32.f, 1/16.f, 1/12.f, 1/8.f, 1/6.f, 3/16.f, 1/4.f, 1/3.f, 3/8.f, 1/2.f};
+
+static float wantedTime(const Delay* d) { return d->timePending ? d->pendingDelayTime : d->delayTime; }	// a crossfade may be holding a newer one
+
+static uint32_t fractionAt(float t)
+{
+	const uint32_t i = (uint32_t)(t * DELAY_FRACTIONS);
+	return i < DELAY_FRACTIONS ? i : DELAY_FRACTIONS - 1;
+}
+
+float Delay_syncSamples(const Delay* d, float t)
+{
+	const float top = d->delayType == DELAY_NORMAL ? (float)FX_BUFFER_SIZE - 2 : FX_BUFFER_SIZE * 0.48f;
+	const float samples = 240.f / (float)seq_getBpm() * fractionOfBar[fractionAt(t)] * REAL_FS;
+	return samples < top ? samples : top;
+}
+
+const char* Delay_syncName(float t) { return fractionName[fractionAt(t)]; }
+
 void Delay_setDelayTime(Delay* d, float t)
 {
 
@@ -303,7 +325,7 @@ void Delay_setDelayTime(Delay* d, float t)
 
 
 		//uint32_t offset = medianFilter(delayTime*SRAM_SIZE*range);
-		float offset =  /*medianFilter*/(calcDelayTime(d, d->delayTime * d->range));
+		float offset =  d->sync ? Delay_syncSamples(d, d->delayTime) : /*medianFilter*/(calcDelayTime(d, d->delayTime * d->range));
 		//timeBuffer.write(offset);
 		//offset = timeBuffer.getAverage();
 
@@ -355,6 +377,18 @@ void Delay_setType(Delay* d, uint8_t type)
 	d->write &= mask;
 	d->oldRead &= mask;
 	d->newRead &= mask;
+}
+
+void Delay_setMode(Delay* d, uint8_t mode)
+{
+	Delay_setType(d, mode & 1);
+	d->sync = (mode >> 1) & 1;
+	Delay_setDelayTime(d, d->delayTime);
+}
+
+void Delay_tempoChanged(Delay* d)
+{
+	if(d->sync) Delay_setDelayTime(d, d->delayTime);
 }
 
 void Delay_setFeedback(Delay* d, float fb)

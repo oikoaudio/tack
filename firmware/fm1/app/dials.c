@@ -82,7 +82,7 @@ static void fx_turn(uint32_t slot, int32_t e)
     } else if (top) {
         const uint16_t p = tack_fx_param(s);
         mark('F');
-        tack_post_param(p, (uint8_t)clamp((int32_t)tack_get_param(p) + e, 0, top));
+        tack_post_param(p, (uint8_t)clamp((int32_t)tack_get_param(p) + e * tack_fx_step(s), 0, top));
     }
 }
 

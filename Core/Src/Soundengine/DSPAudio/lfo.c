@@ -12,6 +12,7 @@
  */
 
 //-------------------------------------------------------------
+#include "Soundengine/FxBus.h"
 #include "Soundengine/DSPAudio/lfo.h"
 #include "Soundengine/DSPAudio/random.h"
 #include <math.h>
@@ -237,6 +238,7 @@ IN_ITCM_RAM void lfo_setSync(Lfo* lfo, uint8_t sync)
 //-------------------------------------------------------------
 void lfo_recalcSync()
 {
+	Delay_tempoChanged(&fxBus.delay);
 	Lfo* lfo = &voiceArray[0].lfo;
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
 

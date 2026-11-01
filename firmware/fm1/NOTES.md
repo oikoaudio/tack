@@ -174,7 +174,7 @@ Known omissions:
   the boot kit. Nothing writes an edited kit back to the bank.
 - A pattern remembers its bank kit, which loads through the LXR's own hook before the pattern's first step. It remembers
   the slot, not edits made to the kit, and a pattern with no kit leaves the playing kit and its edits alone.
-- Reverb. The LXR firmware compiles it out (`USE_REVERB 0`), and desktop Tack does the same. Shelved.
+- Reverb. The LXR firmware compiles it out, with no reason given. Tack turns it on: on the unit the CPU reading went to 70 to 72 from about 42 while it is the FX, with `PEAK` and `XRUN` on a busy pattern not yet reported. It shares the FX buffer with the delay. If it needs to come down, the second core is the way, with half rate after that. `PRE` is its pre-delay, `DECAY` its feedback, which rings for good at the top, `TONE` its tilt, held to the middle of its range, as further up low drums drop out of it and at the ends all of it does, and `EARLY` its early reflections.
 - No Bluetooth, no second core, no velocity from the keys.
 
 The brief's first stage asked for one voice. The mixer computes all voices in one function and the whole engine compiled

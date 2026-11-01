@@ -259,6 +259,9 @@ wait 40
 expect fxv0 4
 turn K1 3
 wait 40
+expect fxv0 5
+turn K1 -1
+wait 40
 expect fxv0 4
 expect fxp2 238
 expect fxp3 241
@@ -498,7 +501,7 @@ expect page 0
 # the FX's second page, and the delay in milliseconds: time and range both shape it
 tap FX
 wait 40
-turn K1 4
+turn K1 2
 wait 40
 turn K2 100
 wait 40

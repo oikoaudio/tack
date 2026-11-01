@@ -274,19 +274,19 @@ tap HOME
 wait 40
 expect step0 1
 
-# the cymbal and hats have FINE first and PITCH last, the main page's own
+# PITCH leads on the cymbal and hats too, and FINE, with no row under it, is last
 tapkey 10
 wait 40
 expect sl0 127
 tap EDIT
 wait 40
 expect page 10
-expect sl0 63
-expect sl3 127
-turn K4 -5
+expect sl0 127
+expect sl3 63
+turn K1 -5
 wait 40
-expect sl3 122
-expect sl0 63
+expect sl0 122
+expect sl3 63
 tap HOME
 wait 40
 expect sl0 122

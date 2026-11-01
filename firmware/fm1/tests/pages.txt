@@ -189,6 +189,30 @@ release SEL
 wait 40
 expect len0 12
 
+# SEL and SELECT is the shuffle the tempo popup shows, where SELECT alone is the tempo
+expect bpm 120
+press SEL
+wait 30
+turn SELECT 9
+wait 40
+release SEL
+wait 40
+expect shuffle 9
+expect bpm 120
+turn SELECT 1
+wait 40
+expect shuffle 9
+expect bpm 121
+turn SELECT -1
+wait 40
+press SEL
+wait 30
+turn SELECT -9
+wait 40
+release SEL
+wait 40
+expect shuffle 0
+
 # past the lane's end a step stays, and its key stays dark
 tapkey 16
 wait 40

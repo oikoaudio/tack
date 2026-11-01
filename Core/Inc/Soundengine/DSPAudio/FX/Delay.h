@@ -66,6 +66,7 @@ typedef struct DelayStruct
 	OnePoleFilter tone2;
 	//RingBuffer timeBuffer;
 	uint8_t delayType;
+	uint8_t sync;			// the time is a fraction of the bar, at the tempo
 
 } Delay;
 
@@ -77,6 +78,11 @@ void Delay_processPingPong(Delay *d, int16_t *fxBuffer,int16_t* outL, int16_t* o
 void Delay_setDelayTime(Delay* d, float t);
 void Delay_setType(Delay* d, uint8_t type);
 void Delay_setFeedback(Delay* d, float fb);
+void Delay_setMode(Delay* d, uint8_t mode);			// bit 0 ping-pong, bit 1 sync
+void Delay_tempoChanged(Delay* d);
+float Delay_syncSamples(const Delay* d, float t);	// the fraction at t, in samples: as long as the buffer holds
+const char* Delay_syncName(float t);
+#define DELAY_FRACTIONS 10
 void Delay_setRange(Delay* d, float r);
 void Delay_setFilter(Delay* d, float f);
 

@@ -213,7 +213,8 @@ IN_ITCM_RAM void FxBus_updateParameter()
 	case FX_REVERB:
 		Reverb_setDelayTime(&fxBus.reverb, fxBus.parameter[0]);
 		Reverb_setFeedback(&fxBus.reverb, fxBus.parameter[1]);
-		Reverb_setComposition(&fxBus.reverb, fxBus.parameter[2]);
+		// past this the tilt takes the low drums out of the reverb, and at its ends everything, and a kit's default is the top
+		Reverb_setComposition(&fxBus.reverb, 0.35f + 0.3f * fxBus.parameter[2]);
 
 		Reverb_setVariation(&fxBus.reverb, fxBus.parameter[3]);
 		break;

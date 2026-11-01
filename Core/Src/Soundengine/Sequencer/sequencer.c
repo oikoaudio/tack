@@ -2620,7 +2620,9 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 #ifdef LXR_FM1_BUILD	/* the step that plays next, not the next by number; a slow lane is only late in its last tick */
 		const uint8_t laneMode = seq_laneMode[seq_activePattern][trackNr];
 		const uint8_t late = (seq_getElapsedStepTimePercent() >= 50.f) && seq_laneSub[trackNr] + 1u >= LANE_DIV(laneMode);
-		int8_t quantizedStep = !late ? seq_stepIndex[trackNr]
+		/* started and no clock yet: no step has played, so the first is the one this goes on */
+		int8_t quantizedStep = seq_stepIndex[trackNr] < 0 ? (int8_t)seq_laneNext(trackNr, seq_trackLength(seq_activePattern, trackNr))
+		                     : !late ? seq_stepIndex[trackNr]
 		                     : !seq_lanePlain(trackNr) ? (int8_t)seq_laneNext(trackNr, seq_trackLength(seq_activePattern, trackNr)) : seq_stepIndex[trackNr] + 1;
 #else
 		int8_t quantizedStep = (seq_getElapsedStepTimePercent() >= 50.f) ? seq_stepIndex[trackNr] + 1 : seq_stepIndex[trackNr];

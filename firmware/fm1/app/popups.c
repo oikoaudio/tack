@@ -37,8 +37,7 @@ static void draw_tempo(void)
         cv_rect(x + 9, 74, 2, 30, C_WHITE);
     }
     cv_rect(159, 72, 58, 4, C_WHITE);
-    cv_text(60 - text_w(&FONT_B, "(SELECT)") / 2, 118, &FONT_B, "(SELECT)", C_GRAY);
-    cv_text(180 - text_w(&FONT_B, "(GLO)") / 2, 118, &FONT_B, "(GLO)", C_GRAY);
+    cv_text(180 - text_w(&FONT_B, "(SEL+)") / 2, 118, &FONT_B, "(SEL+)", C_GRAY);
     cv_blit(0, 52);
 }
 
@@ -47,7 +46,7 @@ static void help_row(int32_t *y, const char *with, const char *does)
 {
     cv_text(10, *y, &FONT_S, with, C_WHITE);
     cv_text(104, *y, &FONT_S, does, C_GRAY);
-    *y += 15;                            /* eight rows at most: a step's page has them all */
+    *y += on_home() ? 13 : 15;           /* eight rows at most, and HOME has a line under them */
 }
 
 static void draw_sel_help(void)
@@ -60,6 +59,8 @@ static void draw_sel_help(void)
     cv_text(10, 3, &FONT_XS, "HOLD SEL AND", C_AMB);
     if (seq_detail())
         help_row(&y, "SELECT", "JUMP A BAR");
+    else if (!saving && ui.song_page != PAGE_SONG)
+        help_row(&y, "SELECT", "SHUFFLE");
     if (!saving && ui.song_page != PAGE_SONG && !keys_notes(ui.btn))
         help_row(&y, "WHITE KEY", "LANE LENGTH");
     if (!full_page() || seq_detail() || arp_page())
@@ -72,7 +73,7 @@ static void draw_sel_help(void)
     help_row(&y, "EDIT, HOLD", "CLEAR LANE");
     help_row(&y, "HOME, HOLD", "REVERT KIT");
     if (on_home())                               /* not SEL's, but the next thing to want on the page a new pattern starts from */
-        cv_text(10, y + 1, &FONT_XS, "HOLD SEQ AND PRESS A KEY: PATTERN", C_AMB);
+        cv_text(10, y + 2, &FONT_XS, "HOLD SEQ AND PRESS A KEY: PATTERN", C_AMB);
     cv_blit(0, 52);
 }
 

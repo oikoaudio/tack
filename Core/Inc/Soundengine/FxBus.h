@@ -23,7 +23,7 @@
 #include "Soundengine/DSPAudio/FX/Delay.h"
 #include "Soundengine/DSPAudio/FX/Reverb.h"
 
-#define USE_REVERB 0
+#define USE_REVERB 1
 
 enum FxTypeEnum
 {

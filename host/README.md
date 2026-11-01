@@ -82,7 +82,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   is left out. Its target list has the FX parameters once per voice, so Tack lists each target once, and names
   targets like the parameters (the front panel calls the FM waveform "Oscillator Waveform" there). The front panel's
   "Veloc EG" page is the voice's amplitude envelope and has nothing to do with velocity, which has its own
-  parameters, so Tack calls it "Amp EG" ("Drum 1 Amp EG Decay"). Reverb is compiled out of the firmware (`USE_REVERB 0`) and isn't offered.
+  parameters, so Tack calls it "Amp EG" ("Drum 1 Amp EG Decay"). The reverb runs if a kit asks for it, as FX type 5, but the editor doesn't offer it.
 - **Kits:** Tack offers kit files from the device's SD card (`.SND`) as presets, through CLAP's preset discovery,
   so hosts list them in their preset browser. It looks in the kit folder, `~/.local/share/Tack/Kits/` on Linux
   (or `$XDG_DATA_HOME/Tack/Kits/`) and `Documents/Tack/Kits` on Windows and macOS; each subfolder is a sound pack, e.g. a symlink to a backup of a project folder. Kits
@@ -103,6 +103,7 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
   that is already there asks before overwriting it. Hosts may only see a new kit once they rescan their presets.
 - **LFO sync:** an LFO's Sync switch makes Freq a fraction of the bar at the host's tempo, in whole BPM. Each way, the other control jumps
   to the nearest speed. To the host these stay two parameters, Freq and a Clock Sync list, so automation can reach all the fractions.
+- **Delay sync:** the delay's mode has two more entries. In them Time picks a fraction of the bar at the host's tempo, though the dial still reads as a number.
 - **LFO once:** Retrig's list has each voice twice, the second as once. The LFO then plays start to end when that voice fires, and finishes
   on the value the target is set to, so a rising wave ducks and recovers. FX Dry/Wet is a target, so an LFO can duck the FX.
 - **Mutating kits:** "Mutate kit" and "Mutate voice" make a small random change to the kit or the open tab's voice, and each click goes

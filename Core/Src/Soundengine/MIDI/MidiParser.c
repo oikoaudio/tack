@@ -1370,11 +1370,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 
 			case CC2_FX_TYPE:
 #if 1
-#if USE_REVERB
-				if((value.itg == FX_REVERB) && (fxBus.fxType != value.itg)) FxBus_prepareFxChange();
-#else
 				if( fxBus.fxType != value.itg) FxBus_prepareFxChange();
-#endif
 				fxBus.fxType = value.itg;
 				FxBus_updateParameter();
 				//change visible parameters to selected FX type
@@ -1429,7 +1425,7 @@ void midiParser_ccHandler(MidiMsg msg, uint8_t updateOriginalValue, uint8_t isFl
 				break;
 
 			case CC2_FX_DELAY_TYPE:
-				Delay_setType(&fxBus.delay, value.itg);
+				Delay_setMode(&fxBus.delay, value.itg);
 			break;
 
 			default:

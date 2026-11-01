@@ -643,7 +643,7 @@ static void nudge_tests(void)
     run(2);
     nudge_steps = 8u * NUDGE_STEPS;
     nudge_want = 216u;
-    nudge_slack = 3;
+    nudge_slack = 5;                             /* it depends on the draw: twelve seeds gave 213 to 217, with one build at 212 */
     nudge_case("random, from step 8", 120, 0, 0, 0);
     nudge_case("random on external clock", 120, 1, 0, 0);
     nudge_steps = NUDGE_STEPS;

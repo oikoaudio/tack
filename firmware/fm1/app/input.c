@@ -317,7 +317,10 @@ static void input(void)
         else if (seq_detail())
             vv_walk(e);
         else {
-            tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
+            if (btn >> B_SEL & 1u)
+                tack_post_shuffle((uint8_t)clamp((int32_t)tack_shuffle() + e, 0, 127));
+            else
+                tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
             tempo_show();
         }
         ui.redraw = 1;

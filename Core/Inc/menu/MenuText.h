@@ -107,11 +107,13 @@ const char reverbNames[][4] =
 
 };
 //-----------------------------------------------------------------
-const char delayNames[][4] =
+const char delayNames[][8] =
 {
-	{2},		//number of entries
+	{4},		//number of entries
 	{"Del"},
 	{"Pp"},
+	{"Del syn"},
+	{"Pp syn"},
 
 };
 //-----------------------------------------------------------------

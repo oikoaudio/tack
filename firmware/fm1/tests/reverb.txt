@@ -1,0 +1,27 @@
+# The reverb, on a low drum: firmware/fm1/build/host/tack_host firmware/fm1/tests/reverb.txt OUTDIR
+# verify.sh reads the tail of the wav
+wait 600
+tap FX
+wait 60
+tapkey 1
+wait 40
+turn K1 5
+wait 60
+expect fxv0 5
+turn K2 100
+wait 60
+turn K4 80
+wait 60
+press OCT-
+wait 30
+turn K1 -64
+wait 40
+release OCT-
+wait 40
+tap HOME
+wait 200
+wav verb.wav
+tapkey 1
+wait 1000
+wavstop
+expect dropped 0

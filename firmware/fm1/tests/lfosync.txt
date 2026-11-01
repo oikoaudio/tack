@@ -79,4 +79,33 @@ wait 40
 expect kitv173 0
 release OCT-
 wait 40
+
+# a delay in sync: TIME is fractions, the milliseconds are what they come to, and the tempo moves them
+tap FX
+wait 40
+turn K1 4
+wait 40
+press OCT-
+wait 30
+turn K3 2
+wait 40
+release OCT-
+wait 40
+expect fxv6 2
+expect echo 63
+turn K3 3
+wait 40
+expect fxv2 39
+expect echo 250
+shot delay_sync.png
+tap GLO
+wait 40
+turn K1 -60
+wait 40
+tap FX
+wait 40
+expect echo 500
+turn K3 20
+wait 40
+expect echo 743
 expect dropped 0

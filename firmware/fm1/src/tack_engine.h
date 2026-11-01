@@ -206,6 +206,7 @@ int tack_lane_nudge_turn(uint8_t voice, int32_t e);
 enum { TACK_FX_TYPE, TACK_FX_MIX, TACK_FX_A, TACK_FX_B, TACK_FX_C, TACK_FX_D, TACK_FX_E, TACK_FX_ALL };
 #define TACK_FX_SLOTS 4        /* knobs on a page */
 int tack_fx_pages(void);
+int tack_fx_step(uint32_t slot);       /* how far a detent moves it */
 const char *tack_fx_text(uint32_t slot, uint8_t value);
 int tack_fx_delay_ms(void);
 #define TACK_FX_SENDS 6        /* the hats share one route */

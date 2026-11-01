@@ -199,11 +199,11 @@ static const struct {
     {"COMP", {{"RATIO", PAR_FX_RATIO, 5}, {"THRESH", PAR_FX_P3, 127}, {"ATTACK", PAR_FX_P1, 127}, {"RELEASE", PAR_FX_P2, 127},
               {"GAIN", PAR_FX_P4, 127}}},
     {"DELAY", {{"TIME", PAR_FX_P1, 126}, {"FEEDBK", PAR_FX_P4, 127}, {"RANGE", PAR_FX_P2, 127}, {"TONE", PAR_FX_P3, 127},
-               {"MODE", PAR_FX_DELAY_TYPE, 1}}},
-    {"NO VERB", {NO, NO, NO, NO, NO}},
+               {"MODE", PAR_FX_DELAY_TYPE, 3}}},
+    {"VERB", {{"PRE", PAR_FX_P1, 127}, {"DECAY", PAR_FX_P2, 127}, {"TONE", PAR_FX_P3, 127}, {"EARLY", PAR_FX_P4, 127}, NO}},
 };
 #undef NO
-#define FX_TYPES 5u                     /* what the FX page can choose: not the reverb row */
+#define FX_TYPES 6u                     /* what the FX page can choose: not the reverb row */
 static uint32_t fx_kind(void)
 {
     const uint32_t t = tack_get_param(PAR_FX_TYPE);
@@ -223,13 +223,23 @@ const char *tack_fx_label(uint32_t slot)
 }
 int tack_fx_pages(void) { return FX_KIND[fx_kind()].s[2].max ? 2 : 1; }
 /* a mode setting's name, 0 for a plain number */
+/* TIME, on a delay in sync: its value is a fraction */
+static int fx_time_sync(uint32_t slot)
+{
+    return fx_kind() == FX_DELAY && tack_get_param(PAR_FX_DELAY_TYPE) >= 2u && tack_fx_param(slot) == PAR_FX_P1;
+}
+
+int tack_fx_step(uint32_t slot) { return fx_time_sync(slot) ? 13 : 1; }
+
 const char *tack_fx_text(uint32_t slot, uint8_t value)
 {
-    static const char *const DIST[3] = {"TUBE", "FOLD", "RAT"}, *const DELAY[2] = {"NORMAL", "PING"};
+    static const char *const DIST[3] = {"TUBE", "FOLD", "RAT"}, *const DELAY[4] = {"NORMAL", "PING", "SYNC", "PP SYNC"};
     const uint16_t p = tack_fx_param(slot);
     if (slot < 2u)
         return 0;
-    return p == PAR_FX_DIST_TYPE ? DIST[value % 3u] : p == PAR_FX_DELAY_TYPE ? DELAY[value % 2u] : 0;
+    if (fx_time_sync(slot))
+        return Delay_syncName((float)value / 127.0f);
+    return p == PAR_FX_DIST_TYPE ? DIST[value % 3u] : p == PAR_FX_DELAY_TYPE ? DELAY[value % 4u] : 0;
 }
 /* calcDelayTime in Delay.c: range sets the span, and time is scaled by range as well, so at a low range the whole dial is
  * a comb. Milliseconds at this sample rate, 0 unless the type is delay */
@@ -237,6 +247,8 @@ int tack_fx_delay_ms(void)
 {
     if (fx_kind() != FX_DELAY)
         return 0;
+    if (tack_get_param(PAR_FX_DELAY_TYPE) >= 2u)
+        return (int)(Delay_syncSamples(&fxBus.delay, tack_get_param(PAR_FX_P1) / 127.0f) * 1000.0f / TACK_RATE + 0.5f);
     const float r = tack_get_param(PAR_FX_P2) / 127.0f, t = tack_get_param(PAR_FX_P1) / 127.0f;
     const float top = tack_get_param(PAR_FX_DELAY_TYPE) ? FX_BUFFER_SIZE * 0.48f : (float)FX_BUFFER_SIZE;
     const float fs = TACK_RATE / 1000.0f;
