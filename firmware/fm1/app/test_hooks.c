@@ -135,6 +135,8 @@ int app_expect(const char *what, int *got)
         *got = tack_mutate_moved(0) >= 20;
     else if (!strcmp(what, "mutoutside"))
         *got = tack_mutate_moved(1);
+    else if (!strcmp(what, "keysquiet"))
+        *got = ui.keys_quiet;
     else if (numbered(what, "heard"))     /* heardN: parameter N as the voices have it */
         *got = tack_heard((uint16_t)atoi(what + 5));
     else if (numbered(what, "kept"))      /* keptN: morph leaves parameter N alone */
@@ -241,6 +243,16 @@ int app_expect(const char *what, int *got)
         *got = (int)midi_seen;
     else
         return 0;
+    return 1;
+}
+
+/* the simulator doesn't boot through fm1-base's start: splash shows the first screen, for a shot of it */
+int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
+{
+    (void)a, (void)b, (void)c, (void)d;
+    if (strcmp(cmd, "splash"))
+        return 0;
+    app_splash();
     return 1;
 }
 #endif

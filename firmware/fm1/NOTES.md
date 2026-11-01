@@ -36,7 +36,7 @@ felucca-bsp comes with it. Felucca itself (`406b328`, GPL-3.0-only) was a refere
 code was copied from it.
 
 `NOTICE.md` restricts the names Erica Synths, LXR and LXR-02 and requires modified firmware to say so on its start-up
-screen. The splash reads TACK, DRUM SYNTH, and the docs use the names only to state where the code comes from.
+screen. The splash reads TACK, DRUM SYNTH, OIKO AUDIO, on black, and the docs use the names only to state where the code comes from.
 
 The firmware is GPL-3.0-only. MPL-2.0 files can be part of it, and it links no JieLi radio library. A package must ship
 `LICENSES/Apache-2.0.txt` for the three SDK files.
@@ -76,6 +76,8 @@ Before publishing:
 2. Make the Tack repository public, or publish its source for that version: the GPL needs it, and the page links it.
 3. A release build from the commit that gets tagged. After a long session on it, `PEAK` and `XRUN` on GLO and a clean `fm1 log`. The firmware allocates nothing, so there is no leak for an hour's soak to find.
 4. Fill in the manual again after any panel changes.
+
+`/tack/fm1/try/` is the firmware in the browser, from `build.py firmware/fm1 --web`, which needs Emscripten. It is fm1-base's page, and `site/demo_pattern.bin` starts it on a groove: pattern 1 alone, with its own kit, written into the page's saves if the visitor has none. A change of pattern format needs that file saved again, and `make_web.py` stops until it is.
 
 `/tack/fm1/kits/` fills the kit bank and saves it to a `.zip`, from `site/kits_*`. Link to kits, don't host them: none of
 the three kit archives here has a licence file. It picks kits as `tools/fm1_kits.py` does, except that a `.snd` that isn't 255

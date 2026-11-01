@@ -7,6 +7,7 @@
 #define APP_NAME "TACK"
 #define APP_SPLASH_RGB RGB(232, 148, 62)
 #define APP_TAGLINE "DRUM SYNTH"
+#define APP_MAKER "OIKO AUDIO"
 #define APP_BLOCK 256u                   /* 4 engine blocks: 5.8 ms */
 
 /* the store: the settings and kit, the panel calibration, and one object for each of the 16 patterns */
@@ -37,5 +38,8 @@ void app_backup_hold(int on);
 void app_backup_restored(void);
 int app_sysex(const uint8_t *p, uint32_t n);
 
+#define APP_SPLASH
+void app_splash(void);
 #define APP_HOST_EXPECT
+#define APP_HOST_CMD
 int app_expect(const char *what, int *got);

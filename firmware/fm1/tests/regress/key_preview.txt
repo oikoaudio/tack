@@ -1,0 +1,59 @@
+# PREVIEW on GLO, with OCT- held: the black keys play their voice, or with it off only select it, but for REC. SAVE keeps it
+wait 600
+expect keysquiet 0
+key b1 down
+wait 60
+key b1 up
+wait 60
+expect voice 1
+expect fires1 1
+
+tap GLO
+wait 40
+press OCT-
+wait 40
+turn K4 -1
+wait 40
+expect keysquiet 1
+release OCT-
+wait 40
+tap HOME
+wait 60
+key b2 down
+wait 60
+key b2 up
+wait 60
+expect voice 2
+expect fires2 0
+
+# what REC takes in has to sound
+tap REC
+wait 60
+key b3 down
+wait 60
+key b3 up
+wait 60
+expect voice 3
+expect fires3 1
+tap REC
+wait 60
+
+# SAVE keeps it, and it comes from the store: the change after the save is gone at the reboot
+tap SAVE
+wait 60
+tap SAVE
+wait 300
+tap GLO
+wait 40
+press OCT-
+wait 40
+turn K4 1
+wait 40
+expect keysquiet 0
+release OCT-
+wait 40
+tap HOME
+wait 60
+reboot
+wait 600
+expect keysquiet 1

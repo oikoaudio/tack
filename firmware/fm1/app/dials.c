@@ -117,6 +117,8 @@ static void set_turn(uint32_t slot, int32_t e)
             tack_post_param(tack_rate_param(), (uint8_t)clamp((int32_t)tack_get_param(tack_rate_param()) + e, 0, 127));
         else if (slot == 2u)
             tack_post_bits((uint8_t)clamp(tack_bits() + e, 0, 127));
+        else
+            ui.keys_quiet = e < 0;
     } else if (slot == 0u) {
         tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
     } else if (slot == 1u) {

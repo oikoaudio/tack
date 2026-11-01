@@ -11,7 +11,10 @@
 #define LXR_HOST_BUILD 1
 #define LXR_FM1_BUILD 1
 
-/* the simulator builds with this machine's compiler, where the half float is spelled _Float16 */
-#ifdef PLAT_HOST
+/* the simulator builds with this machine's compiler, where the half float is spelled _Float16. WebAssembly has none, so the
+ * browser's FX buffer holds floats: the same samples, kept more finely */
+#ifdef PLAT_WEB
+#define __fp16 float
+#elif defined(PLAT_HOST)
 #define __fp16 _Float16
 #endif

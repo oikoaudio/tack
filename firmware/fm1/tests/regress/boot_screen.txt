@@ -1,0 +1,5 @@
+# the first screen draws, and the app carries on after it
+wait 100
+splash
+wait 60
+expect kit 0

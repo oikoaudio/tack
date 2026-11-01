@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Writes Tack's install, backup and kit bank pages into a checkout of the oikoaudio site, from a release package.
+"""Writes Tack's install, backup, kit bank and try-it pages into a checkout of the oikoaudio site, from a release package.
 
-    make_web.py VERSION WEB_DIR        # first: build.py firmware/fm1 --release VERSION
+    make_web.py VERSION WEB_DIR        # first: build.py firmware/fm1 --release VERSION, and --web
 
 The update and backup logic stays fm1-base's: web/installer.html and web/backup/index.html, with the libraries inlined
 as make_site.py does. This takes those pages apart so the site can give them its own header, theme and footer. The kit
@@ -10,11 +10,13 @@ bank page is Tack's own, from site/kits_body.html, kits_core.js and kits_app.js:
 
     WEB_DIR/public/tack/fm1/install.js, backup.js, kits.js    the pages' scripts
     WEB_DIR/public/tack/fm1/firmware/                the package, and the licences that go with it
+    WEB_DIR/public/tack/fm1/try/                     the firmware in the browser, with site/demo_pattern.bin in pattern 1
     WEB_DIR/app/tack/fm1/tool-pages.ts               the pages' markup, and the release's version and checksum
 
 Writes nothing to an FM-1 and publishes nothing. m-bootloader stays out of it: it is the one thing the installer can
 write below 0x4000, and Tack has not been run on it. make_site.py is not used because it needs Emscripten's build.
 """
+import base64
 import hashlib
 import json
 import re
@@ -33,6 +35,13 @@ from make_site import ports_js, product_of, strip_module, tool_pages  # noqa: E4
 NAME = "Tack"
 V15 = "https://web.archive.org/web/20261009203224id_/https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc"
 V16 = "https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc"
+
+
+# Tack plays with one hand on a button and the other on a dial, and a mouse is one hand. fm1-base's page says so only to a
+# screen reader
+DEMO_HINT = ('<p style="margin: 14px 0 0;">Press Switch on, then PLAY/STOP. To hold a button or key down, right-click or '
+             "Shift-click it, and click it again to let go. Then drag a dial, or use the scroll wheel on it. For the shuffle, "
+             "hold SEL and turn SELECT.</p>")
 
 
 def once(text, old, new):
@@ -106,6 +115,32 @@ def kits(conf):
     return (APP / "site" / "kits_body.html").read_text(encoding="utf-8").strip(), "\n".join((lib, core, page))
 
 
+def demo(out):
+    """the browser build, which starts with the demo pattern. It is one saved object, as what else a backup holds is not all
+    ours to publish, and a page keeps a visitor's own saves"""
+    emu = APP / "build" / "emu"
+    if not (emu / "app.wasm").exists():
+        raise SystemExit("make_web: no build/emu: build.py firmware/fm1 --web first")
+    pattern = (APP / "site" / "demo_pattern.bin").read_bytes()
+    magic = re.search(r'PATTERN_MAGIC = b"(\w+)"', (HERE / "tack_check.py").read_text(encoding="utf-8")).group(1)
+    if pattern[:4] != magic.encode():
+        raise SystemExit(f"make_web: site/demo_pattern.bin is not a {magic} pattern: save it again from this build")
+    store = json.dumps({"2": base64.b64encode(pattern).decode()})         # 2: app.h's OBJ_PAT0
+    seed = ('<script>try { if (!localStorage.getItem("tack-emu-store")) '
+            f'localStorage.setItem("tack-emu-store", {json.dumps(store)}); }} catch (e) {{ /* a blank FM-1 */ }}</script>')
+    html = (emu / "index.html").read_text(encoding="utf-8")
+    html = once(html, "<head>", "<head>" + seed)
+    html = once(html, "<h1>TACK</h1>", '<h1>TACK</h1>\n  <p><a href="../">Back to Tack</a></p>')
+    html = once(html, '<div class="bar">', f"{DEMO_HINT}\n<div class=\"bar\">")
+    target = out / "try"
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+    (target / "index.html").write_text(html, encoding="utf-8")
+    shutil.copy(emu / "app.wasm", target / "app.wasm")
+    shutil.copy(emu / "worklet.js", target / "worklet.js")
+
+
 def main(version, web):
     web = Path(web).resolve()
     if not (web / "app").is_dir() or not (web / "public").is_dir():
@@ -139,6 +174,7 @@ def main(version, web):
     (out / "install.js").write_text(install_js, encoding="utf-8")
     (out / "backup.js").write_text(backup_js, encoding="utf-8")
     (out / "kits.js").write_text(kits_js, encoding="utf-8")
+    demo(out)
 
     release = {"version": version, "file": package, "identity": product, "bytes": len(raw),
                "sha256": hashlib.sha256(raw).hexdigest()}

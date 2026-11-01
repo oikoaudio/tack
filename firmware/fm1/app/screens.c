@@ -150,11 +150,12 @@ static void pg_set_usb(uint32_t *last)
     uint32_t st[4], key;
     usb_pump_stats(st);
     key = rk(rk(rk(rk(rk(rk(rk(rk(rk(rk(rk(31u, (uint32_t)on), ui.usb10), drops), st[0]), st[1]), st[2]), st[3]), ui.save_gap), rate), bits), (uint32_t)diag);
+    key = rk(key, ui.keys_quiet);
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
-    row_lines(on ? 0x7u : 0u, C_HI);
+    row_lines(on ? (diag ? 0x7u : 0xFu) : 0u, C_HI);
     wd_box(PG_CW / 2, 0, ui.usb10 ? "10 CH" : "STEREO", on ? C_HI : C_GRAY);
     pg_column(0, "USB AUDIO", on);
     if (diag) {                                  /* OCT+ held: what USB audio has been doing */
@@ -183,6 +184,8 @@ static void pg_set_usb(uint32_t *last)
         int_text(2 + (int32_t)((bits * 14u + 63u) / 127u), t);
         wd_dial_text(2, t, bits, 127, on);
         pg_column(2, "BITS", on);
+        wd_toggle(PG_CW * 3 + PG_CW / 2, 0, !ui.keys_quiet, on ? C_HI : C_GRAY);
+        pg_column(3, "PREVIEW", on);
     }
     cv_blit(0, PG_Y + 2u * PG_RH);
 }

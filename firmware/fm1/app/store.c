@@ -10,6 +10,7 @@ static int save_settings(void)
     memcpy(set.kit + SET_KIT_NAME, ui.kit_name, 8);
     memcpy(set.song, tack_song(), sizeof set.song);
     set.song_on = tack_song_mode() == TACK_SONG_ON;
+    set.keys_quiet = ui.keys_quiet;
     return plat_store_save(OBJ_SETTINGS, &set, sizeof set);
 }
 

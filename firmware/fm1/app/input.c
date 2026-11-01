@@ -49,7 +49,8 @@ static void input_keys(uint32_t keys, uint32_t btn)
                 if (ui.group != TACK_G_MAIN)
                     ui.sub = screen_page(screen, 1);
                 if (!(btn >> B_SEQ & 1u)) {
-                    tack_post_note((uint8_t)k, TACK_NOTE_CENTRE, 110);
+                    if (!ui.keys_quiet || tack_recording())   /* what REC is taking in plays, or nothing could be recorded */
+                        tack_post_note((uint8_t)k, TACK_NOTE_CENTRE, 110);
                     ui.lane_key = (uint8_t)(k + 1u);
                     ui.lane_at = plat_ms();
                 }

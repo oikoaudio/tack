@@ -67,7 +67,7 @@ typedef struct {
     uint32_t magic;
     uint16_t bpm;
     uint8_t kit_now;                     /* the bank's kit it came from: slot + 1, 0 none */
-    uint8_t rsv;
+    uint8_t keys_quiet;                  /* the black keys only select a voice: older saves have 0, which plays it */
     uint8_t kit[KIT_SLOT];               /* the parameters, then the name at SET_KIT_NAME; older saves have it empty */
     uint8_t song[TACK_SONG_ROWS];      /* older saves stop here */
     uint8_t song_on, rsv2[3];
@@ -107,6 +107,7 @@ static struct {
     uint32_t keys, btn, redraw;
     int32_t voice, bar;
     uint8_t stress;
+    uint8_t keys_quiet;                  /* PREVIEW off: settings_t's */
     uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
     uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
@@ -303,6 +304,7 @@ static void load_saved(int running_audio)
     const int got = plat_store_load(OBJ_SETTINGS, &set, sizeof set);
     const int ok = got >= (int)SET_OLD_SIZE && set.magic == SET_MAGIC;
     tack_song_load(ok && got == (int)sizeof set ? set.song : 0, ok && got == (int)sizeof set && set.song_on);
+    ui.keys_quiet = ok && set.keys_quiet == 1u;
     if (ok)
         tack_post_bpm(set.bpm);
     {                                    /* the pattern's own kit, or for one that has none the kit it was left on */
@@ -371,6 +373,29 @@ void app_say(const char *a, const char *b)
 #include "app/popups.c"
 
 #include "app/screens.c"
+
+/* the first screen at boot: the name on black, the voices' colours, and who made it */
+void app_splash(void)
+{
+    static const uint8_t HEIGHT[TACK_VOICES] = {18, 6, 12, 4, 15, 7, 10};
+    enum { BAR = 12, GAP = 4, BARS_W = TACK_VOICES * BAR + (TACK_VOICES - 1) * GAP, BARS_Y = 62, TRACK = 3 };
+    int32_t x = 120 - BARS_W / 2;
+    lcd_fill(0, 0, 240, 240, C_BLACK);
+    cv_begin(240, 104, C_BLACK);
+    cv_text(120 - text_w(&FONT_L, APP_NAME) / 2, 0, &FONT_L, APP_NAME, APP_SPLASH_RGB);
+    for (uint32_t v = 0; v < TACK_VOICES; v++, x += BAR + GAP)
+        cv_rect(x, BARS_Y - HEIGHT[v], BAR, HEIGHT[v], VOICE_COLOUR[v]);
+    cv_text(120 - text_w(&FONT_S, APP_TAGLINE) / 2, BARS_Y + 10, &FONT_S, APP_TAGLINE, C_GRAY);
+    cv_blit(0, 56);
+    cv_begin(240, FONT_XS.h, C_BLACK);
+    x = 120 - (text_w(&FONT_XS, APP_MAKER) + TRACK * ((int32_t)sizeof APP_MAKER - 2)) / 2;
+    for (const char *c = APP_MAKER; *c; c++) {
+        const char one[2] = {*c, 0};
+        cv_text(x, 0, &FONT_XS, one, C_GRAY);
+        x += text_w(&FONT_XS, one) + TRACK;
+    }
+    cv_blit(0, 212);
+}
 
 static void draw(void)
 {
