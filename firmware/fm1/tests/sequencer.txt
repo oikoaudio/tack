@@ -85,15 +85,65 @@ turn K3 5
 wait 40
 expect param2 15
 # a pattern away and back keeps what was entered
-turn PRESET 1
+press SEQ
+wait 20
+tapkey 2
+wait 60
+release SEQ
 wait 60
 expect pattern 1
+expect stepmode 1
 expect step4 0
-turn PRESET -1
+press SEQ
+wait 20
+tapkey 0
+wait 60
+release SEQ
 wait 60
 expect pattern 0
 expect step4 1
 expect step16 1
+# a lane's length: SEL held, the 12th white key (key 19) makes this lane 12 steps
+press SEL
+wait 20
+tapkey 19
+wait 40
+release SEL
+wait 20
+expect len3 12
+expect step11 0
+# a parameter lock: step 4 held, K2 turned. The step stays on, and two parameters fit but not three
+key 7 down
+wait 40
+turn K2 5
+wait 40
+turn K3 2
+wait 40
+turn K4 1
+wait 40
+shot lock.png
+key 7 up
+wait 40
+expect step4 1
+expect locks4 1
+# on an empty step a lock does nothing, and the step stays off
+key 2 down
+wait 40
+turn K2 3
+wait 40
+key 2 up
+wait 40
+expect step1 0
+expect locks1 0
+# EDIT clears them
+key 7 down
+wait 40
+tap EDIT
+wait 40
+key 7 up
+wait 40
+expect step4 1
+expect locks4 0
 # save, restart, and it comes back
 tap SAVE
 wait 60
@@ -106,12 +156,275 @@ tapkey 8
 wait 40
 expect step4 1
 expect param2 15
-# the load test
-tap HOME
-wait 500
-tap HOME
+expect len3 12
+# no kits uploaded: the kit page says so
+turn PRESET 1
+wait 40
+expect kit 0
+expect pattern 0
+# the FX page: K1 type, K2 mix, K3 and K4 follow the type, black keys send. Locks stay on the voice pages
+tap FX
+wait 40
+expect fxpage 1
+expect fxv0 0
+turn K1 4
+wait 40
+expect fxv0 4
+turn K1 3
+wait 40
+expect fxv0 4
+expect fxp2 238
+expect fxp3 241
+turn K2 30
+wait 40
+expect fxv1 30
+expect send3 0
+tapkey 8
+wait 40
+expect send3 1
+expect voice 3
+turn K1 -2
+wait 40
+expect fxp3 243
+tap FX
+wait 40
+expect fxpage 0
+# the sound pages: each press the next, and past the last back to the main page
+tap EDIT
+wait 40
+expect page 10
+tap EDIT
+wait 40
+expect page 11
+tap ENV
+wait 40
+expect page 20
+tap ENV
+wait 40
+tap ENV
+wait 40
+expect page 22
+tap ENV
+wait 40
+expect page 0
+# the snare has no FM page: the page it opens is its noise
+tapkey 8
+wait 40
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+expect voice 3
+turn K2 -9
+wait 40
+expect sl1 52
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+expect page 0
+tap LFO
+wait 40
+turn K1 1
+wait 40
+expect sl0 2
+turn K2 40
+wait 40
+expect sl1 40
+tap LFO
+wait 40
+tap LFO
+wait 40
+expect page 0
+# the settings page
+tap GLO
+wait 40
+turn K1 3
+wait 40
+expect bpm 133
+turn K2 5
+wait 40
+expect shuffle 25
+turn K3 -1
+wait 40
+expect ext 0
+turn K3 1
+wait 40
+expect ext 1
+turn K3 -1
+wait 40
+expect ext 0
+tap GLO
+wait 40
+# the Euclidean page: drum 3, a lane of 8 with 3 hits. Opening it changes nothing; a turn writes the lane
+tapkey 5
+wait 40
+tapkey 20
+wait 40
+expect eupage 1
+expect len2 16
+turn K1 -8
+wait 40
+expect eu0 8
+expect len2 8
+turn K2 -1
+wait 40
+expect eu1 3
+# the length can't leave more hits or rotation than it has steps
+turn K3 7
+wait 40
+expect eu2 7
+turn K1 -6
+wait 40
+expect eu0 2
+expect eu1 2
+expect eu2 1
+turn K1 30
+wait 40
+expect eu0 16
+turn K1 -8
+wait 40
+tapkey 20
+wait 40
+expect eupage 0
+# COPY held with a white key: this pattern onto pattern 9. On itself it does nothing
+key 22 down
+wait 40
+tapkey 14
+wait 60
+tapkey 0
+wait 60
+key 22 up
+wait 40
+press SEQ
+wait 20
+tapkey 14
+wait 60
+release SEQ
+wait 60
+expect pattern 8
+expect len2 8
+press SEQ
+wait 20
+tapkey 0
+wait 60
+release SEQ
+wait 60
+expect pattern 0
+# one tap of EDIT with SEL held changes nothing: the lane needs a second, and clears once
+press SEL
+wait 20
+tap EDIT
+wait 300
+release SEL
+wait 20
+expect len2 8
+expect page 0
+press SEL
+wait 20
+press EDIT
+wait 1200
+release EDIT
+wait 20
+release SEL
+wait 40
+expect len2 16
+expect step0 0
+expect page 0
+# roll: the key on its own, and a rate on the settings page
+key 17 down
+wait 40
+key 17 up
 wait 40
 tap GLO
 wait 40
-expect ext 1
+turn K4 -2
+wait 40
+expect roll 3
+tap GLO
+wait 40
+# the STEP page: a held step takes all four, no step held K1 nudges the lane and the rest ask for a step
+tapkey 1
+wait 40
+expect step0 1
+tapkey 25
+wait 40
+expect stpage 1
+key 0 down
+wait 40
+turn K1 3
+wait 40
+expect st_0 3
+turn K2 2
+wait 40
+expect st_1 2
+turn K3 -40
+wait 40
+expect st_2 60
+turn K4 -27
+wait 40
+expect st_3 100
+turn K1 9
+wait 40
+expect st_0 7
+turn K1 -4
+wait 40
+key 0 up
+wait 40
+# the release after an edit leaves the step on
+expect step0 1
+turn K1 -2
+wait 40
+expect st_0 1
+expect lanenudge 1
+turn K2 2
+wait 40
+expect st_1 2
+tapkey 25
+wait 40
+expect stpage 0
+# the load test
+press GLO
+wait 30
+tap PLAY
+wait 30
+release GLO
+wait 40
+expect stress 1
+wait 500
+tap PLAY
+wait 40
+expect stress 0
+# HOME is the main page, from anywhere
+tap ENV
+wait 40
+tap FX
+wait 40
+tap HOME
+wait 40
+expect fxpage 0
+expect page 0
+# the FX's second page, and the delay in milliseconds: time and range both shape it
+tap FX
+wait 40
+turn K1 4
+wait 40
+turn K2 100
+wait 40
+turn K3 49
+wait 40
+tap FX
+wait 40
+expect fxpage 2
+turn K1 127
+wait 40
+expect fxv4 127
+expect echo 299
+tap FX
+wait 40
+expect fxpage 0
 expect dropped 0

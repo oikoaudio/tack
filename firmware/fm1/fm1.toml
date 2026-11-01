@@ -9,7 +9,7 @@ usb_audio_in = true
 usb_audio_out = false
 licence = "GPL-3.0-only"
 repo = "https://github.com/oikoaudio/tack"
-tagline = "the LXR drum engine on the FM-1"
+tagline = "a drum synth for the FM-1"
 credits = "Tack's engine is the LXR firmware by Erica Synths."
 
 # the engine, unchanged sources: firmware/fm1/shim stands in for the STM32 and libm

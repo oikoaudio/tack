@@ -4,7 +4,7 @@ Branch `experiment/fm1-tack`. Each result below says how far it got:
 
 - **Compiled:** the JieLi toolchain built it and fm1-base's image checks passed.
 - **Simulator-tested:** it ran on this computer, in fm1-base's host simulator or a test program.
-- **Hardware-tested:** installing, booting, sound and the load test on the init kit, on one FM-1 on 2026-11-01.
+- **Hardware-tested:** installing, booting, sound, kit upload and kit switching, on one FM-1 on 2026-11-01.
 
 ## Recommendation: continue
 
@@ -42,11 +42,28 @@ fm1-base is the platform, because it already has audio, MIDI, the panel, storage
 felucca-bsp comes with it. Felucca itself (`406b328`, GPL-3.0-only) was a reference for panel conventions only, and no
 code was copied from it.
 
+`NOTICE.md` restricts the names Erica Synths, LXR and LXR-02 and requires modified firmware to say so on its start-up
+screen. The splash reads TACK, DRUM SYNTH, and the docs use the names only to state where the code comes from.
+
 The firmware is GPL-3.0-only. MPL-2.0 files can be part of it, and it links no JieLi radio library. A package must ship
 `LICENSES/Apache-2.0.txt` for the three SDK files.
 
 JieLi's SDK repository no longer exists at the URL in `get_sdk.sh`. The same revision is at the mirror
 `amitv87/fw-AC79_AIoT_SDK`, and the script's SHA-256 checks passed for all five pinned files.
+
+## Using a connected FM-1
+
+`firmware/fm1/tools/fm1` runs the device tools from any directory. Its first run makes `firmware/fm1/.venv` from
+`tools/requirements.txt`. Close anything holding the FM-1's MIDI port first.
+
+| Command | What it does |
+| --- | --- |
+| `fm1 info` | shows what is on the unit |
+| `fm1 install` | installs `build/tack.fwsc` |
+| `fm1 log` | reads the crash log |
+| `fm1 kits DIR` | replaces the kit bank with every `.SND` under `DIR`, sequencer stopped |
+
+`tests/verify.sh` checks the desktop renders against `tests/desktop_renders.sha256`, then builds the firmware and simulator.
 
 ## Build and simulator
 
@@ -76,16 +93,25 @@ The panel:
 
 | Control | Action |
 | --- | --- |
-| White keys | STEP mode: the 16 steps of the page. PLAY mode: the first seven play the voices |
+| White keys | STEP mode: the 16 steps of the page, on release. PLAY mode: the first seven play the voices |
+| A step held, K1 to K4 | lock those values on the step, two per step. EDIT clears them |
+| SEL held, a white key | that step becomes the lane's last |
 | Black keys, first seven | select a voice; with ARP held, mute it |
 | SEQ | switch between STEP and PLAY mode |
 | OCT- and OCT+ | bar 1 to 4 |
 | PLAY, REC | start and stop, live recording |
-| K1 to K4 | pitch, filter, decay and volume of the voice |
-| SELECT, ALGORITHM, PRESET | tempo, shuffle, pattern 1 to 16 |
-| GLO | external MIDI clock |
+| K1 to K4 | what the open page shows: pitch, filter, decay and volume of the voice on the main page |
+| SELECT, ALGORITHM, PRESET | tempo, shuffle, kit |
+| SEQ | tap: STEP or PLAY mode. Held with a white key: pattern 1 to 16 |
+| EDIT, ENV, LFO | the voice's sound pages, 256 parameter slots in all. Each press opens the next page, and past the last returns to the main page |
+| FX | FX type, mix and two settings of that type, then a second page of its others. Black keys send voices to the FX |
+| GLO | settings: tempo, shuffle, external MIDI clock, roll rate, and the `CPU`, `PEAK` and `XRUN` readings |
+| Black keys 8 to 10 | ROLL while held, the Euclidean page, COPY held with a white key: this pattern onto that one |
+| Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane |
+| SEL and EDIT held a second | clear the lane |
 | SAVE | pattern and kit, refused while running because a flash write stops the sound |
-| HOME | load test: every voice every 35 blocks, about 51 ms, on the loaded kit |
+| HOME | the main page. GLO held: zero `PEAK` and `XRUN` |
+| GLO held, PLAY | load test: every voice every 35 blocks, about 51 ms, on the loaded kit. PLAY alone ends it |
 
 Compiled and simulator-tested:
 
@@ -105,12 +131,41 @@ Compiled, not tested on their own:
   has not run. The panel test only switches the setting on.
 - MIDI out from the sequencer, and recording from the keys through the event queue.
 
+Simulator-tested in this round, not yet on a device:
+
+- The screen shows all seven lanes at once, with their lengths, playheads, mutes and lock marks.
+- Lane length per voice, for polyrhythms.
+- Parameter locks through the sequencer's two automation slots per step. `tests/lock_test.sh` runs them through the real
+  engine: a lock changes its own voice's filter on its step, holds until the lane's next step, and gives back the kit's
+  value, including a value edited after the lock was made. With locks addressed by parameter number, not CC number, the
+  test fails, so it catches that mistake. A lock in place when the sequencer stops stays in the engine until the lane's
+  next step, as on the LXR.
+
+Compiled and simulator-tested, not yet on a device: the FX page, the sound pages, the settings page, patterns on SEQ, and
+the xrun tag. `lock_test.sh` drives each through the real engine: a sent voice gets a delay tail and an unsent one none, mix
+0 removes the tail, each FX setting changes the output, a lock reaches a parameter above 127, and all 256 page slots step,
+clamp and render at both ends.
+
 Known omissions:
 
 - 16 patterns, not 64. The full bank needs 233,536 B and the pool has about 150 KB left. Each pattern is 3,649 B.
 - Song playback works, but the panel has no song page.
-- The panel cannot edit flams, shifts, probability or automation yet. The sequencer plays them.
-- No kit browser. The firmware holds one kit, and factory kits are not installed.
+- The STEP page edits nudge, flam, probability and velocity. It has no note, which the sequencer stores per step.
+- A lane nudge adds to each step's nudge and stops at the limits of 7/8 of a step, so a large turn back can lose a hit's
+  own offset.
+- The Euclidean page stops at length 16, as the LXR's menu does. From length 18 with one hit the generator recurses
+  without end, which would crash the audio interrupt.
+- A Euclidean turn replaces the lane's steps and length, with no undo. Its locks stay on their steps.
+- SAVE writes the active pattern only, so a copied pattern needs a visit and a SAVE to outlive power-off.
+- No kits in the firmware. `README.md` says none come with Tack, because they belong to their authors, and `NOTICE.md`
+  does not cover them. `tools/fm1_kits.py` sends your own files to 128 slots in flash. Loading a kit runs in the audio
+  interrupt, as the engine has one writer. It costs about 57,000 x86 instructions, roughly 23% of a block when warm.
+- The delay's time is scaled by its range twice (`calcDelayTime`), so at the init kit's range of 27 the longest delay is
+  40 ms, which is a comb or flanger. Range is on the second FX page, and the FX pages show the delay in milliseconds, matching
+  rendered echoes at 299, 383 and 531 ms. Delay at maximum time and maximum range runs past the buffer and goes silent,
+  so the page stops time at 126.
+- The sound pages cover the LXR's voice parameters with sound-design use. Edits apply until a kit loads, and SAVE keeps them as
+  the boot kit. Nothing writes an edited kit back to the bank.
 - Per-pattern kit loading does nothing, because the kit bank is on the LXR's SD card.
 - Reverb. The LXR firmware compiles it out (`USE_REVERB 0`), and desktop Tack does the same. Shelved.
 - No Bluetooth, no second core, no velocity from the keys.
@@ -124,8 +179,8 @@ Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 233,100 B | 581,564 B | 40% |
-| RAM, `.data` and `.bss` | 35,528 B | 98,304 B | 36% |
+| Flash image | 256,092 B | 581,564 B | 44% |
+| RAM, `.data` and `.bss` | 36,044 B | 98,304 B | 37% |
 | Pool | 193,044 B | 344,064 B | 56% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables
@@ -271,6 +326,10 @@ Done on 2026-11-01:
 
 - It makes sound, and the load test reads `CPU 42`, `PEAK 42`, `XRUN 0` on the init kit (user's reading of the screen).
 
+- Commit `36b4c89` installed by the user. `fm1_kits.py` uploaded 86 kits and the unit answered for each. The kits load.
+- The user read `CPU 48`, `PEAK 50`, `XRUN 3` after trying kits, and saw no xruns while switching kits fast. The three are
+  unexplained. The next build tags the count with what the panel did last.
+
 Steps 1 and 2 are done, except a check of each control. Step 3 is done for the init kit only.
 
 The way back: M-VAVE's FM1 Workbench (open.m-vave.com/fm1-workbench) offers a bundled V15 restore through "force flash",
@@ -281,7 +340,7 @@ custom firmware, so do not install V16 first.
    survive, so back up what matters first. The update loader writes only the app area, `[0x4000, 0x93000)`, and never
    the flash head. Recovery is the installer again, or `fm1_rescue` through the chip's ROM update mode on Mac or Linux.
 2. Install `firmware/fm1/build/tack.fwsc`. Check boot, the screen, keys, encoders, LEDs and audio on the speaker.
-3. Run the load test (HOME) on the init kit, BADON, NAPALM and a kit through delay. Read `CPU`, `PEAK` and `XRUN`.
+3. Run the load test (GLO held, PLAY) on the init kit, BADON, NAPALM and a kit through delay. Read `CPU`, `PEAK` and `XRUN`.
    This is the go or stop reading. My suggested threshold: under 80% peak with no xruns is enough to continue.
 4. Run an hour with the sequencer playing, for crashes from the 64-bit multiply fault and for faults on FM values.
 5. Record over USB audio and repeat the audio comparison on the device's own output.

@@ -200,9 +200,9 @@ int seq_trace_run(uint32_t r)
     for (uint8_t s = 0; s < 16; s++) {
         Step *p = &seq_patternSet.seq_subStepPattern[0][0][s];
         step(0, 0, s, 100, 60);
-        p->param1Nr = PAR_FILTER_FREQ_1;
+        p->param1Nr = PAR_FILTER_FREQ_1 + 1;   /* automation holds CC numbers, one above the parameter's */
         p->param1Val = (uint8_t)(s * 8u);
-        p->param2Nr = PAR_VOL1;
+        p->param2Nr = PAR_VOL1 + 1;
         p->param2Val = (uint8_t)(127u - s);
     }
     go();
@@ -216,7 +216,7 @@ int seq_trace_run(uint32_t r)
     go();
     run_ms(330);
     seq_addNote(2, 90, 64);
-    seq_recordAutomation(0, PAR_VOL1, 77);
+    seq_recordAutomation(0, PAR_VOL1 + 1, 77);
     run_ms(471);
     seq_addNote(3, 80, 65);
     run_ms(1500);

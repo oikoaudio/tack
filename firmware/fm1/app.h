@@ -6,7 +6,7 @@
 
 #define APP_NAME "TACK"
 #define APP_SPLASH_RGB RGB(232, 148, 62)
-#define APP_TAGLINE "LXR DRUM ENGINE"
+#define APP_TAGLINE "DRUM SYNTH"
 #define APP_BLOCK 256u                   /* 4 engine blocks: 5.8 ms */
 
 /* the store: the settings and kit, the panel calibration, and one object for each of the 16 patterns */
@@ -22,6 +22,8 @@ void app_ui_init(void);
 void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
+#define APP_SYSEX                        /* kits from a computer (tools/fm1_kits.py) */
+int app_sysex(const uint8_t *p, uint32_t n);
 
 #define APP_HOST_EXPECT
 int app_expect(const char *what, int *got);
