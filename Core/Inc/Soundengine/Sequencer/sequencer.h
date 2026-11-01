@@ -172,6 +172,17 @@ void seq_MidiSyncQueue(uint8_t cnt);
 uint8_t seq_isAutomationStepArmed();
 //------------------------------------------------------------------------------
 void seq_nextStep();
+#ifdef LXR_FM1_BUILD
+/* a lane's mode: the direction in the low bits, the speed above them */
+enum { LANE_FORWARD, LANE_REVERSE, LANE_PINGPONG, LANE_RANDOM, LANE_DIRECTIONS };
+#define LANE_SPEEDS 3u				/* a step lasts 1, 2 or 4 ticks */
+#define LANE_DIR(mode) ((mode) & 3u)
+#define LANE_SPEED(mode) (((mode) >> 2) & 3u)
+#define LANE_DIV(mode) (1u << LANE_SPEED(mode))
+#define LANE_MODE(dir, speed) ((uint8_t)((dir) | (speed) << 2))
+extern uint8_t seq_laneMode[NUM_PATTERN][NUM_TRACKS];
+uint8_t seq_laneAtEdge(uint8_t track, int8_t position);
+#endif
 //------------------------------------------------------------------------------
 void seq_processFlam(uint8_t idx);
 //------------------------------------------------------------------------------

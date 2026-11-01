@@ -124,7 +124,11 @@ expect tall 0
 tap EDIT
 wait 40
 expect tall 1
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 expect tall 1
 tap HOME
@@ -148,7 +152,11 @@ expect songpage 0
 tap GLO
 wait 40
 expect setpage 1
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 expect setpage 0
 expect songpage 1
@@ -160,13 +168,21 @@ tap HOME
 wait 40
 expect setpage 0
 
-# ARP tapped is the SONG page, and the keys fill its rows
+# SEQ held with ARP is the SONG page, and the keys fill its rows
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 tap HOME
 wait 40
 expect songpage 0
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 expect songpage 1
 shot song_empty.png
@@ -254,7 +270,11 @@ expect songrow4 64
 # the page closes, and the song goes off by hand without losing the rows
 tap HOME
 wait 40
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 expect songpage 1
 turn K4 -1
@@ -268,7 +288,11 @@ expect songpage 0
 # a backup holds the song, and a restore brings back what it held
 backup out:song.tack
 wait 200
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 turn K1 -3
 wait 40

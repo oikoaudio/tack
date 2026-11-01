@@ -1,0 +1,219 @@
+# Velocity shapes on ARP's third screen, and putting back what a generator replaced.
+# The expected values come from aww's levels and rule by another route than tools/gen_shapes.py
+wait 600
+tapkey 0
+wait 30
+tapkey 7
+wait 30
+tapkey 14
+wait 30
+
+# a velocity by hand, then ARP: the lane, Euclid, then the velocity page, whose white keys are steps
+tap SEQ
+wait 30
+tapkey 0
+wait 30
+tapkey 0
+wait 30
+turn K1 -7
+wait 30
+expect vel0 120
+tap HOME
+wait 30
+tap ARP
+wait 30
+expect lanepage 1
+expect velpage 0
+tap ARP
+wait 30
+expect eupage 1
+tap ARP
+wait 30
+expect velpage 1
+expect voice 0
+
+# SON at centre 90, amount 70: every step of the lane, on or off, and the page changes nothing else
+turn K1 10
+wait 30
+expect vel0 110
+expect vel1 66
+expect vel3 116
+expect vel4 66
+expect vel6 116
+expect vel10 110
+expect vel12 110
+expect step0 1
+expect step1 0
+expect step4 1
+shot vel.png
+
+# a turn reads no step, so it never builds on the last
+turn K3 30
+wait 30
+expect vel0 118
+expect vel1 55
+expect vel3 127
+turn K3 -30
+wait 30
+expect vel0 110
+expect vel1 66
+expect vel3 116
+
+# K4 moves it later, wrapping
+turn K4 3
+wait 30
+expect vel3 110
+expect vel6 116
+expect vel0 66
+turn K4 -3
+wait 30
+expect vel0 110
+
+# a new step plays what is already written; a key on this page sets a step
+tapkey 2
+wait 30
+expect step1 1
+expect vel1 66
+tapkey 2
+wait 30
+expect step1 0
+
+# the bars of OCT, as elsewhere
+tap OCT+
+wait 30
+tap OCT-
+wait 30
+expect bar 0
+
+# OFF puts back what was there, the on and off steps alike, once
+turn K1 -10
+wait 30
+expect vel0 120
+expect vel1 127
+expect vel3 127
+expect step0 1
+turn K1 1
+wait 30
+turn K1 -1
+wait 30
+expect vel0 120
+
+# the undo is one lane's: shaping another moves it there
+turn K1 10
+wait 30
+tapkey 3
+wait 30
+expect voice 1
+turn K1 -1
+wait 30
+turn K1 1
+wait 30
+expect vel0 110
+turn K1 -10
+wait 30
+expect vel0 127
+tapkey 1
+wait 30
+expect voice 0
+expect vel0 110
+
+# by hand after a shape is an ordinary edit, and what is saved is the velocities: a reboot keeps them
+turn K1 10
+wait 30
+tap HOME
+wait 30
+tap SEQ
+wait 30
+turn K1 -4
+wait 30
+expect velpage 0
+expect selstep 0
+expect vel0 106
+tap SAVE
+wait 200
+reboot
+wait 600
+expect vel0 106
+expect vel1 66
+expect vel3 116
+expect step0 1
+expect step1 0
+expect badpatterns 0
+
+# the velocity reaches the voice and MIDI: step 1, as edited
+out
+tap PLAY
+wait 60
+expect_out USB 90 3C 6A
+tap PLAY
+wait 60
+
+# Euclid: K4 puts the lane back, length and all, and a velocity set since stays
+tap HOME
+wait 40
+tap SEQ
+wait 40
+expect voiceview 1
+expect len0 16
+expect step0 1
+expect step4 1
+expect step8 1
+tap ARP
+wait 30
+tap ARP
+wait 30
+expect eupage 1
+turn K1 -4
+wait 30
+turn K2 1
+wait 30
+expect len0 12
+expect step1 0
+expect step3 1
+turn K2 -1
+wait 30
+turn K2 -1
+wait 30
+expect eu1 3
+turn K2 -9
+wait 30
+expect eu1 1
+expect len0 12
+turn K4 1
+wait 30
+expect len0 16
+expect step0 1
+expect step4 1
+expect step8 1
+expect step3 0
+expect vel0 106
+
+# and once only: another turn finds nothing to put back
+turn K4 1
+wait 30
+expect len0 16
+expect step4 1
+
+# HOME says what is queued: a pattern picked while running, until it arrives
+tap HOME
+wait 40
+turn ALGO 20
+wait 1600
+expect homenext -1
+tap PLAY
+wait 200
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 60
+expect homenext 1
+shot home_next.png
+wait 2200
+expect homenext -1
+expect pattern 1
+tap PLAY
+wait 60
+expect dropped 0
+

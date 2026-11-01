@@ -331,14 +331,16 @@ wait 40
 expect ext 0
 tap GLO
 wait 40
-# the lane's dials: drum 3, a lane of 8 with 3 hits. SEL held in the bars view changes nothing; a turn writes the lane
+# Euclid, ARP's second screen: drum 3, a lane of 8 with 3 hits. Opening it changes nothing; a turn writes the lane
 tapkey 5
 wait 40
 tap SEQ
 wait 40
-press SEL
-wait 300
-expect lanedials 1
+tap ARP
+wait 40
+tap ARP
+wait 40
+expect eupage 1
 expect len2 16
 turn K1 -8
 wait 40
@@ -361,9 +363,6 @@ wait 40
 expect eu0 16
 turn K1 -8
 wait 40
-release SEL
-wait 40
-expect lanedials 0
 tap HOME
 wait 40
 # COPY held with a white key: this pattern onto pattern 9. On itself it does nothing
@@ -453,16 +452,14 @@ wait 40
 # the release after an edit leaves the step on, and no dial locked it
 expect step0 1
 expect locks0 0
-press SEL
-wait 20
+tap ARP
+wait 40
+expect lanepage 1
 turn K4 -2
 wait 40
-expect lanedials 1
 expect st_0 1
 expect lanenudge 1
 expect st_1 2
-release SEL
-wait 40
 tap HOME
 wait 40
 # the load test

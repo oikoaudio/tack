@@ -410,6 +410,57 @@ static uint8_t bank[2][512];
 static const uint8_t *bank_find(uint32_t slot) { return slot < 2 ? bank[slot] : 0; }
 
 /* the bank's kit a pattern was left with comes back as the sequencer switches to it, before its first step */
+int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed);
+int tack_bits(void);
+int tack_post_bits(uint8_t value);
+uint32_t tack_lane_dir(uint8_t voice);
+uint32_t tack_lane_speed(uint8_t voice);
+uint32_t tack_pattern_export(uint8_t pattern, void *image);
+int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);
+
+/* Saved patterns from older builds: as a current one, without the bytes added since and with the older magic. Each loads
+ * whole, with what it lacks at its default, and a current one keeps its modes and BITS */
+#define IMAGE_LANES (6u + 3u * 448u + 448u + 4u * 7u * 2u + 7u + 2u)
+static uint8_t lane_image[3840], image_old[3840];
+static void lane_format_tests(void)
+{
+    uint32_t len;
+    tack_post_lane(2, 3, 2);
+    tack_post_length(2, 12);
+    tack_post_bits(100);
+    run(2);
+    len = tack_pattern_export(0, lane_image);
+    check("the image holds the lane's mode", lane_image[3] == '4' && lane_image[IMAGE_LANES + 2u] == (3u | 2u << 2), lane_image[3], lane_image[IMAGE_LANES + 2u]);
+    check("and BITS", lane_image[IMAGE_LANES + 7u] == 27, 27, lane_image[IMAGE_LANES + 7u]);
+    memcpy(image_old, lane_image, IMAGE_LANES);
+    memcpy(image_old + IMAGE_LANES, lane_image + IMAGE_LANES + 10u, len - IMAGE_LANES - 10u);
+    image_old[3] = '2';
+    check("the KPT2 image loads", tack_load_pattern(0, image_old, len - 10u) == 0, 0, 0);
+    check("its lanes play forward at full speed", tack_lane_dir(2) == 0 && tack_lane_speed(2) == 0, tack_lane_dir(2), tack_lane_speed(2));
+    check("with BITS off", tack_bits() == 127, 127, tack_bits());
+    check("and it keeps the length", tack_length(2) == 12, 12, tack_length(2));
+    memcpy(image_old, lane_image, IMAGE_LANES + 7u);
+    memcpy(image_old + IMAGE_LANES + 7u, lane_image + IMAGE_LANES + 10u, len - IMAGE_LANES - 10u);
+    image_old[3] = '3';
+    check("the KPT3 image loads", tack_load_pattern(0, image_old, len - 3u) == 0, 0, 0);
+    check("with its modes and BITS off", tack_lane_dir(2) == 3 && tack_bits() == 127, tack_lane_dir(2), tack_bits());
+    check("the current image loads", tack_load_pattern(0, lane_image, len) == 0, 0, 0);
+    check("and keeps its modes", tack_lane_dir(2) == 3 && tack_lane_speed(2) == 2, tack_lane_dir(2), tack_lane_speed(2));
+    check("and BITS", tack_bits() == 100, 100, tack_bits());
+    lane_image[IMAGE_LANES + 2u] = 12;
+    check("a mode out of range is refused", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
+    lane_image[IMAGE_LANES + 2u] = (3u | 2u << 2);
+    lane_image[IMAGE_LANES + 7u] = 128;
+    check("BITS out of range is refused", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
+    lane_image[IMAGE_LANES + 7u] = 27;
+    lane_image[3] = '1';
+    check("and so is any other magic", tack_load_pattern(0, lane_image, len) != 0, 0, 0);
+    tack_post_bits(127);
+    tack_post_lane(2, 0, 0);
+    tack_post_length(2, 16);
+    run(2);
+}
+
 static void pattern_tests(void)
 {
     const int vol = probe_param_vol1();
@@ -507,7 +558,7 @@ static void pattern_tests(void)
 
 /* the list of locks: more than the sequencer's two slots, in any order, and only good images come back from the store */
 static uint8_t image[3840], broken[3840];
-#define IMG_LOCKS 1863u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 */
+#define IMG_LOCKS 1873u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 + 7 + 3 */
 #define IMG_LEN 1854u
 
 static uint32_t mutate(uint32_t len, void (*f)(uint8_t *))
@@ -928,6 +979,7 @@ int main(void)
     keys_tests();
     step_tests();
     pattern_tests();
+    lane_format_tests();
 
     ul_tests();
 

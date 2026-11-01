@@ -1,0 +1,437 @@
+# How a lane plays: firmware/fm1/build/host/tack_host firmware/fm1/tests/lanes.txt OUTDIR
+# A step is 125 ms at the default 120 BPM. ARP's first screen: K1 length, K2 direction, K3 speed, K4 nudge
+wait 600
+
+# a lane of 4, cut to length without touching its steps
+tapkey 0
+wait 30
+tapkey 4
+wait 30
+expect step0 1
+expect step2 1
+tap ARP
+wait 40
+expect lanepage 1
+expect lanedir 0
+expect lanespeed 0
+turn K1 -12
+wait 40
+expect len0 4
+expect eu0 4
+expect step0 1
+expect step2 1
+turn K1 12
+wait 40
+expect len0 16
+turn K1 -12
+wait 40
+shot lane_page.png
+
+# forward, as it always was
+press PLAY
+wait 20
+expect head 0
+wait 125
+expect head 1
+wait 125
+expect head 2
+wait 125
+expect head 3
+wait 125
+expect head 0
+release PLAY
+wait 20
+tap PLAY
+wait 60
+
+# reverse: the last step first
+turn K2 1
+wait 40
+expect lanedir 1
+press PLAY
+wait 20
+expect head 3
+wait 125
+expect head 2
+wait 125
+expect head 1
+wait 125
+expect head 0
+wait 125
+expect head 3
+release PLAY
+wait 20
+tap PLAY
+wait 60
+
+# ping-pong: each end plays twice, and each way is a pass
+turn K2 1
+wait 40
+expect lanedir 2
+press PLAY
+wait 20
+expect head 0
+wait 125
+expect head 1
+wait 125
+expect head 2
+wait 125
+expect head 3
+wait 125
+expect head 3
+wait 125
+expect head 2
+wait 125
+expect head 1
+wait 125
+expect head 0
+wait 125
+expect head 0
+wait 125
+expect head 1
+release PLAY
+wait 20
+tap PLAY
+wait 60
+
+# half speed: each step holds for two, and clockwise is back to full. A step plays once in its two
+turn K2 -2
+wait 40
+expect lanedir 0
+turn K3 -1
+wait 40
+expect lanespeed 1
+press PLAY
+wait 20
+expect head 0
+wait 125
+expect head 0
+wait 125
+expect head 1
+wait 125
+expect head 1
+wait 125
+expect head 2
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K3 -1
+wait 40
+expect lanespeed 2
+press PLAY
+wait 20
+expect head 0
+wait 375
+expect head 0
+wait 125
+expect head 1
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K3 2
+wait 40
+expect lanespeed 0
+
+# hits: drum 2, two steps in a lane of 4, once a pass in every direction. A stop before the 5th pass: 4 passes, 8 hits and the select
+tapkey 3
+wait 60
+expect fires1 1
+tapkey 0
+wait 30
+tapkey 4
+wait 30
+turn K1 -12
+wait 40
+expect len1 4
+turn K2 1
+wait 40
+expect lanedir 1
+tap PLAY
+wait 1830
+tap PLAY
+wait 60
+expect fires1 9
+turn K2 1
+wait 40
+tap PLAY
+wait 1830
+tap PLAY
+wait 60
+expect fires1 17
+turn K2 1
+wait 40
+expect lanedir 3
+tap PLAY
+wait 1830
+tap PLAY
+wait 60
+expect fires1 25
+tap PLAY
+wait 1830
+tap PLAY
+wait 60
+expect fires1 33
+
+# at half speed a pass is twice as long
+turn K3 -1
+wait 40
+tap PLAY
+wait 1830
+tap PLAY
+wait 60
+expect fires1 37
+turn K3 1
+wait 40
+expect lanespeed 0
+
+# nudged early, reversed: the step after the first of the pass is the one before it by number. Drum 3, step 3, 7 early, in
+# the window of step 4, which plays first. Taken for step 1, it would never play
+tapkey 5
+wait 60
+expect fires2 1
+tapkey 4
+wait 30
+turn K1 -12
+wait 40
+turn K2 1
+wait 40
+turn K4 -7
+wait 40
+expect lanenudge -7
+press PLAY
+wait 100
+expect fires2 2
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K4 7
+wait 40
+turn K2 -1
+wait 40
+
+# recurrence reversed: snare, step 4, plays on the second pass only, 7 early. It is the first of a reversed pass, so its early
+# hit, in the last step of the first pass, belongs to the pass about to start
+tapkey 8
+wait 60
+expect fires3 1
+tapkey 6
+wait 40
+key 6 down
+wait 40
+turn SELECT 1
+wait 40
+tapkey 3
+wait 40
+tapkey 1
+wait 40
+expect recurmask3 2
+turn ALGO -7
+wait 40
+key 6 up
+wait 40
+expect step3 1
+turn K1 -12
+wait 40
+expect len3 4
+turn K2 1
+wait 40
+press PLAY
+wait 340
+expect fires3 1
+wait 100
+expect fires3 2
+release PLAY
+wait 20
+tap PLAY
+wait 60
+turn K2 -1
+wait 40
+
+# a slow lane runs on across its pattern's repeats: cymbal, 16 steps at half speed, on step 9 after a whole 16 ticks and 2 more
+tapkey 10
+wait 60
+turn K3 -1
+wait 40
+expect lanespeed 1
+press PLAY
+wait 2270
+expect head 9
+release PLAY
+wait 20
+tap PLAY
+wait 60
+
+# and a queued pattern waits for the longest lane at full speed, 2 s, not for the slow lane's 4 s
+tap PLAY
+wait 200
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 60
+expect homenext 1
+wait 1400
+expect homenext 1
+expect pattern 0
+wait 500
+expect pattern 1
+expect homenext -1
+tap PLAY
+wait 60
+
+# a lane's direction is the pattern's: this one has none. And back, and copied
+expect lanespeed 0
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+expect lanespeed 1
+tapkey 3
+wait 60
+expect lanedir 3
+key 25 down
+wait 40
+tapkey 4
+wait 60
+key 25 up
+wait 40
+press SEQ
+wait 30
+tapkey 4
+wait 30
+release SEQ
+wait 60
+expect pattern 2
+expect lanedir 3
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+
+# saved with the pattern, through a reboot
+tap HOME
+wait 40
+tap SAVE
+wait 300
+reboot
+wait 600
+tapkey 3
+wait 60
+expect pattern 0
+expect len1 4
+expect lanedir 3
+tapkey 10
+wait 60
+expect lanespeed 1
+
+# live recording goes to the step that plays next, not the next by number: open hat, a lane of 4 reversed, late in its 2nd step
+tapkey 15
+wait 60
+tap ARP
+wait 40
+turn K1 -12
+wait 40
+turn K2 1
+wait 40
+expect step1 0
+expect step3 0
+tap REC
+wait 40
+press PLAY
+wait 200
+key 15 down
+wait 20
+key 15 up
+wait 20
+release PLAY
+wait 40
+tap PLAY
+wait 60
+tap REC
+wait 40
+expect step1 1
+expect step3 0
+tap HOME
+wait 40
+
+# SEQ held with several white keys is a chain; COPY tapped on the SONG page writes it in, and the row moves past it
+press SEQ
+wait 30
+tapkey 0
+wait 30
+tapkey 2
+wait 30
+tapkey 4
+wait 30
+release SEQ
+wait 60
+expect songmode 1
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 40
+expect songpage 1
+expect songlen 0
+shot song_chain.png
+tapkey 25
+wait 60
+expect songlen 3
+expect songrow0 0
+expect songrow1 1
+expect songrow2 2
+expect songrow3 64
+expect songedit 3
+# again, after them
+tapkey 25
+wait 60
+expect songlen 6
+expect songrow3 0
+expect songedit 6
+# from an earlier row it writes over, and the rest stay
+turn K1 -5
+wait 40
+expect songedit 1
+tapkey 25
+wait 60
+expect songlen 6
+expect songrow1 0
+expect songrow2 1
+expect songrow3 2
+expect songrow4 1
+expect songedit 4
+# COPY with a white key is still a copy, and writes no rows
+key 25 down
+wait 40
+tapkey 18
+wait 60
+key 25 up
+wait 40
+expect songlen 6
+expect songedit 4
+
+# with one pattern picked there is no chain, and COPY writes nothing
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect songmode 0
+tapkey 25
+wait 60
+expect songlen 6
+expect songedit 4
+tap HOME
+wait 40
+expect dropped 0

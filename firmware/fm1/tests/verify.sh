@@ -17,7 +17,7 @@ export JIELI_TOOLCHAIN=$HOME/.jieli/toolchain AC79_SDK=$HOME/.jieli/ac79-sdk JIE
 python3 third_party/fm1-base/tools/build.py firmware/fm1 2>&1 | grep -E '^  (ok|FAIL|fail)|error|^package|ERROR|failed'
 CC=clang python3 third_party/fm1-base/tools/build.py firmware/fm1 --host 2>&1 | grep -E ' error|undefined|did not|^host'
 python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'KITTWO  ' + bytes([50]) * 248)" > "$out/sim/kits.bin"
-for t in keys sequencer song note kits recur rows voice clock fxdc pages; do
+for t in keys sequencer song note kits recur rows voice clock fxdc pages shapes lanes crush; do
     (cd "$out/sim" && timeout 60 "$root/firmware/fm1/build/host/tack_host" "$root/firmware/fm1/tests/$t.txt" . 2>&1 | grep -v -E '^  ok' | tail -3)
 done
 dup=$(cd "$out/sim" && timeout 60 "$root/firmware/fm1/build/host/tack_host" "$root/firmware/fm1/tests/midi_once.txt" . 2>&1 | grep -E '^  out (80|90)' | uniq -d | wc -l)
@@ -31,6 +31,21 @@ for f in sys.argv[1:]:
     s = a[n:]
     if not s or max(abs(x) for x in s) > 2:
         sys.exit(1)
+PY
+python3 -I - "$out/sim/crush_off.wav" "$out/sim/crush_on.wav" "$out/sim/bits_on.wav" "$out/sim/bits_quiet.wav" <<'PY' || echo "FAIL RATE or BITS did not reach the audio"
+import array, sys, wave
+def repeats(f):
+    w = wave.open(f)
+    a = array.array("h", w.readframes(w.getnframes()))[::2]
+    return sum(x == y for x, y in zip(a, a[1:])) / len(a)
+off, on = repeats(sys.argv[1]), repeats(sys.argv[2])
+def samples(f):
+    w = wave.open(f)
+    return array.array("h", w.readframes(w.getnframes()))
+levels, full = len(set(samples(sys.argv[3]))), len(set(samples(sys.argv[1])))
+quiet = samples(sys.argv[4])
+print(f"rate: {off:.3f} of samples repeat at 127, {on:.3f} at 10; bits: {full} levels at 16, {levels} at about 4; quiet peak {max(map(abs, quiet))}")
+sys.exit(0 if on > off + 0.3 and levels < 40 and full > 1000 and max(map(abs, quiet)) == 0 else 1)
 PY
 python3 -I firmware/fm1/tests/grid.py "$root/firmware/fm1/build/host/tack_host" "$out/sim" | grep -E '^FAIL' || true
 timeout 300 bash firmware/fm1/tests/lock_test.sh "$out/lock" 2>&1 | tail -1

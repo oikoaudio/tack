@@ -60,7 +60,6 @@ tapkey 19
 wait 30
 tap HOME
 wait 60
-shot overview.png
 
 # the hats in the bars view: accents, a nudge, a lock and a recurrence
 tapkey 15
@@ -167,3 +166,54 @@ wait 1500
 shot fx.png
 tap HOME
 wait 40
+tapkey 15
+wait 40
+tap ARP
+wait 40
+turn K2 2
+wait 1500
+shot lane.png
+turn K2 -2
+wait 40
+tap ARP
+wait 40
+tap ARP
+wait 40
+turn K1 3
+wait 1500
+shot velocity.png
+tap HOME
+wait 40
+
+# the front page: the groove running, with its hats shaped, a few more patterns and a chain
+tap HOME
+wait 40
+tapkey 1
+wait 40
+turn ALGO 24
+wait 1700
+key 25 down
+wait 40
+tapkey 2
+wait 40
+tapkey 4
+wait 40
+tapkey 6
+wait 40
+key 25 up
+wait 40
+press SEQ
+wait 30
+tapkey 0
+wait 30
+tapkey 2
+wait 30
+tapkey 6
+wait 30
+release SEQ
+wait 60
+tap PLAY
+wait 1140
+shot overview.png
+tap PLAY
+wait 60

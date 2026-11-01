@@ -20,7 +20,11 @@ midi USB 90 3C 7F
 wait 300
 expect midi 1
 expect param3 >0
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 tap HOME
 wait 40

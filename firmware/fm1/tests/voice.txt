@@ -215,7 +215,11 @@ expect noteview 1
 expect notemode 1
 
 # NOTE left on takes no page's own keys: the song's white keys, the FX sends, and each comes back to notes
+press SEQ
+wait 20
 tap ARP
+wait 20
+release SEQ
 wait 40
 expect songpage 1
 expect songlen 0
@@ -427,10 +431,9 @@ expect voiceview 1
 expect selstep 2
 expect selslot3 100
 
-# a tap of SEL shows the step's dials throughout, and a turn with it held is the lane's and walks no step
+# a tap of SEL walks the steps, and a turn with it held is the step's and walks none
 press SEL
 wait 40
-expect lanedials 0
 release SEL
 wait 40
 expect selstep 3
@@ -438,8 +441,6 @@ press SEL
 wait 40
 turn K4 1
 wait 40
-expect lanedials 1
-shot voice_lane.png
 turn K4 -1
 wait 40
 release SEL

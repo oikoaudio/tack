@@ -35,6 +35,8 @@ enum { TACK_SONG_OFF, TACK_SONG_CHAIN, TACK_SONG_ON };
 int tack_post_chain(uint8_t index, uint8_t pattern);     /* after a tack_post_pattern, index 0 of the chain */
 int tack_post_song_row(uint8_t row, uint8_t value);
 int tack_post_song_on(uint8_t on);
+uint32_t tack_chain_len(void);
+int tack_post_chain_to_song(uint8_t row);                /* the chain playing, written over the song's rows from this one */
 int tack_post_mute(uint8_t voice, uint8_t muted);
 int tack_post_record(uint8_t on);
 int tack_post_ext_sync(uint8_t on);
@@ -67,6 +69,7 @@ int tack_step_on(uint8_t voice, uint8_t step);
 int tack_playhead(uint8_t voice);
 int tack_running(void);
 int tack_pattern(void);
+int tack_pattern_next(void);                             /* the pattern queued for the bar's end, -1 none */
 void tack_pattern_now(uint8_t pattern);                  /* from the audio interrupt, as tack_post_pattern */
 uint8_t tack_voice_fires(uint8_t voice);                 /* a count of its triggers, from any source */
 int tack_lane_used(uint8_t voice);                       /* it has steps in the active pattern */
@@ -132,9 +135,19 @@ enum { TACK_EU_LENGTH, TACK_EU_HITS, TACK_EU_ROTATE, TACK_EU_SLOTS };
 #define TACK_EU_MAX 16          /* as the LXR's menu: the generator recurses without end from length 18 with one hit */
 uint8_t tack_euclid_get(uint8_t voice, uint32_t slot);
 int tack_euclid_turn(uint8_t voice, uint32_t slot, int32_t e);
+void tack_euclid_length(uint8_t voice, uint32_t length);  /* the dials follow a lane cut to length by hand; no step changes */
+int tack_euclid_can_undo(uint8_t voice);
+int tack_post_euclid_undo(uint8_t voice);              /* the lane as it was before the first turn, once */
 /* The active pattern onto another. Lanes, in the active pattern: back to empty, 16 steps, no locks */
 int tack_post_copy(uint8_t dst);
 int tack_post_clear(uint8_t voice);
+/* Velocity shapes: a shape writes new velocities into the lane's steps, every step, on or off, so what is saved is the
+ * velocities. Shape 0 puts back the velocities from before the first shape, on the last lane shaped, once */
+#define TACK_SHAPE_N 12
+const char *tack_shape_name(uint32_t shape);             /* 1 to TACK_SHAPE_N */
+uint32_t tack_shape_steps(uint32_t shape);
+int tack_shape_can_undo(uint8_t voice);
+int tack_post_shape(uint8_t voice, uint32_t shape, uint32_t shift, uint32_t centre, uint32_t amount);
 
 /* One hit's timing and level. A nudge is -7 to +7 eighths of a step */
 enum { TACK_ST_NUDGE, TACK_ST_FLAM, TACK_ST_PROB, TACK_ST_VEL, TACK_ST_NOTE, TACK_ST_SLOTS };
@@ -144,6 +157,18 @@ int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot);
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
 const char *tack_flam_name(int flam);
 /* The whole lane: every step's nudge moves by e, so a hit's own nudge stays relative. Get reads its first hit */
+/* How a lane plays: a direction and a speed, saved with the pattern. A pass starts and ends on the same bar in every direction,
+ * ping-pong turns at each pass's end, and random plays every step once a pass in a new order. Half and quarter speed hold each
+ * step for 2 or 4 ticks. A pattern's length is its longest lane in steps at full speed: a slow lane runs on across the repeats
+ * of its pattern, and a change of pattern cuts it off */
+uint32_t tack_lane_dir(uint8_t voice);
+uint32_t tack_lane_speed(uint8_t voice);
+const char *tack_lane_dir_name(uint32_t dir);
+const char *tack_lane_speed_name(uint32_t speed);
+int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed);
+#define TACK_LANE_DIRS 4u
+#define TACK_LANE_SPEEDS 3u
+uint32_t tack_patterns_used(void);                       /* a bit each: the patterns with a step set */
 int tack_lane_nudge_get(uint8_t voice);
 int tack_lane_nudge_turn(uint8_t voice, int32_t e);
 
@@ -161,6 +186,11 @@ const char *tack_fx_label(uint32_t slot);
 const char *tack_fx_type_name(void);
 int tack_fx_send(uint32_t voice);
 int tack_post_fx_send(uint32_t voice, uint8_t on);
+const TackSlot *tack_send_slot(uint32_t voice);
+uint16_t tack_rate_param(void);          /* every voice's sample rate before the FX, 127 no change: a kit's parameter */
+/* the bit depth of the final mix, after the FX and before MASTER, saved with the pattern: 127 no change, 0 about 2 bits */
+int tack_bits(void);
+int tack_post_bits(uint8_t value);
 
 /* Saving: main loop, with the sequencer stopped. The image is the active pattern, the LXR's backup buffer */
 const uint8_t *tack_kit(void);

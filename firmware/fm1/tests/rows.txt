@@ -17,11 +17,12 @@ release OCT+
 wait 40
 expect row 0
 expect page 10
-# below OSC on a drum: its pitch and the MOD EG, the same parameters as the main page and ENV
+# PITCH leads the middle row on a drum, the main page's own, and below it are FINE and the MOD EG, as on ENV
+expect side0 -29
 press OCT-
 wait 40
 expect row 20
-expect side0 -29
+expect side0 0
 shot edit_pitch.png
 turn K2 7
 wait 40
@@ -273,4 +274,85 @@ wait 40
 tap HOME
 wait 40
 expect step0 1
+
+# the cymbal and hats have FINE first and PITCH last, the main page's own
+tapkey 10
+wait 40
+expect sl0 127
+tap EDIT
+wait 40
+expect page 10
+expect sl0 63
+expect sl3 127
+turn K4 -5
+wait 40
+expect sl3 122
+expect sl0 63
+tap HOME
+wait 40
+expect sl0 122
+turn K1 5
+wait 40
+
+# FX SEND on OUTPUT is the FX page's send, and takes no lock
+tapkey 1
+wait 40
+tap EDIT
+wait 40
+tap EDIT
+wait 40
+expect page 12
+expect send0 0
+press OCT-
+wait 40
+expect row 4
+turn K4 1
+wait 40
+expect send0 1
+expect sl3 >0
+key 0 down
+wait 40
+turn K4 -1
+wait 40
+expect send0 1
+expect lockcount 2
+key 0 up
+wait 40
+turn K4 -1
+wait 40
+expect send0 0
+release OCT-
+wait 40
+tap HOME
+wait 40
+
+# RATE, every voice's sample rate, and BITS, the mix's depth: GLO, OCT- held, K2 and K3
+tap GLO
+wait 40
+expect crush 127
+expect bits 127
+expect bitslabel 16
+press OCT-
+wait 40
+turn K2 -100
+wait 40
+expect crush 27
+turn K2 100
+wait 40
+expect crush 127
+turn K3 -64
+wait 40
+expect bits 63
+expect bitslabel 9
+turn K3 -200
+wait 40
+expect bits 0
+expect bitslabel 2
+turn K3 127
+wait 40
+expect bits 127
+release OCT-
+wait 40
+tap HOME
+wait 40
 expect dropped 0

@@ -30,23 +30,56 @@ wait 40
 expect setpage 1
 tap ARP
 wait 40
-expect songpage 1
+expect lanepage 1
 expect setpage 0
 tap ARP
 wait 40
-expect songpage 1
+expect eupage 1
+tap ARP
+wait 40
+expect velpage 1
+tap ARP
+wait 40
+expect velpage 0
+expect lanepage 1
 
 # the two black keys before COPY do nothing
 tapkey b8
 wait 40
-expect songpage 1
+expect lanepage 1
 tapkey b9
 wait 40
-expect songpage 1
+expect lanepage 1
 tap HOME
 wait 40
 expect songpage 0
 expect page 0
+
+# SEQ held with ARP is the song. Its release does not go on to a detail, and ARP goes to its own first screen
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 40
+expect songpage 1
+expect voiceview 0
+tap ARP
+wait 40
+expect lanepage 1
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 40
+expect songpage 1
+tap SEQ
+wait 40
+expect songpage 0
+expect voiceview 1
+tap HOME
+wait 40
 tap EDIT
 wait 40
 expect page 10

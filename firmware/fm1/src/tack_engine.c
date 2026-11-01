@@ -31,6 +31,8 @@ uint16_t tack_voice_param(uint32_t voice, uint32_t slot) { return VOICE_PARAM[vo
 typedef struct { const char *const *names; const uint8_t *fw; uint8_t count; } TackEnum;
 typedef struct { uint8_t group; const char *title; uint8_t graph; TackSlot s[4]; } TackPage;
 #include "tack_pages.h"
+#include "tack_shapes.h"
+_Static_assert(sizeof SHAPES / sizeof SHAPES[0] == TACK_SHAPE_N, "the tables");
 
 static const TackPage *page_at(uint32_t voice, uint32_t group, uint32_t sub)
 {
@@ -186,11 +188,22 @@ int tack_post_fx_send(uint32_t voice, uint8_t on)
 {
     return tack_post_param(fx_route(voice), on ? MIXER_ROUTING_FX_BUS : MIXER_ROUTING_DAC1_STEREO);
 }
+/* the send as a dial on OUTPUT, which reads as OFF or ON: a route of 0 is the first name, and any other the last. A turn goes
+ * through tack_post_fx_send, as its values are routes */
+const TackSlot *tack_send_slot(uint32_t voice)
+{
+    static TackSlot send[TACK_FX_SENDS];
+    const uint32_t i = voice < TACK_FX_SENDS ? voice : TACK_FX_SENDS - 1u;
+    static const uint8_t OFF_ON = 6u;            /* en of tack_pages.h's {"OFF","ON"} */
+    send[i] = (TackSlot){"FX SEND", fx_route(voice), 1, OFF_ON, 0, 0};
+    return &send[i];
+}
+uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -230,6 +243,7 @@ static uint8_t wheel_on, wheel_over;            /* the flywheel below is running
                                                  * next ones from outside are already played */
 static uint8_t clock_w, clock_held;             /* external clock: the next slot, the times held */
 static int recur_plays(uint8_t track, uint8_t step, int8_t position);
+static uint8_t bits_of[NUM_PATTERN];            /* how far each pattern takes BITS: 0 not at all, 127 the fewest bits */
 static void lane_wrap(uint8_t track);
 static void lanes_reset(void);
 
@@ -289,6 +303,8 @@ int tack_post_pattern(uint8_t pattern) { return post(EV_PATTERN, pattern, 0, 0);
 int tack_post_chain(uint8_t index, uint8_t pattern) { return post(EV_CHAIN, index, pattern, 0); }
 int tack_post_song_row(uint8_t row, uint8_t value) { return post(EV_SONG_ROW, row, value, 0); }
 int tack_post_song_on(uint8_t on) { return post(EV_SONG_ON, on, 0, 0); }
+int tack_post_bits(uint8_t value) { return post(EV_BITS, value, 0, 0); }
+int tack_post_chain_to_song(uint8_t row) { return post(EV_CHAIN_SONG, row, 0, 0); }
 int tack_post_mute(uint8_t voice, uint8_t muted) { return post(EV_MUTE, voice, muted, 0); }
 int tack_post_record(uint8_t on)
 {
@@ -340,6 +356,16 @@ int tack_euclid_turn(uint8_t voice, uint32_t slot, int32_t e)
         u[TACK_EU_ROTATE] = (uint8_t)(u[TACK_EU_LENGTH] - 1u);
     return post5(EV_EUCLID, voice, u[TACK_EU_LENGTH], u[TACK_EU_HITS], u[TACK_EU_ROTATE]);
 }
+int tack_post_euclid_undo(uint8_t voice) { return post(EV_EU_UNDO, voice, 0, 0); }
+void tack_euclid_length(uint8_t voice, uint32_t length)
+{
+    uint8_t *u = ui_eu[voice];
+    u[TACK_EU_LENGTH] = (uint8_t)(length > TACK_EU_MAX ? TACK_EU_MAX : length);
+    if (u[TACK_EU_HITS] > u[TACK_EU_LENGTH])
+        u[TACK_EU_HITS] = u[TACK_EU_LENGTH];
+    if (u[TACK_EU_ROTATE] >= u[TACK_EU_LENGTH])
+        u[TACK_EU_ROTATE] = (uint8_t)(u[TACK_EU_LENGTH] - 1u);
+}
 _Static_assert(sizeof(StepTiming) == 1u, "the backup buffer copies step timing as bytes");
 #define SHIFT_ZERO 7                     /* a stored shift of 7 is on the grid */
 #define FLAMS 6
@@ -382,6 +408,12 @@ int tack_lane_nudge_turn(uint8_t voice, int32_t e)
 }
 int tack_post_copy(uint8_t dst) { return post(EV_COPY, dst, 0, 0); }
 int tack_post_clear(uint8_t voice) { return post(EV_CLEAR, voice, 0, 0); }
+int tack_post_shape(uint8_t voice, uint32_t shape, uint32_t shift, uint32_t centre, uint32_t amount)
+{
+    return post5(EV_SHAPE, voice, (uint8_t)(shape | shift << 4), (uint8_t)centre, (uint8_t)amount);
+}
+const char *tack_shape_name(uint32_t shape) { return shape && shape <= TACK_SHAPE_N ? SHAPES[shape - 1u].name : "OFF"; }
+uint32_t tack_shape_steps(uint32_t shape) { return shape && shape <= TACK_SHAPE_N ? SHAPES[shape - 1u].n : 1u; }
 
 /* a kit in the audio interrupt: the engine has one writer. Its parameters take a block's time, as on the LXR */
 static const uint8_t *volatile kit_pending;
@@ -580,9 +612,9 @@ static int recur_plays(uint8_t track, uint8_t step, int8_t position)
     if (st->param1Nr == NO_AUTOMATION)
         return 1;
     pass = lane_pass[seq_activePattern][track];
-    if (position > 0 && step == 0u)              /* nudged early, it belongs to the pass about to start */
+    if (position > 0 && seq_laneAtEdge(track, 1))   /* nudged early, it belongs to the pass about to start */
         pass = (pass + 1u) % LANE_PASSES;
-    else if (position < 0 && (int)step + 1 == tack_length(track))   /* nudged late, the one just ended */
+    else if (position < 0 && seq_laneAtEdge(track, -1))   /* nudged late, the one just ended */
         pass = (pass + LANE_PASSES - 1u) % LANE_PASSES;
     return (st->param1Val >> (pass % st->param1Nr)) & 1u;
 }
@@ -636,12 +668,17 @@ const uint8_t *tack_kit(void) { return shadow; }
 uint32_t tack_kit_size(void) { return sizeof shadow; }
 
 /* A pattern as the store holds it, little-endian: the magic, u16 the count of locks, then for each track and step volume,
- * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the locks, and in what is left the steps
+ * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes, BITS and two bytes kept, the locks, and in what is left the steps
  * with recurrence, 3 bytes each: the key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as
  * they need to be. Anything else is refused whole: patterns of older builds, and whatever a bad write or a bad file left */
-#define IMAGE_MAGIC 0x3254504Bu          /* "KPT2" */
+#define IMAGE_MAGIC 0x3454504Bu          /* "KPT4" */
+#define IMAGE_MAGIC_3 0x3354504Bu        /* "KPT3": as this, without the pattern's settings after the modes */
+#define IMAGE_MAGIC_2 0x3254504Bu        /* "KPT2": and without the lanes' modes after the kit, so forward at full speed */
 #define IMAGE_STEPS (NUM_TRACKS * NUM_STEPS)
-#define IMAGE_HEAD (6u + 3u * IMAGE_STEPS + IMAGE_STEPS + NUM_BARS * NUM_TRACKS * 2u + NUM_TRACKS + 2u)
+#define IMAGE_HEAD_2 (6u + 3u * IMAGE_STEPS + IMAGE_STEPS + NUM_BARS * NUM_TRACKS * 2u + NUM_TRACKS + 2u)
+#define IMAGE_HEAD_3 (IMAGE_HEAD_2 + NUM_TRACKS)
+#define IMAGE_SETTINGS 3u                /* BITS, and two bytes kept for morph: zero until then */
+#define IMAGE_HEAD (IMAGE_HEAD_3 + IMAGE_SETTINGS)
 #define IMAGE_MAX (IMAGE_HEAD + TACK_LOCKS_MAX * sizeof(Lock))
 _Static_assert(IMAGE_MAX <= 3840u, "a pattern is one store object (PLAT_STORE_MAX)");
 _Static_assert(NUM_TRACKS == TACK_VOICES && NUM_STEPS == 64, "the image's size and its keys");
@@ -674,6 +711,11 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     o += NUM_TRACKS;
     *o++ = seq_patternSet.shuffle[pattern];
     *o++ = seq_patternSet.kitNr[pattern];
+    memcpy(o, seq_laneMode[pattern], NUM_TRACKS);
+    o += NUM_TRACKS;
+    *o++ = bits_of[pattern];
+    *o++ = 0;
+    *o++ = 0;
     memcpy(o, p->l, p->n * sizeof(Lock));
     o += p->n * sizeof(Lock);
     {
@@ -693,17 +735,27 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     }
 }
 
+/* the bytes before the locks, 0 for anything that is not a pattern */
+static uint32_t image_head(const uint8_t *in, uint32_t len)
+{
+    uint32_t magic;
+    if (len < 4u)
+        return 0;
+    magic = (uint32_t)in[0] | (uint32_t)in[1] << 8 | (uint32_t)in[2] << 16 | (uint32_t)in[3] << 24;
+    return magic == IMAGE_MAGIC ? IMAGE_HEAD : magic == IMAGE_MAGIC_3 ? IMAGE_HEAD_3 : magic == IMAGE_MAGIC_2 ? IMAGE_HEAD_2 : 0u;
+}
+
 static int image_ok(const uint8_t *in, uint32_t len)
 {
     const uint8_t *q;
+    const uint32_t head = image_head(in, len);
     uint32_t n, c, last = 0, run = 0;
-    if (len < IMAGE_HEAD || (uint32_t)in[0] << 0 != (IMAGE_MAGIC & 0xFFu) || in[1] != (uint8_t)(IMAGE_MAGIC >> 8) ||
-        in[2] != (uint8_t)(IMAGE_MAGIC >> 16) || in[3] != (uint8_t)(IMAGE_MAGIC >> 24))
+    if (!head || len < head)
         return 0;
     n = (uint32_t)in[4] | (uint32_t)in[5] << 8;
-    if (n > TACK_LOCKS_MAX || len < IMAGE_HEAD + n * sizeof(Lock) || (len - IMAGE_HEAD) % sizeof(Lock))
+    if (n > TACK_LOCKS_MAX || len < head + n * sizeof(Lock) || (len - head) % sizeof(Lock))
         return 0;
-    c = (len - IMAGE_HEAD) / sizeof(Lock) - n;
+    c = (len - head) / sizeof(Lock) - n;
     if (n + c > TACK_LOCKS_MAX)
         return 0;
     q = in + 6;
@@ -723,6 +775,15 @@ static int image_ok(const uint8_t *in, uint32_t len)
     if (q[0] > 127u || q[1] > 128u)
         return 0;
     q += 2;
+    if (head >= IMAGE_HEAD_3)
+        for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
+            if (*q >= LANE_MODE(0u, LANE_SPEEDS))
+                return 0;
+    if (head == IMAGE_HEAD) {
+        if (q[0] > 127u)
+            return 0;
+        q += IMAGE_SETTINGS;
+    }
     for (uint32_t i = 0; i < n; i++, q += sizeof(Lock)) {
         Lock l;
         memcpy(&l, q, sizeof l);
@@ -748,6 +809,7 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
 {
     const uint8_t *in = image;
     LockList *p = &lock_list[pattern];
+    const uint32_t head = image_head(in, len);
     uint32_t n;
     if (!image_ok(in, len))
         return -1;
@@ -772,10 +834,20 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
     in += NUM_TRACKS;
     seq_patternSet.shuffle[pattern] = *in++;
     seq_patternSet.kitNr[pattern] = *in++;
+    memset(seq_laneMode[pattern], 0, NUM_TRACKS);
+    bits_of[pattern] = 0;
+    if (head >= IMAGE_HEAD_3) {
+        memcpy(seq_laneMode[pattern], in, NUM_TRACKS);
+        in += NUM_TRACKS;
+    }
+    if (head == IMAGE_HEAD) {
+        bits_of[pattern] = in[0];
+        in += IMAGE_SETTINGS;
+    }
     memcpy(p->l, in, n * sizeof(Lock));
     p->n = (uint16_t)n;
     in += n * sizeof(Lock);
-    for (uint32_t i = (len - IMAGE_HEAD) / sizeof(Lock) - n; i; i--, in += 3) {
+    for (uint32_t i = (len - head) / sizeof(Lock) - n; i; i--, in += 3) {
         const uint32_t key = (uint32_t)(in[2] >> 7) << 8 | in[0];
         Step *st = &seq_patternSet.seq_subStepPattern[pattern][key >> 6][key & 63u];
         st->param1Nr = (uint8_t)((in[2] & 0x7Fu) + 1u);
@@ -789,6 +861,8 @@ void tack_clear_pattern(uint8_t pattern)
 {
     seq_clearPattern(pattern);
     seq_patternSet.kitNr[pattern] = 0;
+    memset(seq_laneMode[pattern], 0, NUM_TRACKS);
+    bits_of[pattern] = 0;
     lock_list[pattern].n = 0;
     seq_copyPatternToBackupBuffer(seq_activePattern);
 }
@@ -805,6 +879,7 @@ _Static_assert(TACK_SONG_ROWS == MAX_SONG_LENGTH && TACK_SONG_STOP == SONG_END &
 static volatile uint8_t song_mode;
 
 int tack_song_mode(void) { return song_mode; }
+int tack_pattern_next(void) { return seq_pendingPattern != seq_activePattern ? seq_pendingPattern : -1; }
 int tack_song_pos(void) { return seq_songPositionPointer == 0xFFu ? -1 : seq_songPositionPointer; }
 uint8_t tack_song_get(uint32_t row) { return row < TACK_SONG_ROWS ? SONG_ROWS[row] : TACK_SONG_STOP; }
 const uint8_t *tack_song(void) { return SONG_ROWS; }
@@ -850,6 +925,33 @@ static void chain_add(uint8_t index, uint8_t pattern)
     song_mode = TACK_SONG_CHAIN;
 }
 
+uint32_t tack_chain_len(void)
+{
+    uint32_t n = 0;
+    while (n < TACK_CHAIN_MAX && CHAIN_ROWS[n] < NUM_PATTERN)
+        n++;
+    return n;
+}
+
+/* The chain over the song's rows from this one, as the white keys write them. The song keeps its end, and rows past the chain */
+static void chain_to_song(uint8_t row)
+{
+    uint32_t len = 0, n = tack_chain_len();
+    uint8_t end;
+    if (song_mode != TACK_SONG_CHAIN)
+        return;
+    while (len < TACK_SONG_ROWS - 1u && SONG_ROWS[len] < NUM_PATTERN)
+        len++;
+    end = SONG_ROWS[len];
+    if (row > len)
+        return;
+    if (row + n > TACK_SONG_ROWS - 1u)
+        n = TACK_SONG_ROWS - 1u - row;
+    memcpy(&SONG_ROWS[row], CHAIN_ROWS, n);
+    if (row + n > len)
+        SONG_ROWS[row + n] = end;
+}
+
 /* one pattern, ending a chain or song. Stopped: now; running: at the end of the bar, as on the LXR */
 void tack_pattern_now(uint8_t pattern)
 {
@@ -869,6 +971,39 @@ int tack_lane_used(uint8_t voice)
         if (seq_patternSet.seq_mainSteps[b][seq_activePattern][voice])
             return 1;
     return 0;
+}
+
+/* a bit each: the patterns with a step set */
+int tack_bits(void) { return 127 - bits_of[seq_activePattern]; }
+uint32_t tack_patterns_used(void)
+{
+    uint32_t used = 0;
+    for (uint32_t p = 0; p < TACK_PATTERNS; p++)
+        for (uint32_t v = 0; v < NUM_TRACKS; v++)
+            for (uint32_t b = 0; b < NUM_BARS; b++)
+                if (seq_patternSet.seq_mainSteps[b][p][v])
+                    used |= 1u << p;
+    return used;
+}
+
+_Static_assert(TACK_LANE_DIRS == LANE_DIRECTIONS && TACK_LANE_SPEEDS == LANE_SPEEDS, "the panel's dials");
+uint32_t tack_lane_dir(uint8_t voice) { return LANE_DIR(seq_laneMode[seq_activePattern][voice]); }
+uint32_t tack_lane_speed(uint8_t voice) { return LANE_SPEED(seq_laneMode[seq_activePattern][voice]); }
+const char *tack_lane_dir_name(uint32_t dir)
+{
+    static const char *const NAME[LANE_DIRECTIONS] = {"FWD", "REV", "PONG", "RAND"};
+    return NAME[dir < LANE_DIRECTIONS ? dir : 0];
+}
+const char *tack_lane_speed_name(uint32_t speed)
+{
+    static const char *const NAME[LANE_SPEEDS] = {"1X", "1/2", "1/4"};
+    return NAME[speed < LANE_SPEEDS ? speed : 0];
+}
+int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed)
+{
+    if (voice >= NUM_TRACKS || dir >= LANE_DIRECTIONS || speed >= LANE_SPEEDS)
+        return 0;
+    return post(EV_LANE_MODE, voice, LANE_MODE(dir, speed), 0);
 }
 
 /* Stopped, about to start: from the top of the list. The first step counts as a bar's end, which moves on a row */
@@ -909,6 +1044,80 @@ static void commit_active(void)
 {
     seq_copyPatternToBackupBuffer(seq_activePattern);
     dirty |= 1u << seq_activePattern;
+}
+
+/* What a generator is about to replace, for one lane of one pattern. Two lanes' worth would be two more of these */
+static struct { uint8_t vol[NUM_STEPS]; int8_t voice, pattern; } vel_undo = {.voice = -1};
+
+static struct { uint16_t bars[NUM_BARS]; uint8_t vol[NUM_STEPS], length; int8_t voice, pattern; } eu_undo = {.voice = -1};
+
+int tack_euclid_can_undo(uint8_t voice) { return eu_undo.voice == (int8_t)voice && eu_undo.pattern == (int8_t)seq_activePattern; }
+
+static void euclid_keep(uint8_t voice)
+{
+    const Step *p = seq_patternSet.seq_subStepPattern[seq_activePattern][voice];
+    if (tack_euclid_can_undo(voice))
+        return;
+    for (uint32_t b = 0; b < NUM_BARS; b++)
+        eu_undo.bars[b] = seq_patternSet.seq_mainSteps[b][seq_activePattern][voice];
+    for (uint32_t s = 0; s < NUM_STEPS; s++)
+        eu_undo.vol[s] = p[s].volume;
+    eu_undo.length = seq_patternSet.length[seq_activePattern][voice];
+    eu_undo.voice = (int8_t)voice;
+    eu_undo.pattern = (int8_t)seq_activePattern;
+}
+
+static void euclid_undo(uint8_t voice)
+{
+    Step *p = seq_patternSet.seq_subStepPattern[seq_activePattern][voice];
+    if (voice >= NUM_TRACKS || !tack_euclid_can_undo(voice))
+        return;
+    for (uint32_t b = 0; b < NUM_BARS; b++)
+        seq_patternSet.seq_mainSteps[b][seq_activePattern][voice] = eu_undo.bars[b];
+    for (uint32_t s = 0; s < NUM_STEPS; s++)     /* only whether it is on: a velocity set since stays */
+        p[s].volume = (uint8_t)((p[s].volume & STEP_VOLUME_MASK) | (eu_undo.vol[s] & STEP_ACTIVE_MASK));
+    seq_patternSet.length[seq_activePattern][voice] = eu_undo.length;
+    eu_undo.voice = -1;
+    commit_active();
+}
+
+int tack_shape_can_undo(uint8_t voice) { return vel_undo.voice == (int8_t)voice && vel_undo.pattern == (int8_t)seq_activePattern; }
+
+/* aww's rule: centre + contour x room x amount, room what the centre leaves on that side, and never below velocity 1.
+ * It reads no step's own velocity, so a turn never builds on the last one */
+static void velocity_shape(uint8_t voice, uint32_t shape, uint32_t shift, uint32_t centre, uint32_t amount)
+{
+    Step *p;
+    if (voice >= NUM_TRACKS || shape > TACK_SHAPE_N || centre > 127u || amount > 100u)
+        return;
+    p = seq_patternSet.seq_subStepPattern[seq_activePattern][voice];
+    if (!shape) {
+        if (tack_shape_can_undo(voice)) {
+            for (uint32_t s = 0; s < NUM_STEPS; s++)
+                p[s].volume = (uint8_t)((p[s].volume & STEP_ACTIVE_MASK) | vel_undo.vol[s]);
+            vel_undo.voice = -1;
+            commit_active();
+        }
+        return;
+    }
+    if (!tack_shape_can_undo(voice)) {
+        for (uint32_t s = 0; s < NUM_STEPS; s++)
+            vel_undo.vol[s] = p[s].volume & STEP_VOLUME_MASK;
+        vel_undo.voice = (int8_t)voice;
+        vel_undo.pattern = (int8_t)seq_activePattern;
+    }
+    {
+        const TackShape *t = &SHAPES[shape - 1u];
+        for (uint32_t s = 0; s < NUM_STEPS; s++) {
+            const int32_t c = t->c[(s + t->n - shift % t->n) % t->n];
+            const int32_t room = c >= 0 ? 127 - (int32_t)centre : (int32_t)centre;
+            const int32_t top = 127 * 100, swing = c * room * (int32_t)amount;
+            int32_t v = (int32_t)centre + (swing + (swing >= 0 ? top / 2 : -top / 2)) / top;
+            v = v < 1 ? 1 : v > 127 ? 127 : v;
+            p[s].volume = (uint8_t)((p[s].volume & STEP_ACTIVE_MASK) | v);
+        }
+    }
+    commit_active();
 }
 
 static void set_step(uint8_t voice, uint8_t step, uint8_t on)
@@ -1029,6 +1238,19 @@ static void drain(void)
         case EV_SONG_ROW:
             song_row(e.a, e.b);
             break;
+        case EV_BITS:
+            bits_of[seq_activePattern] = (uint8_t)(127u - e.a);
+            commit_active();
+            break;
+        case EV_CHAIN_SONG:
+            chain_to_song(e.a);
+            break;
+        case EV_LANE_MODE:
+            if (e.a < NUM_TRACKS) {
+                seq_laneMode[seq_activePattern][e.a] = e.b;
+                commit_active();
+            }
+            break;
         case EV_SONG_ON:
             if (e.a)
                 song_on();
@@ -1074,16 +1296,25 @@ static void drain(void)
             break;
         case EV_EUCLID:
             if (e.a < NUM_TRACKS) {
+                euclid_keep(e.a);
                 euklid_setLength(e.a, e.b);
                 euklid_setSteps(e.a, e.c, seq_activePattern);
                 euklid_setRotation(e.a, e.d, seq_activePattern);
                 commit_active();
             }
             break;
+        case EV_EU_UNDO:
+            euclid_undo(e.a);
+            break;
+        case EV_SHAPE:
+            velocity_shape(e.a, e.b & 15u, (uint32_t)e.b >> 4, e.c, e.d);
+            break;
         case EV_COPY:
             if (e.a < NUM_PATTERN && e.a != seq_activePattern)
 {
                 seq_copyPattern(seq_activePattern, e.a);
+                memcpy(seq_laneMode[e.a], seq_laneMode[seq_activePattern], NUM_TRACKS);
+                bits_of[e.a] = bits_of[seq_activePattern];
                 lock_list[e.a].n = lock_list[seq_activePattern].n;
                 memcpy(lock_list[e.a].l, lock_list[seq_activePattern].l, lock_list[e.a].n * sizeof(Lock));
                 dirty |= 1u << e.a;
@@ -1371,9 +1602,29 @@ _Static_assert(TACK_BLOCK == 64, "the mixer's taps");
 
 static uint32_t pair(int32_t a, int32_t b) { return (uint32_t)(a & 0xFFFF) | (uint32_t)b << 16; }
 
+/* BITS: the mix on steps of 2 to the 0 to 14, in a line between powers of two so that the dial has no jumps. It rounds to the
+ * nearest step and a step is centred on 0, so silence stays silent and the wave stays centred */
+static uint8_t bits_now;
+static float bits_step = 1.0f, bits_inv = 1.0f;
+
+static void bits_set(uint32_t amount)
+{
+    const uint32_t span = amount * 14u;
+    bits_step = (float)(1u << (span / 127u)) * (1.0f + (float)(span % 127u) / 127.0f);
+    bits_inv = 1.0f / bits_step;
+    bits_now = (uint8_t)amount;
+}
+
+static int32_t bits_round(int32_t s)
+{
+    const float q = (float)s * bits_inv;
+    const int32_t r = (int32_t)((float)(int32_t)(q + (q < 0.0f ? -0.5f : 0.5f)) * bits_step);
+    return r > 32767 ? 32767 : r < -32768 ? -32768 : r;
+}
+
 void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
 {
-    int16_t dac1[TACK_BLOCK * 2], dac2[TACK_BLOCK * 2];
+    int16_t dac1[TACK_BLOCK * 2], dac2[TACK_BLOCK * 2], mix[TACK_BLOCK * 2];
     uint32_t *ul = app_ul_out;
     while (n >= TACK_BLOCK) {
         int i;
@@ -1385,17 +1636,21 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
         seq_tick();
         mixer_tapOn = app_ul_want;
         lxr_host_renderBlock(dac1, dac2);
+        if (bits_now != bits_of[seq_activePattern])
+            bits_set(bits_of[seq_activePattern]);
         for (i = 0; i < TACK_BLOCK * 2; i++) {
             /* every voice is routed to one pair (adjustValue in lxr_core.c); the other is silent, so the sum needs no
-             * headroom. 16 bits to 24, then MASTER */
+             * headroom. BITS comes after the FX and before MASTER, whose level then changes nothing. 16 bits to 24 */
             int32_t s = (int32_t)dac1[i] + dac2[i];
             s = s > 32767 ? 32767 : s < -32768 ? -32768 : s;
+            if (bits_now)
+                s = bits_round(s);
+            mix[i] = (int16_t)s;
             lr[i] = (int32_t)(((int32_t)s * (int32_t)gain_q12) >> 4);
         }
         if (app_ul_want) {
             for (i = 0; i < TACK_BLOCK; i++, ul += UL_WORDS) {
-                const int32_t l = (int32_t)dac1[2 * i] + dac2[2 * i], r = (int32_t)dac1[2 * i + 1] + dac2[2 * i + 1];
-                ul[0] = pair(l > 32767 ? 32767 : l < -32768 ? -32768 : l, r > 32767 ? 32767 : r < -32768 ? -32768 : r);
+                ul[0] = pair(mix[2 * i], mix[2 * i + 1]);
                 ul[1] = pair(mixer_tapVoice[0][i], mixer_tapVoice[1][i]);
                 ul[2] = pair(mixer_tapVoice[2][i], mixer_tapVoice[3][i]);
                 ul[3] = pair(mixer_tapVoice[4][i], mixer_tapVoice[5][i]);

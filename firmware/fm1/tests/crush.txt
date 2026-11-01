@@ -1,0 +1,93 @@
+# GLO's RATE and BITS reach the audio: firmware/fm1/build/host/tack_host firmware/fm1/tests/crush.txt OUTDIR. verify.sh counts how
+# often a sample repeats the one before it, which RATE's steps raise, the levels a stretch of BITS uses, and that silence
+# stays silent under it
+wait 600
+tapkey 15
+wait 40
+tapkey 0
+wait 30
+tapkey 4
+wait 30
+tapkey 7
+wait 30
+tapkey 11
+wait 30
+tapkey 14
+wait 30
+tapkey 18
+wait 30
+tap PLAY
+wait 100
+wav crush_off.wav
+wait 1500
+wavstop
+tap GLO
+wait 40
+press OCT-
+wait 40
+turn K2 -117
+wait 40
+release OCT-
+wait 40
+expect crush 10
+wav crush_on.wav
+wait 1500
+wavstop
+press OCT-
+wait 40
+turn K2 117
+wait 40
+turn K3 -110
+wait 40
+release OCT-
+wait 40
+expect crush 127
+expect bits 17
+wav bits_on.wav
+wait 1500
+wavstop
+tap PLAY
+wait 1200
+wav bits_quiet.wav
+wait 800
+wavstop
+press OCT-
+wait 300
+shot glo_low.png
+release OCT-
+wait 40
+
+# BITS is the pattern's: a copy takes it, an empty pattern has none, and it comes back with its pattern
+tap HOME
+wait 40
+key 25 down
+wait 40
+tapkey 4
+wait 60
+key 25 up
+wait 40
+press SEQ
+wait 30
+tapkey 6
+wait 30
+release SEQ
+wait 60
+expect pattern 3
+expect bits 127
+press SEQ
+wait 30
+tapkey 4
+wait 30
+release SEQ
+wait 60
+expect pattern 2
+expect bits 17
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 60
+expect pattern 0
+expect bits 17
+expect dropped 0
