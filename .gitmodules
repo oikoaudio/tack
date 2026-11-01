@@ -1,0 +1,3 @@
+[submodule "third_party/fm1-base"]
+	path = third_party/fm1-base
+	url = https://github.com/charlesvestal/fm1-base

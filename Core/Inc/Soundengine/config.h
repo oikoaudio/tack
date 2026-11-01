@@ -71,7 +71,9 @@
 
 #define SYNTH_FS 			I2S_AUDIOFREQ_44K		  	// the requested I2S samplerate => 44.1 kHz
 
+#ifndef REAL_FS
 #define REAL_FS				(float)44140.f//((float)44002.7573529412f) 	// since the prescaler wont allow for accurate 44.1kHz
+#endif
 #define REAL_FS2			(REAL_FS/2.f)
 													  	// this is the real sample rate our system is running
 //the number of drum voices (bd tom1 tom2)
@@ -96,6 +98,15 @@
 #define INDTCMZ __attribute__ ((section(".dtcmz")))
 
 #define IN_ITCM_RAM __attribute__((section(".itcm_text")))
+#endif
+
+// the FX lines are too big for the FM-1's main RAM, so its build gives them the big buffer region
+#if defined(LXR_FM1_BUILD) && !defined(PLAT_HOST)
+#define INFXRAM __attribute__((section(".pool")))
+#define INSEQRAM __attribute__((section(".pool")))
+#else
+#define INFXRAM INDTCMZ
+#define INSEQRAM
 #endif
 
 #endif /* CONFIG_H_ */

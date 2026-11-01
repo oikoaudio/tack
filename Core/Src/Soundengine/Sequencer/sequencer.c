@@ -140,7 +140,7 @@ float seq_lastShuffle = 0;
 #if USE_PATTERN_EDIT_BUFFER
 	PatternSet seq_patterns;
 #else
-	PatternSet seq_patternSet;
+	INSEQRAM PatternSet seq_patternSet;
 #endif
 
 PatternBackupBuffer patternBackupBuffer;
@@ -155,6 +155,13 @@ uint8_t seq_songPositionPointer = 0;	//for song playback, current song position
 
 //for the automation tracks each track needs 2 modNodes
 static AutomationNode seq_automationNodes[NUM_TRACKS][2];
+
+// a stored length of 0 means 16 (seq_nextStep); it also divides, so nothing may read the raw value for that
+static inline uint8_t seq_trackLength(uint8_t pattern, uint8_t track)
+{
+	const uint8_t length = seq_patternSet.length[pattern][track];
+	return length ? length : 16;
+}
 
 static void seq_sendMidi(MidiMsg msg);
 static void seq_sendRealtime(const uint8_t status);
@@ -456,7 +463,7 @@ void seq_sync()
 //------------------------------------------------------------------------------
 void seq_setNextPattern(const uint8_t patNr)
 {
-	if(patNr >= MAX_PATTERN) return;
+	if(patNr >= NUM_PATTERN) return;
 	seq_pendingPattern = patNr;
 	seq_loadPendigFlag = 1;
 
@@ -942,7 +949,7 @@ uint32_t flamIdxToPattern(uint8_t flamIdx)
 uint32_t seq_getShiftFlamPattern(const uint8_t track, uint8_t step, StepPosition stepPos)
 {
 #if 0
-	const uint8_t length = seq_patternSet.length[seq_activePattern][track];
+	const uint8_t length = seq_trackLength(seq_activePattern, track);
 	const uint8_t nextStep = (step+1)%length;
 	const uint8_t prevStep = step != 0 ? step - 1 : length-1;
 
@@ -1106,7 +1113,7 @@ void seq_processFlam(uint8_t idx)
 		{
 			//pattern takes main step active and probability into account
 #if 1
-			const uint8_t length = seq_patternSet.length[seq_activePattern][track];
+			const uint8_t length = seq_trackLength(seq_activePattern, track);
 			const uint8_t currentStep = seq_stepIndex[track];
 			const uint8_t nextStep = (seq_stepIndex[track]+1)%length;
 			const uint8_t prevStep = seq_stepIndex[track] != 0 ? seq_stepIndex[track] - 1 : length-1;
@@ -1171,7 +1178,7 @@ void seq_processFlam(uint8_t idx)
 
 
 					uint8_t flamCurrentStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][seq_stepIndex[track]]+1;
-					uint8_t length = patternSet->length[seq_activePattern][track];
+					uint8_t length = seq_trackLength(seq_activePattern, track);
 					uint8_t flamNextStep = seq_patternSet.seq_stepTiming[seq_activePattern][track][(seq_stepIndex[track]+1)%length]+1;
 					uint8_t shift = 0;
 					switch(flamCurrentStep)
@@ -1306,7 +1313,7 @@ IN_ITCM_RAM void seq_nextStep()
 				seq_setRunning(0);
 				//make sure pending pattern does not remain at 64 resulting in a seg fault.
 				seq_pendingPattern = seq_activeSong[0];
-				if(seq_pendingPattern >= 64) seq_pendingPattern  = 0;
+				if(seq_pendingPattern >= NUM_PATTERN) seq_pendingPattern  = 0;
 				seq_songPositionPointer = 0;
 				return;
 			}
@@ -2399,7 +2406,7 @@ void seq_addNote(uint8_t trackNr,uint8_t vel, uint8_t note)
 		*/
 
 		//limit to track length
-		quantizedStep = quantizedStep%seq_patternSet.length[targetPattern][trackNr];
+		quantizedStep = quantizedStep%seq_trackLength(targetPattern, trackNr);
 		if(step != quantizedStep)
 		{
 			step = quantizedStep;

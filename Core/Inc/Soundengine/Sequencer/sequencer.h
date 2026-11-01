@@ -30,7 +30,9 @@
   * 1 hiHat
   * track 7 is the open hh... it triggers the hihat voice but with longer decay. it chokes the closed hihat*/
 #define NUM_TRACKS 7
+#ifndef NUM_PATTERN
 #define NUM_PATTERN 16*4 //8
+#endif
 #define NUM_STEPS 64
 #define NUM_BARS 4	//since we access main steps as 64 bit union, other values than 4 will break the union approach
 #define MAX_PATTERN 64

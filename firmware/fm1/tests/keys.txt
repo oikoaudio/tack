@@ -1,0 +1,28 @@
+# Tack in the simulator: firmware/fm1/build/host/TACK_host firmware/fm1/tests/keys.txt OUTDIR
+wait 600
+shot boot.png
+# PLAY mode: the first seven white keys play the voices (it starts in STEP mode)
+tap SEQ
+wait 30
+expect stepmode 0
+wav keys.wav
+key 0 down
+wait 40
+expect voice 0
+key 0 up
+wait 400
+key 6 down
+wait 40
+expect voice 3
+key 6 up
+wait 400
+midi USB 90 3C 7F
+wait 300
+expect midi 1
+expect param3 >0
+turn K3 5
+wait 60
+expect param2 15
+shot edit.png
+wavstop
+expect dropped 0

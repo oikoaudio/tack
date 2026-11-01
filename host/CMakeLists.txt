@@ -78,6 +78,7 @@ add_library(lxr_engine STATIC
     ${LXR_CORE}/Src/Preset/initKit.c
     # modTargets: the list of valid modulation targets, used by the kit loader
     ${LXR_CORE}/Src/menu/Cc2Text.c
+    src/lxr_core.c
     src/lxr_host.c
     src/lxr_files.c
     src/lxr_params.c

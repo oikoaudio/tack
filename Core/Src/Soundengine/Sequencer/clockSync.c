@@ -28,6 +28,9 @@ uint32_t sync_delayedStepTimer = 0;
 //---------------------------------------------------------
 uint16_t sync_calcBpm(float timePerPulse)
 {
+	// Start and the first clock in one audio block: no time between them, and the bpm would be infinite
+	if(timePerPulse <= 0) return 1;
+
 	// 1 Minute has 60 * 1000 [ms]
 	//we have 24 pulses per quarter
 	//120 bpm = 120 quarters per minute

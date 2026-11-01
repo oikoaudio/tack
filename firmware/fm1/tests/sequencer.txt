@@ -1,0 +1,117 @@
+# The panel in the simulator: firmware/fm1/build/host/tack_host firmware/fm1/tests/sequencer.txt OUTDIR
+wait 600
+expect stepmode 1
+expect voice 0
+# four on the floor on drum 1: white keys 0 4 8 12 are keys 0 7 14 21
+tapkey 0
+wait 40
+tapkey 7
+wait 40
+tapkey 14
+wait 40
+tapkey 21
+wait 40
+expect step0 1
+expect step4 1
+expect step8 1
+expect step12 1
+expect step1 0
+# a key toggles: on and off again
+tapkey 2
+wait 40
+expect step1 1
+tapkey 2
+wait 40
+expect step1 0
+# snare on the off beats: the 4th black key is key 8
+tapkey 8
+wait 40
+expect voice 3
+tapkey 7
+wait 40
+tapkey 21
+wait 40
+expect step4 1
+expect step0 0
+shot steps.png
+# an empty pattern is saved separately from this one further down
+wav beat.wav
+tap PLAY
+wait 2060
+expect running 1
+shot running.png
+wavstop
+# saving is refused while it runs: the flash stops the sound
+tap SAVE
+wait 40
+expect store_writes 0
+tap PLAY
+wait 40
+expect running 0
+# mute: ARP held, a black key
+press ARP
+wait 20
+tapkey 8
+wait 40
+release ARP
+wait 20
+expect muted3 1
+expect voice 3
+press ARP
+wait 20
+tapkey 8
+wait 40
+release ARP
+wait 20
+expect muted3 0
+# the bars
+tap OCT+
+wait 30
+expect bar 1
+tapkey 0
+wait 40
+expect step16 1
+tap OCT-
+wait 30
+expect bar 0
+# the encoders
+turn SELECT 10
+wait 40
+expect bpm 130
+turn ALGO 20
+wait 40
+expect shuffle 20
+turn K3 5
+wait 40
+expect param2 15
+# a pattern away and back keeps what was entered
+turn PRESET 1
+wait 60
+expect pattern 1
+expect step4 0
+turn PRESET -1
+wait 60
+expect pattern 0
+expect step4 1
+expect step16 1
+# save, restart, and it comes back
+tap SAVE
+wait 60
+expect store_writes 2
+reboot
+wait 800
+expect pattern 0
+expect bpm 130
+tapkey 8
+wait 40
+expect step4 1
+expect param2 15
+# the load test
+tap HOME
+wait 500
+tap HOME
+wait 40
+tap GLO
+wait 40
+expect ext 1
+expect dropped 0

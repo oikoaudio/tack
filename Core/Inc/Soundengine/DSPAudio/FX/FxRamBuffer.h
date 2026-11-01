@@ -22,7 +22,7 @@
 #define FX_BUFFER_SIZE 0x7FFF//32768 //must be power of to for masking!
 
 //For delay an in16_t buffer would be more performant, but since the reverb uses flt16, we can save on an initial buffer clear to prevent NaN injection poisoning the buffer
-extern INDTCMZ __fp16 FX_BUFFER[FX_BUFFER_SIZE+1];
+extern INFXRAM __fp16 FX_BUFFER[FX_BUFFER_SIZE+1];
 
 //because we have 17 delay units using the memory in the reverb
 //must be masking compatible pow2-1
