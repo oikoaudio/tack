@@ -24,6 +24,24 @@ Needs libsamplerate. An installed copy (with its CMake package) is used if prese
 The engine always runs at `REAL_FS`. Its filter cutoffs are fractions of the sample rate, envelopes advance by fixed
 amounts per sample, and delay and reverb lengths are fixed sample counts, so running it at another rate would change
 the sound. `lxr_host_process()` resamples the output to the host rate instead (libsamplerate, `SRC_SINC_MEDIUM_QUALITY`).
+That converter keeps its artefacts about 97 dB down and passes 90% of the band, so at a 44.1 kHz host it rolls off
+above about 20 kHz. The audible aliasing comes from the engine's own oscillators and distortion, as on the device, and
+the resampler neither adds to it nor removes it.
+
+Running the engine at the host's rate would need more than `REAL_FS` as a variable. Only 16 places read it. The rest of
+the engine assumes 44,140 Hz without saying so:
+
+- Envelopes and LFOs step a fixed amount per sample, so their times scale with the rate.
+- The transients are sample recordings, `TRANSIENT_SAMPLE_LENGTH` 2205 samples, 50 ms at 44.1 kHz.
+- `FX_BUFFER` holds 32,768 samples, so at 96 kHz the longest delay would be about a third of a second, and the
+  reverb's all-pass lengths are sample counts.
+- Parameters are applied once per 64-sample block.
+- `Distortion.c` has 44140 written into one filter coefficient.
+
+Each would need converting to seconds or hertz and checking against the kits, and at higher rates the oscillators
+alias differently, which is part of the LXR's sound. The latency would barely change, as it comes from the engine's
+blocks, and the resampler costs about 1.3% of a core with Stereo outputs. So the engine keeps its rate. The FM-1
+build sets `REAL_FS` to 44,100, its codec's rate: see `firmware/fm1/NOTES.md`, Sample rate.
 
 - Events (notes and parameter changes) are queued with their exact output time (`lxr_host_queueNoteOn`,
   `lxr_host_queueParam`) and come out a constant `lxr_host_latency()` later: 4 engine blocks, 5.8 ms, at 32 kHz and
