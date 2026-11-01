@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <string.h>
 
 #define TACK_VOICES 7
 #define TACK_BLOCK 64
@@ -22,6 +23,22 @@ float probe_filter(int voice);
 int probe_param_filter1(void);
 int probe_filter_type(int voice);
 float probe_fx_settings(void);
+int probe_fx_type(void);
+int probe_param_vol1(void);
+int probe_kit_size(void);
+typedef const uint8_t *(*TackKitFind)(uint32_t slot);
+void tack_set_kit_find(TackKitFind fn);
+int tack_post_kit(const uint8_t *values, uint8_t slot);
+int tack_kit_busy(void);
+int tack_kit_now(void);
+uint32_t tack_dirty(void);
+void tack_clean(uint8_t pattern);
+void tack_pattern_export(uint8_t pattern, void *image);
+void tack_load_pattern(uint8_t pattern, const void *image);
+uint32_t tack_pattern_image_size(void);
+const void *tack_pattern_image(void);
+void tack_load_kit(const uint8_t *values);
+const uint8_t *tack_kit(void);
 int probe_param_filter_type1(void);
 int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel);
 int tack_post_fx_send(uint32_t voice, uint8_t on);
@@ -377,6 +394,106 @@ static void step_tests(void)
     run(3);
 }
 
+static uint8_t bank[2][512];
+static const uint8_t *bank_find(uint32_t slot) { return slot < 2 ? bank[slot] : 0; }
+
+/* the bank's kit a pattern was left with comes back as the sequencer switches to it, before its first step */
+static void pattern_tests(void)
+{
+    const int vol = probe_param_vol1();
+    tack_kit();
+    memcpy(bank[0], tack_kit(), (size_t)probe_kit_size());
+    memcpy(bank[1], tack_kit(), (size_t)probe_kit_size());
+    bank[0][vol] = 100;
+    bank[1][vol] = 50;
+    tack_set_kit_find(bank_find);
+    tack_post_kit(bank[0], 0);
+    run(2);
+    tack_kit_busy();
+    check("a kit taken on pattern 1 is playing", tack_get_param((uint16_t)vol) == 100 && tack_kit_now() == 1,
+          tack_get_param((uint16_t)vol), tack_kit_now());
+    tack_post_pattern(4);
+    run(2);
+    tack_post_kit(bank[1], 1);
+    run(2);
+    tack_post_pattern(0);
+    run(2);
+    tack_kit_busy();
+    check("back on pattern 1 its kit returns", tack_get_param((uint16_t)vol) == 100 && tack_kit_now() == 1,
+          tack_get_param((uint16_t)vol), tack_kit_now());
+
+    /* an edit on the kit playing survives a pattern with the same kit, or with none */
+    tack_post_param((uint16_t)vol, 77);
+    run(2);
+    tack_post_pattern(7);                  /* no kit of its own */
+    run(2);
+    tack_post_pattern(0);
+    run(2);
+    tack_kit_busy();
+    check("a pattern without a kit leaves the edit alone", tack_get_param((uint16_t)vol) == 77, 77, tack_get_param((uint16_t)vol));
+
+    /* the sequencer turns the FX off around a switch: it must come back, kit or no kit */
+    tack_post_param(234, 4);
+    tack_post_param(236, 50);
+    run(2);
+    tack_post_pattern(7);
+    run(2);
+    check("the FX stays on across a pattern without a kit", probe_fx_type() == 4, 4, probe_fx_type());
+    tack_post_pattern(0);
+    run(2);
+    tack_post_param(234, 0);
+    run(2);
+
+    /* running: the switch is at the end of the bar, and the kit is already in on the first step of the new pattern */
+    tack_post_pattern(4);
+    tack_post_step(0, 0, 1);
+    run(2);
+    tack_post_pattern(0);
+    run(2);
+    tack_post_step(0, 0, 1);
+    run(2);
+    tack_post_run(1);
+    run(20);
+    tack_post_pattern(4);
+    int waited = 0;
+    while (tack_pattern() != 4 && waited++ < 8000)
+        run(1);
+    const int now = tack_kit_now();
+    tack_post_run(0);
+    run(2);
+    tack_kit_busy();
+    check("running, the kit is in the block the pattern starts", now == 2 && waited < 8000, now, waited);
+    tack_post_pattern(0);
+    run(4);
+
+    /* what a SAVE writes: any pattern's image equals the sequencer's own, and loads back */
+    static uint8_t img[3840], copy[3840];
+    const uint32_t n = tack_pattern_image_size();
+    tack_post_step(1, 9, 1);
+    run(2);
+    tack_pattern_export(0, img);
+    check("a pattern's image is the sequencer's own", !memcmp(img, tack_pattern_image(), n), n, 0);
+    tack_post_pattern(4);
+    run(2);
+    tack_pattern_export(0, copy);
+    check("and can be taken with another pattern active", !memcmp(img, copy, n), n, 0);
+    tack_post_pattern(0);
+    run(2);
+    tack_post_step(1, 9, 0);
+    run(2);
+    check("edit marks the pattern changed", (tack_dirty() & 1u) != 0, tack_dirty(), 0);
+    tack_clean(0);
+    tack_post_copy(11);
+    run(2);
+    check("a copy marks the one it wrote", (tack_dirty() & (1u << 11)) && !(tack_dirty() & 1u), tack_dirty(), 0);
+    tack_load_pattern(0, img);
+    run(2);
+    check("an image loads back", tack_step_on(1, 9), tack_step_on(1, 9), 1);
+    tack_post_clear(1);
+    tack_post_clear(0);
+    run(2);
+}
+
 int main(void)
 {
     const int fp = probe_param_filter1();
@@ -457,6 +574,7 @@ int main(void)
     page_sweep();
     keys_tests();
     step_tests();
+    pattern_tests();
 
     printf(fails ? "FAILED\n" : "all passed\n");
     return fails != 0;

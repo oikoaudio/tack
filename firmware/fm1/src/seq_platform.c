@@ -51,9 +51,14 @@ uint8_t menu_getViewedPattern() { return 0; }
 void menu_repaint() {}
 void menu_repaintAll() {}
 void menu_setShownPattern(uint8_t patternNr) { (void)patternNr; }
+static SeqKitLoad kit_load;
+void seq_platform_set_kit_load(SeqKitLoad fn) { kit_load = fn; }
 void preset_loadDrumsetRam(uint8_t presetNr, uint8_t isMorph, uint8_t sendImmediate)
 {
-    (void)presetNr; (void)isMorph; (void)sendImmediate;    /* per-pattern kits: not on the FM-1 yet */
+    (void)isMorph; (void)sendImmediate;
+    if (kit_load)
+        kit_load(presetNr);
+    (void)presetNr;    /* per-pattern kits: not on the FM-1 yet */
 }
 void preset_touchTimer(PresetTimer type) { (void)type; }
 void trigger_clockTick(uint8_t onOff, uint8_t cnt) { (void)onOff; (void)cnt; }

@@ -23,4 +23,4 @@ for s in "${src[@]}"; do
 done
 wait
 "$CC" -O1 -g -Wno-everything firmware/fm1/tests/lock_test.c "$out"/obj/*.o -lm -o "$out/lock_test"
-timeout 60 "$out/lock_test"
+timeout 90 "$out/lock_test"

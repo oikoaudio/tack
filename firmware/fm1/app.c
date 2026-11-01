@@ -17,7 +17,7 @@
  *   GLO          the settings page: tempo, shuffle, external MIDI clock, roll rate, the load
  *                  GLO held: PLAY starts the load test, and PLAY alone ends it; HOME zeroes PEAK and XRUN
  *   SELECT       tempo                 ALGORITHM  shuffle             PRESET  kit
- *   SAVE         pattern and kit (stopped)     SEL and EDIT held a second  clear the lane
+ *   SAVE         every changed pattern, the kit and tempo (stopped)     SEL and EDIT held a second  clear the lane
  */
 #include "src/tack_engine.h"
 #include "src/seq_platform.h"
@@ -33,7 +33,8 @@ enum { KEY_ROLL = TACK_VOICES, KEY_EUCLID, KEY_COPY, KEY_STEP };   /* the black 
 typedef struct {
     uint32_t magic;
     uint16_t bpm;
-    uint8_t rsv[2];
+    uint8_t kit_now;                     /* the bank's kit it came from: slot + 1, 0 none */
+    uint8_t rsv;
     uint8_t kit[KIT_SLOT];               /* the parameters, then the name at SET_KIT_NAME; older saves have it empty */
 } settings_t;
 #define SET_KIT_NAME 248u
@@ -46,14 +47,22 @@ static uint8_t pat_buf[3840];
 #define KIT_BASE 0xB8000u
 #define KIT_SLOTS 128u
 #define KIT_SECTORS 8u
+#define KIT_PART 64u                     /* a slot read back goes in parts: a SysEx frame fits the USB ring */
 _Static_assert(KIT_BASE >= PAT_AT(16), "above the patterns");
 _Static_assert(KIT_BASE + KIT_SLOTS * KIT_SLOT <= 0xDC000u, "below the panel calibration");
 static uint8_t kit_buf[KIT_SLOT];
 
 static const uint8_t *kit_slot(uint32_t i)
 {
-    const uint8_t *p = plat_data(KIT_BASE + i * KIT_SLOT);
+    const uint8_t *p = i < KIT_SLOTS ? plat_data(KIT_BASE + i * KIT_SLOT) : 0;
     return p && p[0] != 0xFFu ? p : 0;
+}
+
+/* a pattern's kit, as the sequencer switches to it: the audio interrupt, so the parameters in place in the flash */
+static const uint8_t *kit_params(uint32_t i)
+{
+    const uint8_t *p = kit_slot(i);
+    return p ? p + 8 : 0;
 }
 
 static struct {
@@ -63,6 +72,9 @@ static struct {
     uint8_t roll_voice;                  /* the voice ROLL went down on */
     uint32_t clear_at;                   /* when SEL and EDIT went down together, 0 not */
     uint8_t group, sub;                  /* the sound page */
+    uint32_t save_todo;                  /* patterns a SAVE still has to write, one a frame */
+    uint8_t saved, save_hold;            /* how many; a backup is reading the flash */
+    int kit_seen;                        /* the kit the name is of */
     uint8_t seq_used;                    /* SEQ was a modifier this press: no mode change on release */
     uint8_t glo_used;                    /* so was GLO: no page */
     int32_t held;                        /* the white key held (0-15), -1 none */
@@ -134,19 +146,40 @@ static void seq_midi_out(uint8_t status, uint8_t d1, uint8_t d2)
     plat_midi_send((uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24, TO_USB);
 }
 
-void app_init(void)
+/* the store into the engine, as at power-on. With a backup restored the sequencer is stopped, and what a pattern's
+ * object no longer holds is cleared */
+static void load_saved(int running_audio)
 {
     uint32_t i;
-    tack_init();
-    seq_platform_set_midi_out(seq_midi_out);
-    for (i = 0; i < TACK_PATTERNS; i++)
+    for (i = 0; i < TACK_PATTERNS; i++) {
         if (plat_store_load(OBJ_PAT0 + i, pat_buf, sizeof pat_buf) == (int)tack_pattern_image_size())
             tack_load_pattern((uint8_t)i, pat_buf);
+        else if (running_audio)
+            tack_clear_pattern((uint8_t)i);
+        tack_clean((uint8_t)i);
+    }
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) == (int)sizeof set && set.magic == SET_MAGIC) {
-        tack_load_kit(set.kit);
+        if (running_audio) {
+            while (tack_kit_busy())
+                ;
+            tack_post_kit(set.kit, TACK_KIT_NO_SLOT);
+        } else {
+            tack_load_kit(set.kit);
+        }
         tack_post_bpm(set.bpm);
+        tack_set_kit_now(set.kit_now);
+        ui.kit_seen = set.kit_now;
+        ui.kit = set.kit_now ? set.kit_now - 1 : 0;
         memcpy(ui.kit_name, set.kit + SET_KIT_NAME, 8);
     }
+}
+
+void app_init(void)
+{
+    tack_init();
+    seq_platform_set_midi_out(seq_midi_out);
+    tack_set_kit_find(kit_params);
+    load_saved(0);
 }
 
 void app_say(const char *a, const char *b)
@@ -166,24 +199,85 @@ void app_say(const char *a, const char *b)
     ui.redraw = 1;
 }
 
-/* SAVE: the flash stops everything for a moment, sound too, so never while the sequencer runs */
+static int save_settings(void)
+{
+    set.magic = SET_MAGIC;
+    set.bpm = tack_bpm();
+    set.kit_now = (uint8_t)tack_kit_now();
+    memcpy(set.kit, tack_kit(), tack_kit_size());
+    memcpy(set.kit + SET_KIT_NAME, ui.kit_name, 8);
+    return plat_store_save(OBJ_SETTINGS, &set, sizeof set);
+}
+
+/* SAVE: the flash stops everything for a moment, sound too, so never while the sequencer runs. Every changed pattern, and
+ * the active one so that SAVE always does something: one a frame (save_frame), as each is an erase and a write */
 static void save(void)
 {
     if (tack_running()) {
         app_say("STOP FIRST", "");
         return;
     }
+    if (ui.save_hold || ui.save_todo)
+        return;
     mark('S');
-    set.magic = SET_MAGIC;
-    set.bpm = tack_bpm();
-    memcpy(set.kit, tack_kit(), tack_kit_size());
-    memcpy(set.kit + SET_KIT_NAME, ui.kit_name, 8);
-    if (plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
-        plat_store_save(OBJ_PAT0 + (uint32_t)tack_pattern(), tack_pattern_image(), tack_pattern_image_size()) == 0)
-        app_say("SAVED", "");
-    else
+    if (save_settings() != 0) {
+        app_say("SAVE", "FAILED");
+        return;
+    }
+    ui.save_todo = tack_dirty() | 1u << tack_pattern();
+    ui.saved = 0;
+}
+
+static int save_one(uint32_t i)
+{
+    tack_pattern_export((uint8_t)i, pat_buf);
+    if (plat_store_save(OBJ_PAT0 + i, pat_buf, tack_pattern_image_size()) != 0)
+        return -1;
+    tack_clean((uint8_t)i);
+    return 0;
+}
+
+static void save_frame(void)
+{
+    uint32_t i;
+    char t[4];
+    if (!ui.save_todo)
+        return;
+    if (tack_running()) {              /* started from MIDI: what is left stays changed, for the next SAVE */
+        ui.save_todo = 0;
+        app_say("SAVE", "STOPPED");
+        return;
+    }
+    for (i = 0; !(ui.save_todo >> i & 1u); i++)
+        ;
+    if (save_one(i) != 0) {
+        ui.save_todo = 0;
+        app_say("SAVE", "FAILED");
+        return;
+    }
+    ui.save_todo &= ~(1u << i);
+    ui.saved++;
+    mark('S');
+    if (!ui.save_todo) {
+        int_text(ui.saved, t);
+        app_say("SAVED", t);
+    }
+}
+
+/* a backup or restore of the patterns and settings: fm1-base's device/backup.c */
+int app_backup_playing(void) { return tack_running(); }
+void app_backup_hold(int on) { ui.save_hold = (uint8_t)on; }
+void app_backup_flush(void)              /* the backup holds what is saved: so save, the kit and tempo too */
+{
+    uint32_t i, todo = tack_dirty();
+    int bad = save_settings();
+    for (i = 0; i < TACK_PATTERNS; i++)
+        if (todo >> i & 1u)
+            bad |= save_one(i);
+    if (bad)
         app_say("SAVE", "FAILED");
 }
+void app_backup_restored(void) { load_saved(1); }
 
 static uint32_t pressed(uint32_t now, uint32_t b) { return (now & ~ui.btn) >> b & 1u; }
 
@@ -236,12 +330,8 @@ static void kit_load(int32_t i)
     if (!k || tack_kit_busy())
         return;
     memcpy(kit_buf, k, KIT_SLOT);
-    if (tack_post_kit(kit_buf + 8)) {
+    if (tack_post_kit(kit_buf + 8, (uint8_t)i))
         mark('K');
-        ui.kit = i;
-        memcpy(ui.kit_name, k, 8);
-        ui.kit_name[8] = 0;
-    }
 }
 
 static void kit_step(int32_t e)
@@ -469,7 +559,7 @@ static void input(void)
         ui.bar++;
         ui.redraw = 1;
     }
-    if (pressed(btn, B_PLAY)) {
+    if (pressed(btn, B_PLAY) && !ui.save_todo) {
         if ((btn >> B_GLO & 1u) || ui.stress) {  /* the load test: not a thing to find by accident */
             ui.glo_used = 1;
             ui.stress = !ui.stress;
@@ -571,6 +661,21 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (n < 4u || p[0] != 0x7Du || p[1] != 'K' || p[2] != 'T')
         return 0;
     mark('U');
+    if (p[3] == 3u && n == 6u && !tack_running()) {     /* 3 slot part: that much of a slot, as hex */
+        static const char HEX[] = "0123456789ABCDEF";
+        const uint8_t *k = p[4] < KIT_SLOTS ? kit_slot(p[4]) : 0;
+        uint8_t f[9 + 2u * KIT_PART + 1u] = {0xF0, 0x7D, 'K', 'T', 0x7F, 3, k ? 0 : 4, p[4], p[5]};
+        uint32_t len = 9;
+        if (k && p[5] < KIT_SLOT / KIT_PART)
+            for (i = 0; i < KIT_PART; i++) {
+                const uint8_t b = k[p[5] * KIT_PART + i];
+                f[len++] = (uint8_t)HEX[b >> 4];
+                f[len++] = (uint8_t)HEX[b & 15u];
+            }
+        f[len++] = 0xF7;
+        plat_sysex_send(f, len);
+        return 1;
+    }
     if (tack_running()) {
         kit_reply(p[3], 1);
     } else if (p[3] == 1u) {
@@ -1097,7 +1202,16 @@ void app_frame(void)
     for (v = 0; v < TACK_VOICES; v++)          /* any lane's playhead moved */
         h = h * 67 + tack_playhead((uint8_t)v);
     input();
-    (void)tack_kit_busy();                     /* a kit that went in shows */
+    save_frame();
+    (void)tack_kit_busy();                     /* a kit that went in shows, whichever way it came */
+    if (tack_kit_now() != ui.kit_seen) {
+        const uint8_t *k = tack_kit_now() ? kit_slot((uint32_t)tack_kit_now() - 1u) : 0;
+        ui.kit_seen = tack_kit_now();
+        ui.kit = ui.kit_seen ? ui.kit_seen - 1 : 0;
+        if (k)
+            memcpy(ui.kit_name, k, 8);
+        ui.redraw = 1;
+    }
     lights();
     if (pct > ui.cpu_peak)
         ui.cpu_peak = pct;
@@ -1144,6 +1258,10 @@ int app_expect(const char *what, int *got)
         *got = tack_fx_delay_ms();
     else if (!strcmp(what, "stress"))
         *got = ui.stress;
+    else if (!strcmp(what, "dirty"))
+        *got = (int)tack_dirty();
+    else if (!strcmp(what, "saved"))
+        *got = ui.saved;
     else if (!strncmp(what, "fxv", 3))       /* fxvN: the FX page's slot N */
         *got = tack_get_param(tack_fx_param((uint32_t)atoi(what + 3)));
     else if (!strncmp(what, "fxp", 3))       /* fxpN: the parameter behind it */

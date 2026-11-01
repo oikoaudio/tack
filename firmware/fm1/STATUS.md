@@ -62,6 +62,8 @@ JieLi's SDK repository no longer exists at the URL in `get_sdk.sh`. The same rev
 | `fm1 install` | installs `build/tack.fwsc` |
 | `fm1 log` | reads the crash log |
 | `fm1 kits DIR` | replaces the kit bank with every `.SND` under `DIR`, sequencer stopped |
+| `fm1 backup NAME` | writes patterns and settings to `NAME.tack`, and the kit bank to `NAME.kits/` |
+| `fm1 restore NAME` | puts both back. The FM-1 asks first: SEL yes, HOME no |
 
 `tests/verify.sh` checks the desktop renders against `tests/desktop_renders.sha256`, then builds the firmware and simulator.
 
@@ -109,7 +111,7 @@ The panel:
 | Black keys 8 to 10 | ROLL while held, the Euclidean page, COPY held with a white key: this pattern onto that one |
 | Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane |
 | SEL and EDIT held a second | clear the lane |
-| SAVE | pattern and kit, refused while running because a flash write stops the sound |
+| SAVE | every changed pattern, tempo and the startup kit, refused while running because a flash write stops the sound |
 | HOME | the main page. GLO held: zero `PEAK` and `XRUN` |
 | GLO held, PLAY | load test: every voice every 35 blocks, about 51 ms, on the loaded kit. PLAY alone ends it |
 
@@ -146,6 +148,15 @@ the xrun tag. `lock_test.sh` drives each through the real engine: a sent voice g
 0 removes the tail, each FX setting changes the output, a lock reaches a parameter above 127, and all 256 page slots step,
 clamp and render at both ends.
 
+Backup on the unit, build 4231e82: `fm1 backup` ran, and all 86 kits read back byte for byte equal to the uploaded files.
+The `.tack` held no patterns or settings, as nothing had been saved and the flush left the settings out. About one kit
+read in 3,000 went unanswered, which stopped a run: 4 of about 12,000 requests, all answered on the second try. The
+device drops a SysEx that starts before it releases the last one, so the tool now repeats a request and the reply names
+its part. The build after 4231e82 saves the settings in the flush and has not been installed.
+
+Not tested on anything: `fm1 restore`, and a backup holding patterns. fm1-base's own test covers the backup code, and the
+simulator cannot run it for Tack.
+
 Known omissions:
 
 - 16 patterns, not 64. The full bank needs 233,536 B and the pool has about 150 KB left. Each pattern is 3,649 B.
@@ -156,7 +167,6 @@ Known omissions:
 - The Euclidean page stops at length 16, as the LXR's menu does. From length 18 with one hit the generator recurses
   without end, which would crash the audio interrupt.
 - A Euclidean turn replaces the lane's steps and length, with no undo. Its locks stay on their steps.
-- SAVE writes the active pattern only, so a copied pattern needs a visit and a SAVE to outlive power-off.
 - No kits in the firmware. `README.md` says none come with Tack, because they belong to their authors, and `NOTICE.md`
   does not cover them. `tools/fm1_kits.py` sends your own files to 128 slots in flash. Loading a kit runs in the audio
   interrupt, as the engine has one writer. It costs about 57,000 x86 instructions, roughly 23% of a block when warm.
@@ -166,7 +176,8 @@ Known omissions:
   so the page stops time at 126.
 - The sound pages cover the LXR's voice parameters with sound-design use. Edits apply until a kit loads, and SAVE keeps them as
   the boot kit. Nothing writes an edited kit back to the bank.
-- Per-pattern kit loading does nothing, because the kit bank is on the LXR's SD card.
+- A pattern remembers its bank kit, which loads through the LXR's own hook before the pattern's first step. It remembers
+  the slot, not edits made to the kit, and a pattern with no kit leaves the playing kit and its edits alone.
 - Reverb. The LXR firmware compiles it out (`USE_REVERB 0`), and desktop Tack does the same. Shelved.
 - No Bluetooth, no second core, no velocity from the keys.
 
@@ -179,9 +190,9 @@ Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 256,092 B | 581,564 B | 44% |
-| RAM, `.data` and `.bss` | 36,044 B | 98,304 B | 37% |
-| Pool | 193,044 B | 344,064 B | 56% |
+| Flash image | 260,672 B | 581,564 B | 45% |
+| RAM, `.data` and `.bss` | 36,720 B | 98,304 B | 37% |
+| Pool | 196,884 B | 344,064 B | 57% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables
 (67,584 B plus the 8,194 B sine) and the transients (26,460 B). All engine code runs from flash through the XIP cache.

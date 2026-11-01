@@ -5,6 +5,7 @@ id_prefix = "FM-1_47"           # dev builds FM-1_4700
 usb_manufacturer = "oikoaudio"
 usb_product = "TACK FM-1"
 words = "words.tsv"
+backup = true
 usb_audio_in = true
 usb_audio_out = false
 licence = "GPL-3.0-only"

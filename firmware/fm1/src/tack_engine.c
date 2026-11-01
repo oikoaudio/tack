@@ -200,12 +200,17 @@ static uint8_t ui_roll = 5;              /* the sequencer's default, 1/16 */
 static uint8_t ui_eu[TACK_VOICES][TACK_EU_SLOTS];
 static volatile uint8_t mute_mask;
 static volatile uint8_t stress;
+static volatile uint32_t dirty;          /* patterns changed since they were saved */
+static void kit_for_pattern(uint8_t kit);
+extern uint8_t activeParameters[];
 
 void tack_init(void)
 {
     lxr_host_init();
     seq_init();
     seq_copyPatternToBackupBuffer(0);   /* as the LXR at boot: a pattern change restores from this buffer */
+    seq_platform_set_kit_load(kit_for_pattern);
+    activeParameters[PAR_PATTERN_MODE] = 1;    /* a pattern loads its kit: seq_setPendingPatternActive */
     seq_setBpm(ui_bpm);
     euklid_init();
     for (uint32_t v = 0; v < TACK_VOICES; v++) {
@@ -338,12 +343,32 @@ int tack_post_clear(uint8_t voice) { return post(EV_CLEAR, voice, 0, 0); }
 static const uint8_t *volatile kit_pending;
 static volatile uint32_t kit_applied;
 static uint32_t kit_seen;
-int tack_post_kit(const uint8_t *values)
+static volatile int kit_now;
+static TackKitFind kit_find;
+int tack_kit_now(void) { return kit_now; }
+void tack_set_kit_now(int kit) { kit_now = kit; }
+void tack_set_kit_find(TackKitFind fn) { kit_find = fn; }
+
+/* The sequencer is switching patterns, and has just turned the FX off to save cycles, as the LXR does around a kit load.
+ * The pattern's own kit, unless it has none or it is the one playing, whose edits stay: then the FX goes back */
+static void kit_for_pattern(uint8_t kit)
+{
+    const uint8_t *k = kit && kit != kit_now && kit_find ? kit_find(kit - 1u) : 0;
+    if (k) {
+        lxr_host_loadKit(k);
+        kit_now = kit;
+        kit_applied++;
+    } else {
+        fxBus.fxType = lxr_host_getParam(PAR_FX_TYPE);
+    }
+}
+
+int tack_post_kit(const uint8_t *values, uint8_t slot)
 {
     if (kit_pending)
         return 0;
     kit_pending = values;
-    if (!post(EV_KIT, 0, 0, 0)) {
+    if (!post(EV_KIT, slot, 0, 0)) {
         kit_pending = 0;
         return 0;
     }
@@ -417,7 +442,30 @@ void tack_load_pattern(uint8_t pattern, const void *image)
 {
     memcpy(&patternBackupBuffer, image, sizeof patternBackupBuffer);
     seq_copyBackupBufferToPattern(pattern);
-    seq_copyPatternToBackupBuffer(0);
+    seq_copyPatternToBackupBuffer(seq_activePattern);
+}
+
+void tack_clear_pattern(uint8_t pattern)
+{
+    seq_clearPattern(pattern);
+    seq_patternSet.kitNr[pattern] = 0;
+    seq_copyPatternToBackupBuffer(seq_activePattern);
+}
+
+uint32_t tack_dirty(void) { return dirty; }
+void tack_clean(uint8_t pattern) { dirty &= ~(1u << pattern); }
+
+/* the same bytes seq_copyPatternToBackupBuffer makes, into image: that buffer is the sequencer's own */
+void tack_pattern_export(uint8_t pattern, void *image)
+{
+    PatternBackupBuffer *b = image;
+    memcpy(b->seq_subStepPattern, seq_patternSet.seq_subStepPattern[pattern], sizeof b->seq_subStepPattern);
+    memcpy(b->seq_stepTiming, seq_patternSet.seq_stepTiming[pattern], sizeof b->seq_stepTiming);
+    for (uint32_t i = 0; i < NUM_BARS; i++)
+        memcpy(b->seq_mainSteps[i], seq_patternSet.seq_mainSteps[i][pattern], sizeof b->seq_mainSteps[i]);
+    memcpy(b->length, seq_patternSet.length[pattern], sizeof b->length);
+    b->shuffle = seq_patternSet.shuffle[pattern];
+    b->kitNr = seq_patternSet.kitNr[pattern];
 }
 
 void tack_load_kit(const uint8_t *values)
@@ -429,7 +477,11 @@ void tack_load_kit(const uint8_t *values)
 
 /* a pattern change restores the pattern it leaves from the backup buffer, discarding what is not in it: on the LXR
  * edits stay until a save or a reload. Here an edit is kept the moment it is made, so it is written there too */
-static void commit_active(void) { seq_copyPatternToBackupBuffer(seq_activePattern); }
+static void commit_active(void)
+{
+    seq_copyPatternToBackupBuffer(seq_activePattern);
+    dirty |= 1u << seq_activePattern;
+}
 
 static void set_step(uint8_t voice, uint8_t step, uint8_t on)
 {
@@ -543,7 +595,10 @@ static void drain(void)
             break;
         case EV_COPY:
             if (e.a < NUM_PATTERN && e.a != seq_activePattern)
+{
                 seq_copyPattern(seq_activePattern, e.a);
+                dirty |= 1u << e.a;
+            }
             break;
         case EV_CLEAR:
             if (e.a < NUM_TRACKS) {
@@ -581,6 +636,11 @@ static void drain(void)
             if (kit_pending) {
                 lxr_host_loadKit(kit_pending);
                 kit_applied++;
+                if (e.a != TACK_KIT_NO_SLOT) {
+                    kit_now = e.a + 1;
+                    seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(e.a + 1u);
+                    commit_active();
+                }
                 kit_pending = 0;
             }
             break;

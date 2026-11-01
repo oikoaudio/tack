@@ -144,10 +144,28 @@ key 7 up
 wait 40
 expect step4 1
 expect locks4 0
-# save, restart, and it comes back
-tap SAVE
+# save, restart, and it comes back: every changed pattern, not only the one showing. Pattern 3 is edited and left
+press SEQ
+wait 20
+tapkey 4
 wait 60
-expect store_writes 2
+release SEQ
+wait 60
+expect pattern 2
+tapkey 0
+wait 60
+expect step0 1
+press SEQ
+wait 20
+tapkey 0
+wait 60
+release SEQ
+wait 60
+tap SAVE
+wait 200
+expect dirty 0
+expect saved 2
+expect store_writes 3
 reboot
 wait 800
 expect pattern 0
@@ -157,6 +175,21 @@ wait 40
 expect step4 1
 expect param2 15
 expect len3 12
+press SEQ
+wait 20
+tapkey 4
+wait 60
+release SEQ
+wait 60
+expect pattern 2
+expect step0 1
+press SEQ
+wait 20
+tapkey 0
+wait 60
+release SEQ
+wait 60
+expect pattern 0
 # no kits uploaded: the kit page says so
 turn PRESET 1
 wait 40

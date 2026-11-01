@@ -31,9 +31,17 @@ int tack_post_length(uint8_t voice, uint8_t length);     /* the lane's length, 1
  * value returns at the lane's next step without one. Returns 0 if the queue is full */
 int tack_post_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value);
 int tack_post_lock_clear(uint8_t voice, uint8_t step);
-/* A whole kit: values stays untouched until tack_kit_busy() is 0 */
-int tack_post_kit(const uint8_t *values);
+/* A whole kit from the bank: values stays untouched until tack_kit_busy() is 0. The active pattern takes it as its own */
+#define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
+int tack_post_kit(const uint8_t *values, uint8_t slot);
 int tack_kit_busy(void);
+/* where a pattern's kit is read from when the sequencer switches to it: the slot's parameters, in flash, 0 if empty. It
+ * runs in the audio interrupt */
+typedef const uint8_t *(*TackKitFind)(uint32_t slot);
+void tack_set_kit_find(TackKitFind fn);
+/* the bank's kit now playing: slot + 1, 0 none */
+int tack_kit_now(void);
+void tack_set_kit_now(int kit);
 
 /* From the render's own context: MIDI in */
 void tack_note_now(uint8_t voice, uint8_t note, uint8_t vel);
@@ -122,6 +130,11 @@ const void *tack_pattern_image(void);
 uint32_t tack_pattern_image_size(void);
 const uint8_t *tack_kit(void);
 uint32_t tack_kit_size(void);
-/* Loading: before the audio starts */
+/* Patterns changed since they were saved, a bit each. Any pattern's image, for the store: pat_image_size bytes */
+uint32_t tack_dirty(void);
+void tack_clean(uint8_t pattern);
+void tack_pattern_export(uint8_t pattern, void *image);
+/* Loading: before the audio starts, or stopped */
 void tack_load_pattern(uint8_t pattern, const void *image);
+void tack_clear_pattern(uint8_t pattern);
 void tack_load_kit(const uint8_t *values);

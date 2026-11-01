@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""Sends .SND kits from your own files to an FM-1 running Tack, over USB-MIDI. The sequencer must be stopped.
+"""Sends .SND kits from your own files to an FM-1 running Tack, over USB-MIDI, or reads its bank back into files. The
+sequencer must be stopped.
 
     fm1_kits.py KITDIR [--port NAME]        # every kit under KITDIR, sorted by path, up to 128
+    fm1_kits.py --save DIR [--port NAME]    # the FM-1's bank into DIR as .snd files, which KITDIR takes back
 
 No kits come with Tack: they stay in the FM-1's flash, and the firmware has none in it. Needs mido with python-rtmidi.
 """
@@ -11,7 +13,7 @@ import argparse, hashlib, os, pathlib, sys, time
 import mido
 
 HEAD = [0x7D, ord("K"), ord("T")]
-SLOTS, SLOT = 128, 256
+SLOTS, SLOT, PART = 128, 256, 64
 
 
 def kits(root):
@@ -28,23 +30,56 @@ def kits(root):
     return out
 
 
-def ask(inp, out, cmd, body=()):
-    out.send(mido.Message("sysex", data=HEAD + [cmd, *body]))
-    end = time.time() + 5
-    while time.time() < end:
-        for m in inp.iter_pending():
-            if m.type == "sysex" and list(m.data[:5]) == HEAD + [0x7F, ] + [cmd]:
-                return m.data[5]
-        time.sleep(0.002)
-    raise SystemExit("no answer from the FM-1 (is it running Tack?)")
+def answer(inp, out, cmd, body=(), same=0, wait=5.0, tries=1):
+    """The FM-1 drops a SysEx that arrives while it still holds the one before, about one read in 3000, so a request
+    that can be repeated goes again. The first `same` bytes after the reply's status must match the body."""
+    for _ in range(tries):
+        out.send(mido.Message("sysex", data=HEAD + [cmd, *body]))
+        end = time.time() + wait
+        while time.time() < end:
+            for m in inp.iter_pending():
+                if (m.type == "sysex" and list(m.data[:5]) == HEAD + [0x7F, cmd]
+                        and list(m.data[6:6 + same]) == list(body[:same])):
+                    return m.data
+            time.sleep(0.002)
+    raise SystemExit("no answer from the FM-1 (is it running this build of Tack?)")
+
+
+def ask(inp, out, cmd, body=(), wait=5.0, tries=1):
+    return answer(inp, out, cmd, body, 0, wait, tries)[5]
+
+
+def save(inp, out, folder):
+    folder = pathlib.Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    count = 0
+    for slot in range(SLOTS):
+        raw = bytearray()
+        for part in range(SLOT // PART):
+            d = answer(inp, out, 3, (slot, part), 2, 0.25, 8)
+            if d[5] == 1:
+                raise SystemExit("stop the sequencer first")
+            if d[5] == 4:
+                break
+            raw += bytes.fromhex(bytes(d[8:]).decode("ascii"))
+        if not raw:
+            continue
+        name = "".join(c for c in raw[:8].decode("ascii", "replace") if c.isalnum())
+        (folder / f"{slot:03d}-{name}.snd").write_bytes(bytes(raw[:255]))
+        count += 1
+        print(f"\r{count} {name:8}", end="", flush=True)
+    print(f"\n{count} kits in {folder}")
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("kitdir")
+    ap.add_argument("kitdir", nargs="?")
+    ap.add_argument("--save")
     ap.add_argument("--port", default="TACK")
     a = ap.parse_args()
-    found = kits(a.kitdir)
+    if bool(a.kitdir) == bool(a.save):
+        ap.error("a KITDIR to send, or --save DIR")
+    found = kits(a.kitdir) if a.kitdir else [None]
     if not found:
         raise SystemExit(f"no .SND files under {a.kitdir}")
     if len(found) > SLOTS:
@@ -54,11 +89,15 @@ def main():
     if not name:
         raise SystemExit(f"no MIDI port matching {a.port!r}")
     inp, out = mido.open_input(name), mido.open_output(name)
+    time.sleep(0.2)                         # as fm1_install.py: a message sent just after opening can be lost
+    if a.save:
+        save(inp, out, a.save)
+        return
     if st := ask(inp, out, 1):
         raise SystemExit("stop the sequencer first" if st == 1 else f"erase failed ({st})")
     for i, (f, raw) in enumerate(found):
         body = [i] + [ord(c) for c in raw.hex().upper()]
-        if st := ask(inp, out, 2, body):
+        if st := ask(inp, out, 2, body, 1.0, 4):
             raise SystemExit(f"{f.name}: refused ({st})")
         print(f"\r{i + 1}/{len(found)} {raw[:8].decode('ascii', 'replace').strip():8}", end="", flush=True)
     print(f"\n{len(found)} kits on the FM-1")

@@ -23,6 +23,17 @@ void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
 #define APP_SYSEX                        /* kits from a computer (tools/fm1_kits.py) */
+/* backup and restore over USB: tools/fm1 backup. The kit bank goes through fm1_kits.py */
+#define APP_BACKUP_OBJS {OBJ_SETTINGS, OBJ_PAT0, OBJ_PAT0 + 1, OBJ_PAT0 + 2, OBJ_PAT0 + 3, OBJ_PAT0 + 4, OBJ_PAT0 + 5, \
+                         OBJ_PAT0 + 6, OBJ_PAT0 + 7, OBJ_PAT0 + 8, OBJ_PAT0 + 9, OBJ_PAT0 + 10, OBJ_PAT0 + 11, \
+                         OBJ_PAT0 + 12, OBJ_PAT0 + 13, OBJ_PAT0 + 14, OBJ_PAT0 + 15}
+#define APP_BACKUP_MAGIC 0x424C544Bu     /* "KTLB" */
+#define APP_BACKUP_VERSION 1u
+#define APP_BACKUP_WHAT "replaces all patterns"
+int app_backup_playing(void);
+void app_backup_flush(void);
+void app_backup_hold(int on);
+void app_backup_restored(void);
 int app_sysex(const uint8_t *p, uint32_t n);
 
 #define APP_HOST_EXPECT
