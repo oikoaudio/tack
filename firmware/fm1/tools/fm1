@@ -39,11 +39,11 @@ case $cmd in
 esac
 
 case $cmd in
-    info) exec "$py" "$tools/fm1_install.py" --info --port TACK "$@" ;;
+    info) exec "$py" "$tools/fm1_install.py" --info --port "$("$py" "$here/fm1_port.py")" "$@" ;;
     install)
         pkg=${1:-$here/../build/tack.fwsc}
         [ $# -gt 0 ] && shift
-        exec "$py" "$tools/fm1_install.py" "$pkg" --port TACK --yes "$@" ;;
+        exec "$py" "$tools/fm1_install.py" "$pkg" --port "$("$py" "$here/fm1_port.py")" --yes "$@" ;;
     log) exec "$py" "$tools/fm1_remote.py" --port TACK log "$@" ;;
     kits) exec "$py" "$here/fm1_kits.py" "$@" ;;
     convert) exec "$py" "$here/ktl_convert.py" "$@" ;;   # one-off: backups from before the list of locks

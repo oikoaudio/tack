@@ -109,6 +109,7 @@ typedef struct {
     const char *label;
     uint16_t par;
     uint8_t max, en, target;     /* en: 1 + its enum; target: a modulation destination, which no lock can reach */
+    uint8_t centre;              /* a signed value: what reads as 0, as on the LXR's menu. 0: a plain number */
 } TackSlot;
 int tack_pages(uint32_t voice, uint32_t group);
 const char *tack_page_title(uint32_t voice, uint32_t group, uint32_t sub);

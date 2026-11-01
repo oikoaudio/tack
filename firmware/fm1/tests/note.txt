@@ -5,6 +5,8 @@ expect stepmode 1
 expect notemode 0
 tap SEQ
 wait 40
+tap SEQ
+wait 40
 expect stepmode 0
 expect notemode 1
 shot note_empty.png
@@ -52,7 +54,7 @@ tap SEL
 wait 40
 expect notestep 5
 expect step4 0
-turn K1 -1
+turn SELECT -1
 wait 40
 expect notestep 4
 tapkey 7
@@ -61,24 +63,24 @@ expect notestep 5
 expect note4 60
 turn K4 -1
 wait 40
-turn K1 -1
+turn SELECT -1
 wait 40
 turn K4 -1
 wait 40
 expect step4 0
 expect notestep 4
 
-# the knobs: K1 the step, K2 its note, K3 how hard the keys write, K4 a rest
-turn K1 -1
+# the dials: SELECT the step, K1 its note, K2 its velocity, K3 how hard the keys write, K4 a rest
+turn SELECT -1
 wait 40
 expect notestep 3
-turn K2 2
+turn K1 2
 wait 40
 expect note3 74
 turn K4 -1
 wait 40
 expect step3 0
-turn K2 3
+turn K1 3
 wait 40
 expect note3 74
 turn K4 1
@@ -87,7 +89,7 @@ expect step3 1
 expect note3 74
 turn K3 -10
 wait 40
-turn K1 -3
+turn SELECT -3
 wait 40
 expect notestep 0
 tapkey 7
@@ -96,14 +98,14 @@ expect st_3 100
 expect notestep 1
 
 # the cursor walks the bars and wraps at the lane's end
-turn K1 16
+turn SELECT 14
 wait 40
 expect notestep 15
 tapkey 7
 wait 40
 expect step15 1
 expect notestep 0
-turn K1 16
+turn SELECT 15
 wait 40
 turn K3 10
 wait 40
@@ -259,29 +261,38 @@ tap HOME
 wait 40
 expect tall 0
 
-# back to STEP, and the second page of the STEP key: a held step's note
+# back to STEP, then a step's note from NOTE's K2
 tap SEQ
+wait 40
+tap SEQ
+wait 40
+tap HOME
 wait 40
 expect stepmode 1
 expect notemode 0
-tapkey 25
+tap SEQ
 wait 40
-expect stpage 1
-tapkey 25
-wait 40
-expect stpage 2
 key 0 down
 wait 40
-turn K1 5
+turn K2 1
 wait 40
-shot step_note.png
+turn K2 -1
+wait 40
 key 0 up
+wait 40
+tap SEQ
+wait 40
+expect noteview 1
+expect notestep 0
+turn K1 5
 wait 40
 expect note0 65
 expect step0 1
-tapkey 25
+tap SEQ
 wait 40
-expect stpage 0
+tap HOME
+wait 40
+expect notemode 0
 
 # more locks on a step than the sequencer has slots, across pages, kept through a save
 expect lockcount 0
@@ -316,3 +327,21 @@ expect note2 59
 expect lockcount 5
 expect badpatterns 0
 expect dropped 0
+
+# a note held through HOME still ends: the key comes up as the note it went down as, on a page where keys are steps
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+expect noteview 1
+out
+key 7 down
+wait 40
+expect_out USB 90 3C 6E
+tap HOME
+wait 40
+expect notemode 0
+expect_no_out USB 80 3C 00
+key 7 up
+wait 40
+expect_out USB 80 3C 00

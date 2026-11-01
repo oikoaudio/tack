@@ -1,0 +1,169 @@
+# The manual's screens: firmware/fm1/build/host/tack_host firmware/fm1/tests/site_shots.txt OUTDIR
+wait 600
+
+# a groove on the init kit: kick, snare, hats, and something off the grid on the toms
+tapkey 0
+wait 30
+tapkey 7
+wait 30
+tapkey 14
+wait 30
+tapkey 21
+wait 30
+tapkey 16
+wait 30
+tapkey 3
+wait 40
+tapkey 6
+wait 30
+tapkey 18
+wait 30
+tapkey 5
+wait 40
+tapkey 11
+wait 30
+tapkey 23
+wait 30
+tapkey 8
+wait 40
+tapkey 7
+wait 30
+tapkey 21
+wait 30
+tapkey 13
+wait 40
+tapkey 26
+wait 30
+tapkey 15
+wait 40
+tapkey 0
+wait 30
+tapkey 4
+wait 30
+tapkey 7
+wait 30
+tapkey 11
+wait 30
+tapkey 14
+wait 30
+tapkey 18
+wait 30
+tapkey 21
+wait 30
+tapkey 24
+wait 30
+tapkey 20
+wait 40
+tapkey 6
+wait 30
+tapkey 19
+wait 30
+tap HOME
+wait 60
+shot overview.png
+
+# the hats in the bars view: accents, a nudge, a lock and a recurrence
+tapkey 15
+wait 60
+tap SEQ
+wait 60
+expect voiceview 1
+tapkey 4
+wait 40
+tapkey 4
+wait 40
+turn K1 -60
+wait 30
+tapkey 11
+wait 40
+tapkey 11
+wait 40
+turn K1 -45
+wait 30
+tapkey 18
+wait 40
+tapkey 18
+wait 40
+turn K1 -70
+wait 30
+tapkey 24
+wait 40
+tapkey 24
+wait 40
+turn K1 -35
+wait 30
+turn ALGO 3
+wait 30
+tapkey 7
+wait 40
+tapkey 7
+wait 40
+turn K4 -40
+wait 30
+key 21 down
+wait 40
+turn SELECT 2
+wait 40
+tapkey 5
+wait 40
+key 21 up
+wait 60
+tapkey 14
+wait 40
+tapkey 14
+wait 300
+shot bars.png
+
+# NOTE on the kick, with a line
+tap HOME
+wait 40
+tapkey 1
+wait 60
+tap SEQ
+wait 40
+expect voiceview 1
+tapkey 0
+wait 40
+tapkey 0
+wait 40
+tap SEQ
+wait 60
+expect noteview 1
+turn K1 3
+wait 30
+turn SELECT 4
+wait 30
+turn K1 7
+wait 30
+turn SELECT 4
+wait 30
+turn K1 12
+wait 30
+turn SELECT 4
+wait 30
+turn K1 -2
+wait 30
+turn SELECT -8
+wait 1500
+shot note.png
+
+# the sound pages
+tap EDIT
+wait 1500
+shot edit.png
+tap ENV
+wait 1500
+shot env.png
+tap FX
+wait 60
+tapkey 1
+wait 30
+tapkey 8
+wait 30
+turn K1 2
+wait 30
+turn K2 90
+wait 1500
+shot fx.png
+tap HOME
+wait 40

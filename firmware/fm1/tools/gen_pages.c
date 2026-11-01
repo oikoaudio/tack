@@ -16,7 +16,7 @@ enum { G_NONE, G_AMP, G_MOD, G_LFO, G_OSC, G_FM, G_MODWAVE };    /* what the scr
 
 static const Page PAGE[] = {
     {MAIN, "", {{"PITCH", "Oscillator Coarse"}, {"FILTER", "Filter Frequency"}, {"DECAY", "Amp EG Decay"}, {"VOLUME", "Volume"}}, G_AMP},
-    {EDIT, "OSC", {{"FINE", "Oscillator Fine"}, {"WAVE", "Oscillator Waveform"}, {"PULSE", "Oscillator Pulse Width"}, {"MODE", "Oscillator Mode"}}, G_OSC},
+    {EDIT, "OSC", {{"FINE", "Oscillator Fine"}, {"WAVE", "Oscillator Waveform"}, {"PW", "Oscillator Pulse Width"}, {"MODE", "Oscillator Mode"}}, G_OSC},
     {EDIT, "FM", {{"AMOUNT", "FM Amount"}, {"FREQ", "FM Frequency"}, {"WAVE", "FM Waveform"}, {0, 0}}, G_FM},
     {EDIT, "NOISE", {{"FREQ", "Noise Frequency"}, {"MIX", "Noise/Osc Mix"}, {0, 0}, {0, 0}}},
     {EDIT, "MOD OSC", {{"FREQ 1", "Mod Osc Frequency 1"}, {"FREQ 2", "Mod Osc Frequency 2"}, {"GAIN 1", "Mod Osc Gain 1"}, {"GAIN 2", "Mod Osc Gain 2"}}},
@@ -71,6 +71,16 @@ static void shorten(char *t)
 }
 static int enums;
 
+/* the value that reads as 0, from the text the desktop shows and the LXR's menu: its lowest value reads minus that */
+static int centre_of(const LxrParamInfo *p)
+{
+    char t[32];
+    if (p->isEnum || lxr_params_isTarget(p->param))
+        return 0;
+    lxr_params_valueText(p->param, p->min, t, sizeof t);
+    return t[0] == '-' ? atoi(t + 1) + (int)p->min : 0;
+}
+
 /* the names and firmware values of an enum, once for each distinct list: its index + 1 */
 static int enum_of(const LxrParamInfo *p)
 {
@@ -95,6 +105,10 @@ static int enum_of(const LxrParamInfo *p)
         for (char *c = t; *c; c++)
             *c = *c == '"' || *c == '\\' ? ' ' : (char)toupper((unsigned char)*c);
         t[18] = 0;
+        if (!strcmp(t, "REC"))                  /* the panel's words for the LXR's two square waves */
+            strcpy(t, "SQR");
+        else if (!strcmp(t, "PWM"))
+            strcpy(t, "PULSE");
         printf("\"%s\",", t);
     }
     printf("};\n");
@@ -141,10 +155,10 @@ int main(void)
             for (int s = 0; s < 4; s++) {
                 const LxrParamInfo *p = PAGE[g].s[s].label ? find(v, PAGE[g].s[s].suffix) : 0;
                 if (p)
-                    printf("{\"%s\", %u, %u, %d, %d},", PAGE[g].s[s].label, p->param, p->max, en[v][g][s],
-                           lxr_params_isTarget(p->param));
+                    printf("{\"%s\", %u, %u, %d, %d, %d},", PAGE[g].s[s].label, p->param, p->max, en[v][g][s],
+                           lxr_params_isTarget(p->param), centre_of(p));
                 else
-                    printf("{0, 0, 0, 0, 0},");
+                    printf("{0, 0, 0, 0, 0, 0},");
             }
             printf("}},\n");
         }

@@ -1,0 +1,92 @@
+# A page's button opens the page, goes through its screens if it has more than one, and otherwise does nothing. HOME, SEQ or
+# another page's button leaves: firmware/fm1/build/host/tack_host firmware/fm1/tests/pages.txt OUTDIR
+wait 600
+
+# one screen: pressed again, nothing
+tap ENV
+wait 40
+expect page 20
+tap ENV
+wait 40
+expect page 20
+tap LFO
+wait 40
+expect page 30
+tap LFO
+wait 40
+expect page 30
+tap FX
+wait 40
+expect fxpage 1
+tap FX
+wait 40
+expect fxpage 1
+tap GLO
+wait 40
+expect setpage 1
+expect fxpage 0
+tap GLO
+wait 40
+expect setpage 1
+tap ARP
+wait 40
+expect songpage 1
+expect setpage 0
+tap ARP
+wait 40
+expect songpage 1
+
+# the two black keys before COPY do nothing
+tapkey b8
+wait 40
+expect songpage 1
+tapkey b9
+wait 40
+expect songpage 1
+tap HOME
+wait 40
+expect songpage 0
+expect page 0
+tap EDIT
+wait 40
+expect page 10
+tap EDIT
+wait 40
+expect page 12
+tap EDIT
+wait 40
+expect page 10
+tap EDIT
+wait 40
+expect page 12
+
+# a page over a screen: its button comes back to that screen, and does not go on to the next
+tap FX
+wait 40
+expect fxpage 1
+tap EDIT
+wait 40
+expect fxpage 0
+expect page 12
+tap GLO
+wait 40
+tap EDIT
+wait 40
+expect setpage 0
+expect page 12
+
+# SEQ and HOME leave from any of them
+tap ARP
+wait 40
+tap SEQ
+wait 40
+expect songpage 0
+expect voiceview 1
+tap FX
+wait 40
+tap HOME
+wait 40
+expect fxpage 0
+expect voiceview 0
+expect page 0
+expect dropped 0

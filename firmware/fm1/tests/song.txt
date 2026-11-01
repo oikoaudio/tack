@@ -75,6 +75,18 @@ wait 40
 release SEQ
 wait 60
 expect songmode 1
+shot chain_grid.png
+tap SEQ
+wait 40
+shot chain_bars.png
+tap SEQ
+wait 40
+shot chain_note.png
+tap SEQ
+wait 40
+tap HOME
+wait 40
+expect songmode 1
 expect pattern 0
 expect stepmode 1
 tap PLAY
@@ -112,11 +124,7 @@ expect tall 0
 tap EDIT
 wait 40
 expect tall 1
-tapkey 20
-wait 40
-expect eupage 1
-expect tall 0
-tapkey 20
+tap ARP
 wait 40
 expect tall 1
 tap HOME
@@ -148,14 +156,14 @@ tap GLO
 wait 40
 expect setpage 1
 expect songpage 0
-tap GLO
+tap HOME
 wait 40
 expect setpage 0
 
 # ARP tapped is the SONG page, and the keys fill its rows
 tap ARP
 wait 40
-tap ARP
+tap HOME
 wait 40
 expect songpage 0
 tap ARP

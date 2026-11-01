@@ -24,6 +24,7 @@ typedef int (*SeqStepPlays)(uint8_t track, uint8_t step, int8_t position);
 typedef void (*SeqLaneWrap)(uint8_t track);
 void seq_platform_set_recurrence(SeqStepPlays plays, SeqLaneWrap wrap);
 
-/* a MIDI clock pulse: the hook sets the tempo and answers 1. Unset, the sequencer's own 8 pulse average does */
+/* a MIDI clock pulse: the hook keeps the tempo, calls sync_pulse when the sequencer should move, and answers 1. Unset, the
+ * sequencer moves on each pulse and its own 8 pulse average sets the tempo */
 typedef int (*SeqClockPulse)(void);
 void seq_platform_set_clock_pulse(SeqClockPulse fn);

@@ -45,11 +45,9 @@ uint16_t sync_calcBpm(float timePerPulse)
 	return bpm>0?bpm:1;
 }
 //---------------------------------------------------------
-//called by midi clock
-void sync_tick()
+//one pulse's worth of the sequencer
+void sync_pulse()
 {
-
-#if 1
 	//with the new sequencer without substeps we have classical 4ppq resolution
 	//MIDI clock is 24ppq
 	//so we can simply advance the sequencer every 6 clock pulses
@@ -77,10 +75,17 @@ void sync_tick()
 
 
 	}
+}
+//---------------------------------------------------------
+//called by midi clock
+void sync_tick()
+{
 
+#if 1
 #ifdef LXR_FM1_BUILD
-	if(seq_platform_clock_pulse()) return;	// the platform keeps the tempo
+	if(seq_platform_clock_pulse()) return;	// the platform keeps the tempo, and calls sync_pulse itself
 #endif
+	sync_pulse();
 
 	//Fix for external sync LFO sync calculation
 

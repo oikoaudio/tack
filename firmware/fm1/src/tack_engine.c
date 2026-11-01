@@ -225,6 +225,9 @@ extern uint8_t activeParameters[];
 static int apply_locks(uint8_t track, uint8_t step);
 static void locks_init(void);
 static int clock_pulse(void);
+static float wheel_each;                        /* ticks between pulses */
+static uint8_t wheel_on, wheel_over;            /* the flywheel below is running, and the pulses it ran past the clock: the
+                                                 * next ones from outside are already played */
 static uint8_t clock_w, clock_held;             /* external clock: the next slot, the times held */
 static int recur_plays(uint8_t track, uint8_t step, int8_t position);
 static void lane_wrap(uint8_t track);
@@ -1041,6 +1044,7 @@ static void drain(void)
             break;
         case EV_EXT:
             clock_held = 0;
+            wheel_on = wheel_over = 0;
             seq_setExtSync(e.a ? 2u : 0u);      /* the LXR's 2 is MIDI clock; its 1 is the trigger input, which seq_sync ignores */
             if (!e.a)
                 seq_setBpm(ui_bpm);             /* back from the clock's tempo */
@@ -1165,14 +1169,15 @@ void tack_note_now(uint8_t voice, uint8_t note, uint8_t vel)
 /* The tempo of an external clock: the time across the last CLOCK_LONG pulses, 4 beats. MIDI in is read once a render, so a
  * pulse is up to 5.8 ms out, and a span of 2 s at 120 BPM brings that to 0.3%. The last CLOCK_SHORT pulses disagreeing by
  * CLOCK_JUMP is a new tempo, not noise, and the span starts again from them. A gap means the clock stopped. Steps follow
- * the pulses (sync_tick) and take none of this: it is for the display, synced LFOs, shuffle and flams, and it moves only
- * when it is CLOCK_STILL away, so the LFOs are not recalculated on each pulse */
+ * the flywheel below and the display, synced LFOs, shuffle and flams this tempo: it moves only when it is CLOCK_STILL away,
+ * so the LFOs are not recalculated on each pulse */
 #define CLOCK_LONG 96u
 #define CLOCK_SHORT 24u
 #define CLOCK_FIRST 12u                         /* the pulses before there is a tempo to believe */
 #define CLOCK_GAP (SEQ_TICKS_PER_SECOND / 4u)   /* slower than 10 BPM */
 #define CLOCK_JUMP 0.04f
 #define CLOCK_STILL 0.6f
+#define CLOCK_PAUSE 3.0f                        /* pulses' time without one */
 static uint32_t clock_at[CLOCK_LONG + 1u];
 
 static float clock_span(uint32_t pulses)        /* BPM over the last pulses, 0 if they took no time */
@@ -1182,18 +1187,98 @@ static float clock_span(uint32_t pulses)        /* BPM over the last pulses, 0 i
     return ticks ? (float)pulses * (float)SEQ_TICKS_PER_SECOND * 2.5f / (float)ticks : 0.0f;
 }
 
+/* The flywheel. A pulse is read up to 5.8 ms late, so steps that followed the pulses moved by that much, and a groove with
+ * them. Once there is a tempo the sequencer takes its pulses from here, counted in the audio's own time as with the internal
+ * clock, on the 1.45 ms grid of the engine's blocks. A pulse from outside only corrects it, by a part of how far out it was,
+ * and that part is larger when it is far out, as after a change of tempo. It goes on a little past the last pulse, in case
+ * the next is late, and then waits. All in ticks from now, as a float cannot hold systick_ticks for long */
+#define WHEEL_EASE 0.0625f
+#define WHEEL_QUICK 0.25f
+#define WHEEL_AHEAD 2                           /* pulses past the last from outside */
+static float wheel_due;                         /* ticks to the next pulse */
+static uint32_t wheel_in, wheel_out, wheel_now;
+
+/* a pulse from outside with the wheel off */
+static void wheel_past(void)
+{
+    if (wheel_over)
+        wheel_over--;
+    else
+        sync_pulse();
+}
+
+/* it stops where the clock is: ahead by a pulse or two, or owing some */
+static void wheel_stop(void)
+{
+    if (wheel_on) {
+        int32_t out = (int32_t)(wheel_out - wheel_in);
+        wheel_over = (uint8_t)(out > 0 ? out : 0);
+        for (; out < 0; out++)
+            sync_pulse();
+    }
+    wheel_on = 0;
+}
+
+static void wheel_time(void)
+{
+    wheel_due -= (float)(systick_ticks - wheel_now);
+    wheel_now = systick_ticks;
+}
+
+static void wheel_take(void)                    /* a pulse from outside, with a tempo */
+{
+    float out;
+    if (!seq_isRunning()) {
+        wheel_stop();
+        wheel_past();
+        return;
+    }
+    if (!wheel_on) {                            /* this one as it comes, and the wheel from here */
+        wheel_past();
+        wheel_on = 1;
+        wheel_in = wheel_out = 0;
+        wheel_now = systick_ticks;
+        wheel_due = wheel_each;
+        return;
+    }
+    wheel_time();
+    out = -(wheel_due + (float)(int32_t)(wheel_in - wheel_out) * wheel_each);   /* this pulse was due so long ago */
+    wheel_due += out * (out > wheel_each * 0.5f || out < wheel_each * -0.5f ? WHEEL_QUICK : WHEEL_EASE);
+    wheel_in++;
+}
+
+static void wheel_turn(void)                    /* each block, before the sequencer */
+{
+    if (!wheel_on)
+        return;
+    wheel_time();
+    while (wheel_due <= 0.0f && (int32_t)(wheel_out - wheel_in) < WHEEL_AHEAD) {
+        sync_pulse();
+        wheel_out++;
+        wheel_due += wheel_each;
+    }
+    if (wheel_due < -wheel_each)                /* waiting for the clock */
+        wheel_due = -wheel_each;
+}
+
 static int clock_pulse(void)
 {
     const uint32_t now = systick_ticks;
+    const uint32_t since = now - clock_at[(clock_w + CLOCK_LONG) % (CLOCK_LONG + 1u)];
     float bpm, d;
-    if (clock_held && now - clock_at[(clock_w + CLOCK_LONG) % (CLOCK_LONG + 1u)] > CLOCK_GAP)
+    /* a gap, or a pause in a known tempo, which would otherwise count as a slower one */
+    if (clock_held && (since > CLOCK_GAP || (clock_held > CLOCK_FIRST && (float)since > wheel_each * CLOCK_PAUSE))) {
         clock_held = 0;
+        wheel_stop();
+    }
     clock_at[clock_w] = now;
     clock_w = (uint8_t)((clock_w + 1u) % (CLOCK_LONG + 1u));
     if (clock_held <= CLOCK_LONG)
         clock_held++;
-    if (clock_held <= CLOCK_FIRST)
+    if (clock_held <= CLOCK_FIRST) {
+        wheel_past();
         return 1;
+    }
     bpm = clock_span(clock_held - 1u);
     if (clock_held > CLOCK_SHORT + 1u) {
         const float recent = clock_span(CLOCK_SHORT);
@@ -1208,6 +1293,13 @@ static int clock_pulse(void)
     d = bpm - (float)seq_getBpm();
     if (bpm > 0.0f && (d >= CLOCK_STILL || d <= -CLOCK_STILL))
         seq_setBpm((uint16_t)(bpm + 0.5f));
+    if (bpm > 0.0f) {
+        wheel_each = (float)SEQ_TICKS_PER_SECOND * 2.5f / bpm;
+        wheel_take();
+    } else {
+        wheel_stop();
+        wheel_past();
+    }
     return 1;
 }
 
@@ -1220,6 +1312,7 @@ void tack_midi_realtime(uint8_t status)
         seq_sync();
         break;
     case MIDI_START:
+        wheel_on = wheel_over = 0;
         lanes_reset();
         song_rewind();
         sync_midiResetPosition();
@@ -1230,6 +1323,7 @@ void tack_midi_realtime(uint8_t status)
         break;
     case MIDI_STOP:
         sync_midiStartStop(0);
+        wheel_stop();
         voiceControl_noteOff(0xFFu);
         break;
     default:
@@ -1287,6 +1381,7 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
         stress_tick();
         /* as the LXR's audio interrupt: the sequencer, then the block it just triggered */
         seq_platform_advance(TACK_BLOCK, TACK_RATE);
+        wheel_turn();
         seq_tick();
         mixer_tapOn = app_ul_want;
         lxr_host_renderBlock(dac1, dac2);

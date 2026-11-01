@@ -35,19 +35,19 @@ tapkey 5
 wait 40
 key 7 up
 wait 60
-tapkey 25
+tap SEQ
 wait 40
 key 14 down
 wait 40
-turn K4 -70
+turn K1 -70
 wait 40
 key 14 up
 wait 40
 tap HOME
 wait 40
 
-# a tap of SEL, and held for something else it does not
-tap SEL
+# SEQ opens it, and SEL held for something else leaves the overview alone
+tap SEQ
 wait 60
 expect voiceview 1
 shot voice.png
@@ -57,7 +57,7 @@ expect voice 1
 expect voiceview 1
 tapkey 1
 wait 60
-tap SEL
+tap HOME
 wait 60
 expect voiceview 0
 press SEL
@@ -74,6 +74,12 @@ wait 40
 release SEL
 wait 60
 expect voiceview 0
+tap SEL
+wait 60
+expect voiceview 0
+tap SEQ
+wait 60
+expect voiceview 1
 tap SEL
 wait 60
 expect voiceview 1
@@ -101,12 +107,12 @@ wait 60
 tap ENV
 wait 40
 expect voiceview 0
-tap ENV
+tap SEQ
 wait 40
 expect voiceview 1
 tap FX
 wait 40
-tap FX
+tap SEQ
 wait 40
 expect voiceview 1
 tap OCT+
@@ -115,11 +121,367 @@ expect bar 0
 tap HOME
 wait 40
 expect voiceview 0
+leds
+
+# SEQ goes between the details, and SEL is no part of it
 tap SEQ
+wait 40
+expect voiceview 1
+expect noteview 0
+tap SEQ
+wait 40
+expect voiceview 0
+expect noteview 1
+tap SEL
+wait 40
+expect noteview 1
+leds
+
+# HOME ends NOTE: the overview's black keys always pick a voice
+tap HOME
+wait 40
+expect noteview 0
+expect notemode 0
+expect voiceview 0
+leds
+tapkey 3
+wait 40
+expect voice 1
+tapkey 1
+wait 40
+expect voice 0
+turn K1 2
+wait 40
+expect param0 33
+turn K1 -2
+wait 40
+expect param0 31
+
+# SEQ comes back to the detail left, from the overview and from a sound page, which it does not turn over
+tap SEQ
+wait 40
+expect noteview 1
+tap EDIT
+wait 40
+expect noteview 0
+leds
+tap SEQ
+wait 40
+expect noteview 1
+expect page 0
+tap SEQ
+wait 40
+expect voiceview 1
+expect notemode 0
+tap EDIT
+wait 40
+tap SEQ
+wait 40
+expect voiceview 1
+tap HOME
+wait 40
+expect voiceview 0
+tap EDIT
+wait 40
+tap SEQ
+wait 40
+expect voiceview 1
+tap HOME
+wait 40
+
+# a sound page from NOTE keeps the keys as notes, to tune by ear; HOME then ends it, and SEQ finds NOTE again
+tap SEQ
+wait 40
+tap SEQ
+wait 40
+expect noteview 1
+tap EDIT
+wait 40
+expect notemode 1
+tapkey 3
+wait 40
+expect voice 0
+tap HOME
+wait 40
+expect notemode 0
+tap HOME
+wait 40
+tap EDIT
+wait 40
+expect notemode 0
+tap SEQ
+wait 40
+expect noteview 1
+expect notemode 1
+
+# NOTE left on takes no page's own keys: the song's white keys, the FX sends, and each comes back to notes
+tap ARP
+wait 40
+expect songpage 1
+expect songlen 0
+tapkey 0
+wait 40
+tapkey 2
+wait 40
+expect songlen 2
+tap SEQ
+wait 40
+expect noteview 1
+expect notemode 1
+tap FX
+wait 40
+expect fxsends 0
+tapkey 1
+wait 40
+expect fxsends 1
+tapkey 1
+wait 40
+expect fxsends 0
+tap SEQ
+wait 40
+expect noteview 1
+tapkey 3
+wait 40
+expect voice 0
+tap SEQ
+wait 40
+expect voiceview 1
+tap HOME
+wait 40
+
+# the selected step: SEL walks it, a key moves it, and the dials are its own with no key held
+tap SEQ
+wait 40
+expect voiceview 1
+tapkey 0
+wait 40
+tapkey 0
+wait 40
+expect selstep 0
+expect step0 1
+expect selslot3 127
+turn K1 -7
+wait 40
+expect selslot3 120
+expect st_3 120
+tap SEL
+wait 40
+expect selstep 1
+expect step1 1
+turn K2 2
+wait 40
+expect selslot0 5
+tap SEL
+wait 40
+expect selstep 2
+expect step2 1
+turn K3 1
+wait 40
+expect selslot1 1
+expect locks0 0
+key 7 down
+wait 40
+expect selstep 4
+key 7 up
+wait 40
+shot voice_selected.png
+
+# SELECT walks either way and round the lane, and ALGORITHM nudges: neither is tempo or shuffle here
+turn SELECT -2
+wait 40
+expect selstep 2
+turn SELECT 2
+wait 40
+expect selstep 4
+expect popup 0
+turn SELECT -5
+wait 40
+expect selstep 15
+turn SELECT 5
+wait 40
+expect selstep 4
+expect step4 0
+turn ALGO 2
+wait 40
+expect selslot0 0
+turn SELECT -2
+wait 40
+expect selstep 2
+expect step2 1
+turn ALGO 2
+wait 40
+expect selslot0 2
+expect popup 0
+turn ALGO -2
+wait 40
+expect selslot0 0
+turn SELECT 2
+wait 40
+
+# an empty step: dashes, and a dial says so and changes nothing
+tap SEL
+wait 40
+expect selstep 5
+expect step5 0
+turn K1 -7
+wait 40
+expect step5 0
+shot voice_empty.png
+wait 400
+
+# SEL comes round at the lane's end, and OCT brings the selection along to the bar showing
+press SEL
+wait 20
+tapkey 9
+wait 40
+release SEL
 wait 40
 tap SEL
 wait 40
-expect voiceview 0
+expect selstep 0
+press SEL
+wait 20
+tap OCT+
+wait 40
+tapkey 2
+wait 40
+release SEL
+wait 40
+expect bar 1
+expect selstep 16
+tap OCT-
+wait 40
+expect bar 0
+expect selstep 0
+tap OCT+
+wait 40
+tap SEL
+wait 40
+expect selstep 17
+tap SEL
+wait 40
+expect selstep 0
+expect bar 0
+
+# SEL with OCT: up to 4 bars, kept steps back with the length, and the lane's shortest a bar it started under
+expect len0 18
+press SEL
+wait 20
+tap OCT+
+wait 30
+expect len0 34
+expect bar 2
+tap OCT+
+wait 30
+tap OCT+
+wait 30
+expect len0 64
+expect bar 3
+expect selstep 48
+tap OCT+
+wait 30
+expect len0 64
+tap OCT-
+wait 30
+tap OCT-
+wait 30
+tap OCT-
+wait 30
+expect len0 16
+tap OCT-
+wait 30
+expect len0 16
+expect step2 1
+release SEL
+wait 40
+
+# NOTE is the same steps: the selection carries over both ways, K2 is the step's velocity, ALGORITHM nudges, SEL and SELECT walk
+tap SEL
+wait 40
+tap SEL
+wait 40
+expect selstep 2
 tap SEQ
+wait 40
+expect noteview 1
+expect tall 1
+expect selstep 2
+expect selslot3 127
+turn K2 -27
+wait 40
+expect selslot3 100
+turn ALGO 1
+wait 40
+expect selslot0 1
+turn ALGO -1
+wait 40
+tap SEL
+wait 40
+expect selstep 3
+turn SELECT -1
+wait 40
+expect selstep 2
+tap SEQ
+wait 40
+expect voiceview 1
+expect selstep 2
+expect selslot3 100
+
+# a tap of SEL shows the step's dials throughout, and a turn with it held is the lane's and walks no step
+press SEL
+wait 40
+expect lanedials 0
+release SEL
+wait 40
+expect selstep 3
+press SEL
+wait 40
+turn K4 1
+wait 40
+expect lanedials 1
+shot voice_lane.png
+turn K4 -1
+wait 40
+release SEL
+wait 40
+expect selstep 3
+
+# ROLL and COPY name themselves while held, but not in NOTE, where the keys are notes
+key 17 down
+wait 40
+expect keyword 1
+key 17 up
+wait 40
+expect keyword 0
+key 25 down
+wait 40
+expect keyword 2
+key 25 up
+wait 40
+expect keyword 0
+
+# and in NOTE, where OCT alone is the keys' range
+tap SEQ
+wait 40
+expect noteview 1
+key 25 down
+wait 40
+expect keyword 0
+key 25 up
+wait 40
+press SEL
+wait 20
+tap OCT+
+wait 30
+expect len0 32
+expect noteview 1
+tap OCT-
+wait 30
+expect len0 16
+release SEL
+wait 40
+tap SEQ
+wait 40
+tap HOME
 wait 40
 expect dropped 0

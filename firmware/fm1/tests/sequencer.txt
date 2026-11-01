@@ -64,7 +64,7 @@ wait 40
 release ARP
 wait 20
 expect muted3 0
-# the bars: OCT+ stays on the bars the lanes reach, and with SEL held goes past them to lengthen a lane
+# the bars: OCT+ stays on the bars the lanes reach, and with SEL held adds a bar and goes to it, as OCT- takes one off
 tap OCT+
 wait 30
 expect bar 0
@@ -73,6 +73,19 @@ wait 20
 tap OCT+
 wait 30
 expect bar 1
+expect len3 32
+release SEL
+wait 40
+expect bar 1
+press SEL
+wait 20
+tap OCT-
+wait 30
+expect len3 16
+expect bar 0
+tap OCT-
+wait 30
+expect len3 16
 release SEL
 wait 40
 expect bar 0
@@ -92,10 +105,10 @@ expect step16 1
 tap OCT-
 wait 30
 expect bar 0
-press SEL
-wait 20
 tap OCT+
 wait 30
+press SEL
+wait 20
 tapkey 14
 wait 40
 release SEL
@@ -248,7 +261,7 @@ expect voice 3
 turn K1 -2
 wait 40
 expect fxp3 243
-tap FX
+tap HOME
 wait 40
 expect fxpage 0
 # the sound pages: three rows a screen, each press the next screen, and past the last back to the main page
@@ -261,15 +274,13 @@ expect page 12
 tap ENV
 wait 40
 expect page 20
-tap ENV
+tap HOME
 wait 40
 expect page 0
 tap HOME
 wait 40
 # the snare has no FM page: the page it opens is its noise
 tapkey 8
-wait 40
-tap EDIT
 wait 40
 tap EDIT
 wait 40
@@ -297,7 +308,7 @@ expect sl0 2
 turn K2 40
 wait 40
 expect sl1 40
-tap LFO
+tap HOME
 wait 40
 expect page 0
 # the settings page
@@ -320,12 +331,14 @@ wait 40
 expect ext 0
 tap GLO
 wait 40
-# the Euclidean page: drum 3, a lane of 8 with 3 hits. Opening it changes nothing; a turn writes the lane
+# the lane's dials: drum 3, a lane of 8 with 3 hits. SEL held in the bars view changes nothing; a turn writes the lane
 tapkey 5
 wait 40
-tapkey 20
+tap SEQ
 wait 40
-expect eupage 1
+press SEL
+wait 300
+expect lanedials 1
 expect len2 16
 turn K1 -8
 wait 40
@@ -348,17 +361,19 @@ wait 40
 expect eu0 16
 turn K1 -8
 wait 40
-tapkey 20
+release SEL
 wait 40
-expect eupage 0
+expect lanedials 0
+tap HOME
+wait 40
 # COPY held with a white key: this pattern onto pattern 9. On itself it does nothing
-key 22 down
+key 25 down
 wait 40
 tapkey 14
 wait 60
 tapkey 0
 wait 60
-key 22 up
+key 25 up
 wait 40
 press SEQ
 wait 20
@@ -407,48 +422,49 @@ wait 40
 expect roll 3
 tap GLO
 wait 40
-# the STEP page: a held step takes all four, no step held K1 nudges the lane and the rest ask for a step
+# the bars view: a held step takes all four dials, and SEL held K4 nudges the lane
 tapkey 1
 wait 40
 expect step0 1
-tapkey 25
+tap SEQ
 wait 40
-expect stpage 1
+expect voiceview 1
 key 0 down
 wait 40
-turn K1 3
+turn K2 3
 wait 40
 expect st_0 3
-turn K2 2
+turn K3 2
 wait 40
 expect st_1 2
-turn K3 -40
+turn K4 -40
 wait 40
 expect st_2 60
-turn K4 -27
+turn K1 -27
 wait 40
 expect st_3 100
-turn K1 9
+turn K2 9
 wait 40
 expect st_0 7
-turn K1 -4
+turn K2 -4
 wait 40
 key 0 up
 wait 40
-# the release after an edit leaves the step on
+# the release after an edit leaves the step on, and no dial locked it
 expect step0 1
-turn K1 -2
+expect locks0 0
+press SEL
+wait 20
+turn K4 -2
 wait 40
+expect lanedials 1
 expect st_0 1
 expect lanenudge 1
-turn K2 2
-wait 40
 expect st_1 2
-tapkey 25
+release SEL
 wait 40
-tapkey 25
+tap HOME
 wait 40
-expect stpage 0
 # the load test
 press GLO
 wait 30
@@ -487,7 +503,7 @@ release OCT-
 wait 40
 expect fxv4 127
 expect echo 299
-tap FX
+tap HOME
 wait 40
 expect fxpage 0
 expect dropped 0

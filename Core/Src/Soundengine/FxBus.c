@@ -38,6 +38,36 @@ void FxBus_init()
 #endif
 }
 
+#ifdef LXR_FM1_BUILD
+// With no input the distortion puts out a steady level: the tube curve is off centre on purpose, and FOLD adds an offset.
+// The desktop keeps it. Here exactly that level comes off the output, worked out as Distortion_process works it out, so
+// nothing plays at rest. It is a constant and no filter: no phase moves, and the asymmetry of a sound as it plays stays.
+extern const double ecc83Table[129];
+float foldback(float in, float threshold);
+static int32_t fxBus_distortionRest(const MasterDistortion *d)
+{
+	float rest;
+	if(d->distortionType == DISTORTION_TUBE)
+		rest = (float)ecc83Table[64] * ((1.0f + 0.55f * d->p1) + 0.55f * d->p1) * d->p3;
+	else if(d->distortionType == DISTORTION_FOLD)
+		rest = foldback(d->p1, 1.f) * d->p3;
+	else
+		return 0;
+	return (int32_t)((float)__SSAT((int32_t)(rest * 32768.0f), 16) * fxBus.dryWet);
+}
+
+static void fxBus_distortionNoRest(int16_t *fxBuffer, int16_t *out, int16_t *out2, uint16_t size, uint8_t channels)
+{
+	const int32_t rest = fxBus_distortionRest(&fxBus.distortion);
+	Distortion_process(&fxBus.distortion, fxBuffer, out, out2, size, channels, fxBus.dryWet);
+	for(uint32_t i=0;i<size*channels;i++)
+	{
+		int16_t *o = channels == 2 ? out + i : out + i*2u;
+		*o = (int16_t)__SSAT((int32_t)*o - rest, 16);
+	}
+}
+#endif
+
 IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, uint32_t size)
 {
 	int16_t* out;
@@ -103,7 +133,11 @@ IN_ITCM_RAM void FxBus_process(int16_t *fxBuffer, int16_t* outL,int16_t* outR,in
 	break;
 
 	case FX_DISTORTION:
+#ifdef LXR_FM1_BUILD
+		fxBus_distortionNoRest(fxBuffer, out, out2, size, channels);
+#else
 		Distortion_process(&fxBus.distortion, fxBuffer, out, out2, size, channels, fxBus.dryWet);
+#endif
 		break;
 
 	case FX_RING:

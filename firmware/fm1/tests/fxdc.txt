@@ -1,0 +1,31 @@
+# The distortion leaves no steady level on the output, here the tube with the mix and volume up and nothing playing. verify.sh
+# reads the mean of the second half of each wav
+wait 600
+tap FX
+wait 60
+turn K1 1
+wait 60
+expect fxv0 1
+turn K2 100
+wait 60
+press OCT-
+wait 40
+turn K2 100
+wait 40
+release OCT-
+wait 400
+wav fxdc.wav
+wait 1500
+wavstop
+# FOLD with COLOR up, its offset
+press OCT-
+wait 40
+turn K1 40
+wait 40
+turn K3 1
+wait 40
+release OCT-
+wait 400
+wav fxdc2.wav
+wait 1500
+wavstop

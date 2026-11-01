@@ -149,7 +149,7 @@ wait 60
 expect songmode 0
 
 # nudged early, a step belongs to the pass about to start: only the second slot, so just before the second pass
-tapkey 25
+tap SEQ
 wait 40
 key 0 down
 wait 40
@@ -158,7 +158,7 @@ wait 40
 tapkey 1
 wait 40
 expect recurmask0 2
-turn K1 -3
+turn K2 -3
 wait 40
 key 0 up
 wait 40
@@ -223,10 +223,10 @@ tap PLAY
 wait 300
 expect skips0 1
 shot rest.png
-tap SEL
+tap SEQ
 wait 60
 shot rest_voice.png
-tap SEL
+tap HOME
 wait 60
 wait 900
 expect skips0 0

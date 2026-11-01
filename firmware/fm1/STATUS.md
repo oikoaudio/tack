@@ -64,6 +64,7 @@ JieLi's SDK repository no longer exists at the URL in `get_sdk.sh`. The same rev
 | `fm1 kits DIR` | replaces the kit bank with every `.SND` under `DIR`, sequencer stopped |
 | `fm1 backup NAME` | writes patterns and settings to `NAME.tack`, and the kit bank to `NAME.kits/` |
 | `fm1 restore NAME` | puts both back. The FM-1 asks first: SEL yes, HOME no |
+| | Each of these stops first if another program holds the FM-1's MIDI port, and names it. `FM1_FORCE=1` goes ahead anyway |
 | `fm1 convert OLD.tack NEW.tack` | one-off: a backup from before the list of locks, for this build. Delete `tools/ktl_convert.py` when done |
 
 `tests/verify.sh` checks the desktop renders against `tests/desktop_renders.sha256`, then builds the firmware and simulator.
@@ -90,6 +91,40 @@ firmware/fm1/tests/compare_kits.sh OUTDIR KITDIR                        # after 
 The browser emulator is not built. `--web` needs Emscripten, and installing it here was refused by the session's
 permission rules. The package and the host simulator are built.
 
+## The site
+
+`/tack/` introduces both forms, `/tack/plugin/` is the plugins, and `/tack/fm1/` is this firmware, with `install/`,
+`backup/` and `firmware/` under it and the manual at `/manuals/tack-fm1/`. They are on local branch `feat/tack` of
+oikoaudio's site, in worktree `~/ws/dev/web/web-oikoaudio-tack`, uncommitted. A push to that repository's `main` deploys, so keep this off `main` until
+the list below is done. `tools/make_web.py VERSION WEB_DIR` writes the installer and backup pages there from a release
+package. It uses fm1-base's page logic, leaves out m-bootloader, and needs no Emscripten. `site/install_app.js` warns a
+unit running V16 before anything is written. `firmware/fm1/.gitignore` ignores `web/`, so own files go in `site/`.
+
+Headless Chromium against a fake FM-1 in the page, no MIDI port opened: the page loads the package, asks for a backup,
+warns on V16, cancels without an update request, and names V15 and V16 and refuses each with a bit flipped in flash.bin or
+the loader. Compiled and simulator-tested only: none of it has run against a unit.
+
+Going back to stock has not been run on a unit. fm1-base's `checkUfw` refused every real M-VAVE package as damaged, as
+parts 50, 52, 161 and 251 use another checksum and its tests only use fm1-base packages, so `make_web.py` checks stock on
+flash.bin and the loader only. Move that into `web/fm1pkg.js` on the fork. `tests/ota_test.c` staged V15 and V16 through
+`chip/ota.c` and refused both with a damaged boot area, so the step before M-VAVE's writer takes over is tested off the unit.
+Tack's saves leave the stock radio data at 0xE7000 to 0xEA000 alone. V16's image runs to 0xA9000 over nine pattern slots,
+which read as empty after that because the store checks CRCs.
+
+V15 and V16's boot areas differ in 12,655 of 16,384 bytes. M-VAVE's download is now V16. V15 is on the Internet Archive,
+SHA-256 `db1642b2...7edb8a`, as in `fm1_rescue.sh`. Tack replaces the whole app, so stock's V16 features do not carry
+over. What matters is whether Tack boots on V16's bootloader, which has not been tried.
+
+Before publishing:
+
+1. Go from Tack to V15 and back on the unit, with the local installer, then take `STOCK_NOTE` out of `make_web.py`.
+2. Decide how to meet a V16 unit: test it, or keep the warning.
+3. Make the Tack repository public, or publish its source for that version: the GPL needs it, and the page links it.
+4. Fill the kit bank from the browser. Today it takes a terminal and this repository, and no kits ship. Link to kits, don't
+   host them: none of the three kit archives here has a licence file.
+5. The hour's soak, and a release build from the commit that gets tagged.
+6. Fill in the manual again after the panel changes below.
+
 ## Features
 
 The panel:
@@ -97,10 +132,10 @@ The panel:
 | Control | Action |
 | --- | --- |
 | White keys | the 16 steps of the page, on release |
-| A step held, K1 to K4 | lock those values on the step, two per step. EDIT clears them |
+| A step held, K1 to K4 | lock those values on the step, eight per step, on every page but the bars view. EDIT clears them |
 | SEL held, a white key | that step becomes the lane's last |
 | Black keys, first seven | select a voice and play it, with REC running recording it; with SEQ held, select it silently; with ARP held, mute it. Lit: the voice. Mid: steps in this pattern. Glow: an empty lane. Dark: muted. Each flashes as its voice fires, the lit one to dark |
-| NOTE mode | all 27 keys play the voice from F3 to G5, and OCT moves them up to 3 octaves. REC on writes what they play: stopped, step by step from the marked step, with a tap of SEL going past a step; running, live. REC off only plays. K1 step, K2 its note, K3 velocity, K4 on or off. The roll shows the voice's bar, and the keys light the step's note. SEQ held with a black key picks the voice |
+| NOTE mode | the bars view's grid, top bar and selected step, with each step showing its note by name and height, three octaves to a box. All 27 keys play the voice from F3 to G5, and OCT moves them up to 3 octaves. REC on writes what they play: stopped, step by step from the selected step; running, live. REC off only plays. SEL and SELECT select a step, ALGORITHM nudges it. K1 its note, K2 its velocity, K3 how hard the keys write, K4 on or off. The keys light the step's note. SEQ held with a black key picks the voice |
 | MIDI channel 1 | notes 60 to 66 play the voices. Notes 0 to 15 and Program Change 0 to 15 pick a pattern, at the end of the bar when running |
 | Recurrence, running | a step that rests on this pass is grey on the screen and its key is at the lowest light. In the one voice view a tall mark shows the slot this pass is on |
 | LFO WAVE RND with RETRIG on a voice | that voice's hit takes a new value, there before the note starts and held until the next hit. FM-1 only: the LXR and desktop Tack keep the value until the LFO's own cycle wraps |
@@ -108,22 +143,26 @@ The panel:
 | ARP | tap: SONG page, up to 63 rows of one pattern each. White keys fill the rows. K1 row, K2 pattern or end, K3 stop or loop at the end, K4 on or off. Picking one pattern turns the song off and keeps its rows |
 | OCT- and OCT+ | bar 1 to 4 |
 | PLAY, REC | start and stop, live recording |
-| Screen | the 7 row grid on the main, Euclidean and STEP pages. EDIT, ENV, LFO, FX, GLO and SONG have the screen below the header, as the keys show the voice's steps |
+| Screen | the 7 row grid on the main page. EDIT, ENV, LFO, FX, GLO and SONG have the screen below the header, as the keys show the voice's steps |
 | K1 to K4 | what the open page shows: pitch, filter, decay and volume of the voice on the main page |
 | GLO, OCT- held | USB AUDIO: STEREO, the master, or 10 CH: 1-2 the master, 3-8 D1 D2 D3 SN CY HH, 9-10 the FX bus, dry and wet, of the voices sent to it. Each voice as it leaves the voice, so a voice sent to the FX is dry on its channel. 44.1 kHz only. Changing it needs the sequencer stopped and re-enumerates, so USB-MIDI goes for a moment. It is never saved, so every power-on is stereo, and with no host after 8 s it goes back to stereo. DROPS counts lost packets, a click each |
 | SELECT, ALGORITHM, PRESET | tempo and shuffle, on a screen of their own for a moment; kit |
-| SEQ | tap: STEP or NOTE mode. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
+| SEQ | tap: the last detail view, one voice's steps or NOTE, from the overview or any page; tapped in a detail, the other one. NOTE carries on over the sound pages, so the keys play the voice while the dials tune it, and on the SONG, FX and GLO pages the keys are that page's own. HOME ends NOTE, so its black keys always pick a voice, and SEQ goes back to NOTE if that was the detail left. A key held through HOME still sends its note-off. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
+| Page buttons | EDIT ENV LFO FX GLO ARP: opens the page. Pressed again, goes to its next screen if it has one, as EDIT does, and otherwise does nothing. HOME, SEQ or another page's button leaves |
 | EDIT, ENV, LFO | the Syntakt layout: a top bar and all three rows in four equal columns, with smooth widgets and one picture across the parameters that shape it: the envelope, the filter's shape, the oscillator's wave, the LFO. LEVEL is the fourth dial of AMP EG, and REPEAT the fourth of ENV's last row. The exact value shows in the top bar while a dial turns, and a held step's recurrence there too. Velocity and LFO targets skip velocity's own settings |
-| SEL tapped on the main page | one voice's bar at a larger size, in the white keys' order: velocity as height, nudge as a tick, locks as dots, recurrence as boxes, chance and flam as numbers, and the main dials below. HOME or SEL leaves it |
-| OCT+, OCT- on the main page | the bar, among those the lanes reach. With SEL held OCT+ goes past them, to lengthen a lane with a white key |
+| One voice's view (SEQ), the bars view | CHN or SONG by the voice's name in the top bar, here and in NOTE, while a chain or the song picks the pattern. One voice's bar at a larger size, in the white keys' order. Each step shows velocity as height, nudge on a ruler under it, its number of locks as L2, recurrence as boxes, and chance and flam as text. A key pressed, a tap of SEL or a turn of SELECT selects a step, shown by an outline and S3 in the top bar, the same step NOTE has selected. ALGORITHM nudges it, so tempo and shuffle are on the other pages. K1 to K4 are that step's velocity, nudge, flam and chance, with or without the key held, so they never lock here and the view does not tune the sound. HOME tunes and locks. A held step's ALGORITHM, PRESET and SELECT popups work here too |
+| OCT+, OCT- on the main page | the bar, among those the lanes reach |
+| SEL held, OCT+ or OCT- | a bar more or less on the selected lane, 16 steps at a time up to 64, on the main page and in NOTE. Steps past the end stay, and come back when the lane grows |
 | OCT+, OCT- on a sound page | held: the upper or lower row takes the screen and the dials, and the middle one comes back when let go. Elsewhere OCT is the bar, or in NOTE mode the keys' range |
 | FX | the sends, lit by the black keys, then FX type, mix and two settings of that type. OCT- held reaches its others |
 | GLO | settings: tempo, shuffle, external MIDI clock, roll rate, and the `CPU`, `PEAK` and `XRUN` readings |
-| Black keys 8 to 10 | ROLL while held, the Euclidean page, COPY held with a white key: this pattern onto that one |
-| Black key 11 | STEP page. A step held: nudge, flam, chance, velocity. None held: K1 nudges the lane. Second press: a held step's note |
+| Black key 8 | ROLL while held. The top bar says ROLL |
+| Black key 11 | COPY held with a white key: this pattern onto that one. The top bar says COPY TO |
+| Black keys 9 and 10 | nothing |
+| SEL held in the bars view | after a quarter of a second, or at once with a dial turned, K1 to K4 are the lane's: Euclidean length, hits and rotation, and the lane's nudge. A turn of K1 to K3 replaces the lane's steps. The top bar says LANE |
 | SEL and EDIT held a second | clear the lane |
 | SAVE | every changed pattern, tempo and the startup kit, refused while running because a flash write stops the sound |
-| HOME | the main page. GLO held: zero `PEAK` and `XRUN`. SEL and HOME held a second: the kit as it is in the bank, dropping every edit |
+| HOME | the overview, every voice, from anywhere. Lit there, as SEQ is in a detail view. GLO held: zero `PEAK` and `XRUN`. SEL and HOME held a second: the kit as it is in the bank, dropping every edit |
 | GLO held, PLAY | load test: every voice every 35 blocks, about 51 ms, on the loaded kit. PLAY alone ends it |
 
 Compiled and simulator-tested:
@@ -138,7 +177,7 @@ Compiled and simulator-tested:
   a backup and restore that bring it back. A copy of the unit's own older backup restored here with its kit, pattern and
   tempo, and an empty song.
 - NOTE mode and a step's note in `tests/note.txt`: playing without writing, step entry, OCT, the knobs, live recording,
-  the second STEP page, and saving through a reboot. The rendered audio measures an octave at 2.05 and a fifth at 1.52 on a
+  NOTE's K2, and saving through a reboot. The rendered audio measures an octave at 2.05 and a fifth at 1.52 on a
   drum with a pitch envelope.
 - The panel in `tests/sequencer.txt`: steps, voices, mutes, bars, tempo, shuffle, patterns, transport, and saving one
   pattern and the kit, then loading them at boot. The recorded audio has onsets 498.8 to 500.9 ms apart at 120 BPM.
@@ -185,9 +224,13 @@ Recurrence: a step plays on chosen slots of a cycle of 2 to 8 passes. The length
 lock slot, so they copy and clear with the step, and each takes 3 B of the 640 in the image. Each lane counts its passes of
 each pattern, from the start of play.
 
-External MIDI clock: followed Bitwig on the unit, in a short check, and run in the simulator, where `tests/clock.txt` sends Start, Clock and Stop through `midi_in`. The panel's setting used to select the LXR's mode 1, its trigger input, so Start ran the sequencer while `seq_sync` ignored every clock. It now selects mode 2. Tack follows MIDI Beat Clock only. `midi_in` drops MIDI Time Code and Song Position Pointer, so Continue carries on from where the sequencer stopped and a DAW that starts mid-bar is not followed to its position. Step 0 falls on the first clock and step 4 on pulse 25. USB and TRS MIDI reach the queue only between renders (`usb_poll` waits outside the render), so Tack reads them once a render, and reading them on each engine block would find nothing new. A step can land up to 5.8 ms late. The tempo comes from the time across the last 96 pulses, 4 beats, which reads 125 for a true 125 where the LXR's 8 pulse average read 127. It moves only by 0.6 BPM or more, so synced LFOs are not recalculated on each pulse. A beat that disagrees by 4% restarts the span, so a jump shows within a beat and a slow ramp can lag by up to 4 beats. For the first 12 pulses after a stopped clock it holds the old tempo, and for the next few beats it can read about 2% out. The first note is on the first clock whether 0 or 12 clocks came before Start. Start and Stop also go back out on USB, as the LXR sends them.
+The distortion's resting level comes off its output on the FM-1 (`fxBus_distortionNoRest`, FM-1 build only). The ECC83 curve reads -0.11 at no input, and with the mix and volume up the main output sat at -1120 with nothing playing. It is a constant worked out from the settings and no filter, so no phase moves, and the asymmetry of a sound as it plays stays. `tests/fxdc.txt` checks TUBE and FOLD at rest. EDIT goes between its two screens and no longer on to the main page.
 
-USB audio's 10 channels: run on the unit. Linux took 10 channels, and 6 s of a running pattern captured with `arecord` gave every frame, each voice on its own channel, with `DROPS` at 0. It also streamed into Bitwig through PipeWire and a combined device with no drops, on a normal session rather than a timed run on a heavy kit. Bitwig's links to the FM-1 go when the FM-1 re-enumerates, as it does on switching to 10 CH, so turn 10 CH on before starting Bitwig's audio engine. With every voice sent to the FX, 9-10 equal 1-2, as the FX bus carries dry and wet together, so they are the bus and not a wet return. The simulator has no USB side. The design is Acid Moogi's (github.com/TomPtherapy/moogi, GPL-3.0), whose notes record clicks and drops found on a device and what fixed them, with the ring and bands worked out again for Tack's 256 frame render. It lives on local branches `tack-usb10` of fm1-base and of its nested felucca-bsp, so the pins here point at commits that exist on this machine only, until those are pushed to forks. `chip/usb.c` is also built into the update loader: `loader.bin` was built from nothing with and without the change and is byte for byte the same. Every power-on is stereo.
+Panel words: pan reads L63, C, R63 on a dial that fills from 12 o'clock. 63 and 64 both read C, as the middle is 63.5 and the default kit sits at 63. Kits still store 0-127. PITCH, FINE and the second oscillators' frequencies read as signed offsets, as on the LXR's menu: `tools/gen_pages.c` asks the desktop's value text what reads as 0, 60 for tuning and 63 for FINE, and dials and bars fill from there. `tools/gen_pages.c` names the LXR's REC and PWM waves SQR and PULSE. The second oscillator's labels follow MODE: FM AMT, FM FREQ, FM WAVE, or MIX, FREQ 2, WAVE 2, as AMOUNT crossfades the two in MIX. GLO is bright for its page alone, and external clock shows as EXT by the tempo. STEP or NOTE is in bold on the main page and in the top bar of the bars view and NOTE. On D1 D2 D3 and SN the lower row of EDIT's first screen is PITCH and the MOD EG's amount, decay and slope, the same parameters as the main page and ENV.
+
+External clock's steps come from a flywheel in `tack_engine.c`, simulator-tested and not yet on the unit. After 12 pulses the sequencer takes its pulses from a clock counted in audio frames, as the internal clock is, and each pulse from outside corrects it by a sixteenth of how far out it was, or a quarter when it is more than half a pulse out. `tests/grid.py` measures it from the audio, at 8 bars of closed hats: the gaps between hits varied by 8.7 ms on steady pulses and 14.5 ms with 3 ms of jitter, and now by 2.9 ms on both. That is the 1.45 ms block at each end of a gap. Before the 12 pulses, including the first hit after a Start with no clock running, steps still follow the pulses, and a pause of 3 pulses' time or more starts the count again. A Stop exactly on a step can sound that step for a moment before the sound stops, as the flywheel has already played it, and the position stays right. The tests cover a tempo jump, a ramp, 60 ms and 400 ms without pulses, Stop and Continue, Start on a running clock, and shuffle. External MIDI clock: followed Bitwig on the unit, in a short check, and run in the simulator, where `tests/clock.txt` sends Start, Clock and Stop through `midi_in`. The panel's setting used to select the LXR's mode 1, its trigger input, so Start ran the sequencer while `seq_sync` ignored every clock. It now selects mode 2. Tack follows MIDI Beat Clock only. `midi_in` drops MIDI Time Code and Song Position Pointer, so Continue carries on from where the sequencer stopped and a DAW that starts mid-bar is not followed to its position. Step 0 falls on the first clock and step 4 on pulse 25. USB and TRS MIDI reach the queue only between renders (`usb_poll` waits outside the render), so Tack reads them once a render, and reading them on each engine block would find nothing new. A step can land up to 5.8 ms late. The tempo comes from the time across the last 96 pulses, 4 beats, which reads 125 for a true 125 where the LXR's 8 pulse average read 127. It moves only by 0.6 BPM or more, so synced LFOs are not recalculated on each pulse. A beat that disagrees by 4% restarts the span, so a jump shows within a beat and a slow ramp can lag by up to 4 beats. For the first 12 pulses after a stopped clock it holds the old tempo, and for the next few beats it can read about 2% out. The first note is on the first clock whether 0 or 12 clocks came before Start. Start and Stop also go back out on USB, as the LXR sends them.
+
+USB audio's 10 channels: run on the unit. Linux took 10 channels, and 6 s of a running pattern captured with `arecord` gave every frame, each voice on its own channel, with `DROPS` at 0. It also streamed into Bitwig through PipeWire and a combined device with no drops, on a normal session rather than a timed run on a heavy kit. One SAVE during that stream was followed by a buzz on USB and not the speaker, with 5 `DROPS`, and PipeWire's capture of the FM-1 stuck in an XRUN loop that a reopened node and a USB reconnect did not clear and restarting Bitwig's audio engine did, as far as the timing shows. A later SAVE brought it back: PipeWire logged `follower delay:7 target:768`, as a flash erase runs with interrupts off and no USB packets go. So a store write now queues silent packets from the flash wait, in RAM (`FL_USB_PUMP`, `fl_pump_poll` in felucca-bsp's `fm1_flash.h`), while 10 CH streams. Compiled: `.ram_text` has no calls and no flash addresses, and the update loader is byte for byte the same. Not yet run on a device. The simulator has no USB, and stereo streaming still has the gap. Bitwig's links to the FM-1 go when the FM-1 re-enumerates, as it does on switching to 10 CH, so turn 10 CH on before starting Bitwig's audio engine. With every voice sent to the FX, 9-10 equal 1-2, as the FX bus carries dry and wet together, so they are the bus and not a wet return. The simulator has no USB side. The design is Acid Moogi's (github.com/TomPtherapy/moogi, GPL-3.0), whose notes record clicks and drops found on a device and what fixed them, with the ring and bands worked out again for Tack's 256 frame render. It lives on local branches `tack-usb10` of fm1-base and of its nested felucca-bsp, so the pins here point at commits that exist on this machine only, until those are pushed to forks. `chip/usb.c` is also built into the update loader: `loader.bin` was built from nothing with and without the change and is byte for byte the same. Every power-on is stereo.
 
 Compiled and simulator-tested, not yet on a device: the three row pages and voice colours, recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
 
@@ -199,7 +242,7 @@ Known omissions:
 - MIDI out is USB only, and notes arriving on USB or the jack go back out on the voice's channel. A DAW track that sends Tack its own output plays voices twice. A sequencer step's note-off comes one pulse after its note-on, about 5 ms at 120 BPM, so recorded steps are short.
 - A lane nudge adds to each step's nudge and stops at the limits of 7/8 of a step, so a large turn back can lose a hit's
   own offset.
-- The Euclidean page stops at length 16, as the LXR's menu does. From length 18 with one hit the generator recurses
+- The Euclidean dials stop at length 16, as the LXR's menu does. From length 18 with one hit the generator recurses
   without end, which would crash the audio interrupt.
 - A Euclidean turn replaces the lane's steps and length, with no undo. Its locks stay on their steps.
 - No kits in the firmware. `README.md` says none come with Tack, because they belong to their authors, and `NOTICE.md`

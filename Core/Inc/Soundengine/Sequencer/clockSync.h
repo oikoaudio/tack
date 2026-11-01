@@ -37,6 +37,7 @@
 
 //called by midi clock
 void sync_tick();
+void sync_pulse();
 void sync_midiResetPosition();
 void sync_midiStartStop(uint8_t isStart);
 uint8_t sync_getClockCnt();
