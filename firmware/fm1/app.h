@@ -27,6 +27,7 @@ void app_say(const char *a, const char *b);
 #define APP_BACKUP_OBJS {OBJ_SETTINGS, OBJ_PAT0, OBJ_PAT0 + 1, OBJ_PAT0 + 2, OBJ_PAT0 + 3, OBJ_PAT0 + 4, OBJ_PAT0 + 5, \
                          OBJ_PAT0 + 6, OBJ_PAT0 + 7, OBJ_PAT0 + 8, OBJ_PAT0 + 9, OBJ_PAT0 + 10, OBJ_PAT0 + 11, \
                          OBJ_PAT0 + 12, OBJ_PAT0 + 13, OBJ_PAT0 + 14, OBJ_PAT0 + 15}
+#define FELUCCA_UAC10 1                  /* USB audio's 10 channels, chosen on GLO: fm1-base usb.c */
 #define APP_BACKUP_MAGIC 0x424C544Bu     /* "KTLB" */
 #define APP_BACKUP_VERSION 2u
 #define APP_BACKUP_WHAT "replaces all patterns"

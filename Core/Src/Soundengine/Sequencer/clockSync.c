@@ -15,6 +15,10 @@
 
 #include "Soundengine/Sequencer/clockSync.h"
 
+#ifdef LXR_FM1_BUILD
+int seq_platform_clock_pulse(void);
+#endif
+
 static float sync_window[WINDOW_SIZE];
 float sync_timeLast = 0;
 uint8_t sync_writePos = 0;
@@ -73,6 +77,10 @@ void sync_tick()
 
 
 	}
+
+#ifdef LXR_FM1_BUILD
+	if(seq_platform_clock_pulse()) return;	// the platform keeps the tempo
+#endif
 
 	//Fix for external sync LFO sync calculation
 

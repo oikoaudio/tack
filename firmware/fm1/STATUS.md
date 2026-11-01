@@ -110,6 +110,7 @@ The panel:
 | PLAY, REC | start and stop, live recording |
 | Screen | the 7 row grid on the main, Euclidean and STEP pages. EDIT, ENV, LFO, FX, GLO and SONG have the screen below the header, as the keys show the voice's steps |
 | K1 to K4 | what the open page shows: pitch, filter, decay and volume of the voice on the main page |
+| GLO, OCT- held | USB AUDIO: STEREO, the master, or 10 CH: 1-2 the master, 3-8 D1 D2 D3 SN CY HH, 9-10 the FX bus, dry and wet, of the voices sent to it. Each voice as it leaves the voice, so a voice sent to the FX is dry on its channel. 44.1 kHz only. Changing it needs the sequencer stopped and re-enumerates, so USB-MIDI goes for a moment. It is never saved, so every power-on is stereo, and with no host after 8 s it goes back to stereo. DROPS counts lost packets, a click each |
 | SELECT, ALGORITHM, PRESET | tempo and shuffle, on a screen of their own for a moment; kit |
 | SEQ | tap: STEP or NOTE mode. Held with a white key: pattern 1 to 16. Held with several, a chain that loops until one pattern is picked. SAVE leaves a chain out |
 | EDIT, ENV, LFO | the Syntakt layout: a top bar and all three rows in four equal columns, with smooth widgets and one picture across the parameters that shape it: the envelope, the filter's shape, the oscillator's wave, the LFO. LEVEL is the fourth dial of AMP EG, and REPEAT the fourth of ENV's last row. The exact value shows in the top bar while a dial turns, and a held step's recurrence there too. Velocity and LFO targets skip velocity's own settings |
@@ -146,8 +147,6 @@ Compiled, not tested on their own:
 
 - Hat choke. It is the LXR's own `HiHat_trigger` code, and no scenario checks it.
 - TRS MIDI, which comes from the platform.
-- External clock through the app. The traces call the sequencer's clock functions directly, so `tack_midi_realtime`
-  has not run. The panel test only switches the setting on.
 - MIDI out from the sequencer, and recording from the keys through the event queue.
 
 Simulator-tested in this round, not yet on a device:
@@ -186,6 +185,10 @@ Recurrence: a step plays on chosen slots of a cycle of 2 to 8 passes. The length
 lock slot, so they copy and clear with the step, and each takes 3 B of the 640 in the image. Each lane counts its passes of
 each pattern, from the start of play.
 
+External MIDI clock: followed Bitwig on the unit, in a short check, and run in the simulator, where `tests/clock.txt` sends Start, Clock and Stop through `midi_in`. The panel's setting used to select the LXR's mode 1, its trigger input, so Start ran the sequencer while `seq_sync` ignored every clock. It now selects mode 2. Tack follows MIDI Beat Clock only. `midi_in` drops MIDI Time Code and Song Position Pointer, so Continue carries on from where the sequencer stopped and a DAW that starts mid-bar is not followed to its position. Step 0 falls on the first clock and step 4 on pulse 25. USB and TRS MIDI reach the queue only between renders (`usb_poll` waits outside the render), so Tack reads them once a render, and reading them on each engine block would find nothing new. A step can land up to 5.8 ms late. The tempo comes from the time across the last 96 pulses, 4 beats, which reads 125 for a true 125 where the LXR's 8 pulse average read 127. It moves only by 0.6 BPM or more, so synced LFOs are not recalculated on each pulse. A beat that disagrees by 4% restarts the span, so a jump shows within a beat and a slow ramp can lag by up to 4 beats. For the first 12 pulses after a stopped clock it holds the old tempo, and for the next few beats it can read about 2% out. The first note is on the first clock whether 0 or 12 clocks came before Start. Start and Stop also go back out on USB, as the LXR sends them.
+
+USB audio's 10 channels: run on the unit. Linux took 10 channels, and 6 s of a running pattern captured with `arecord` gave every frame, each voice on its own channel, with `DROPS` at 0. It also streamed into Bitwig through PipeWire and a combined device with no drops, on a normal session rather than a timed run on a heavy kit. Bitwig's links to the FM-1 go when the FM-1 re-enumerates, as it does on switching to 10 CH, so turn 10 CH on before starting Bitwig's audio engine. With every voice sent to the FX, 9-10 equal 1-2, as the FX bus carries dry and wet together, so they are the bus and not a wet return. The simulator has no USB side. The design is Acid Moogi's (github.com/TomPtherapy/moogi, GPL-3.0), whose notes record clicks and drops found on a device and what fixed them, with the ring and bands worked out again for Tack's 256 frame render. It lives on local branches `tack-usb10` of fm1-base and of its nested felucca-bsp, so the pins here point at commits that exist on this machine only, until those are pushed to forks. `chip/usb.c` is also built into the update loader: `loader.bin` was built from nothing with and without the change and is byte for byte the same. Every power-on is stereo.
+
 Compiled and simulator-tested, not yet on a device: the three row pages and voice colours, recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
 
 Known omissions:
@@ -221,7 +224,7 @@ as easily as one voice, so the build went straight to the complete kit.
 From the user on 2026-11-01, after the sequencing work:
 
 - An eighth voice: two oscillator FM on the user's wavetables, 1D but stepped through by two parameters as if 2D.
-- USB audio, after the interface. Recording from Tack is on already: `usb_audio_in`, seen on Linux as a 16-bit stereo 44.1 kHz capture device, and a one second capture ran on 2026-11-01. A computer playing through the FM-1 is `usb_audio_out`, off in `fm1.toml`. Individual outs are not there: the stream is the master output. github.com/TomPtherapy/moogi lists a 10-channel USB audio mode, so that is the thing to study; its README was read, its code not. Its LICENSE file is GPL-3.0, as Tack's firmware, with no copyright holder filled in.
+- USB audio: playing a computer through the FM-1 is `usb_audio_out`, off in `fm1.toml`, and cannot run with the 10 channels as they stand.
 
 ## Memory
 
@@ -229,9 +232,9 @@ Compiled, from the build's own report:
 
 | Region | Used | Available | Share |
 | --- | --- | --- | --- |
-| Flash image | 280,512 B | 581,564 B | 46% |
-| RAM, `.data` and `.bss` | 37,416 B | 98,304 B | 38% |
-| Pool | 227,636 B | 344,064 B | 66% |
+| Flash image | 283,520 B | 581,564 B | 46% |
+| RAM, `.data` and `.bss` | 37,180 B | 98,304 B | 38% |
+| Pool | 254,156 B | 344,064 B | 73% |
 
 The largest items are the screen canvas (69,120 B), the FX buffer (65,536 B), 16 patterns (58,384 B), the wavetables
 (67,584 B plus the 8,194 B sine) and the transients (26,460 B). All engine code runs from flash through the XIP cache.

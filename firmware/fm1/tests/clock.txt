@@ -1,0 +1,1293 @@
+# External MIDI clock through the app, as a DAW sends it: Start, then 24 pulses a quarter, then Stop.
+wait 600
+# drum 1 on steps 0 and 4
+tapkey 0
+wait 40
+tapkey 7
+wait 40
+expect step0 1
+expect step4 1
+# GLO, the third knob: external clock
+tap GLO
+wait 40
+turn K3 1
+wait 40
+expect ext 1
+tap GLO
+wait 40
+out
+# stopped, clock alone moves nothing. 6 pulses, as the first note came 2 pulses late after 1 to 7 of them
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect running 0
+expect_no_out USB 90 3C 7F
+out
+# Start arms it, and the first clock plays step 0
+midi USB FA
+wait 18
+expect running 1
+expect_no_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+expect_out USB 90 3C 7F
+out
+# steps are 6 pulses each: step 4 is pulse 25, not before
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect_no_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+expect_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+out
+# Stop holds it, though a DAW keeps the clock going
+midi USB FC
+wait 40
+expect running 0
+out
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect_no_out USB 90 3C 7F
+out
+# Start again is from step 0
+midi USB FA
+wait 18
+expect running 1
+expect_no_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+expect_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect_no_out USB 90 3C 7F
+out
+midi USB F8
+wait 18
+expect_out USB 90 3C 7F
+out
+midi USB FC
+wait 40
+expect running 0
+# 20 ms a pulse is 125 BPM, though MIDI in is read every 5.8 ms: the old 8 pulse average read 127.
+# Steady for 4 bars: the reading does not move. First 4 beats clear of the gaps this script's Start and Stop leave
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+# a new tempo, 15 ms a pulse is 167 BPM: a beat to see it, not the 4 beats of the average
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+midi USB F8
+wait 13
+expect bpm 167
+# the clock stops: the tempo stays, and a new run does not measure the gap
+wait 1000
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 167
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+midi USB F8
+wait 18
+expect bpm 125
+# off again: the stored tempo, and the knob and PLAY are back
+tap GLO
+wait 40
+turn K3 -1
+wait 40
+expect ext 0
+expect bpm 120
+tap GLO
+wait 40

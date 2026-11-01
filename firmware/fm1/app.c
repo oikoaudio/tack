@@ -101,6 +101,8 @@ static struct {
     uint8_t seq_used;                    /* SEQ was a modifier this press: no mode change on release */
     uint8_t glo_used;                    /* so was GLO: no page */
     uint8_t arp_used;                    /* so was ARP */
+    uint8_t usb10;                       /* USB audio is 10 channels, not the stereo mix */
+    uint32_t usb10_try;                  /* a host must have taken them by then */
     uint8_t voice_view;                  /* the main page shows one voice's steps: a tap of SEL */
     uint8_t popup;                       /* what a held step is having changed: POP_ */
     uint32_t tempo_until;                /* the tempo screen goes then */
@@ -188,6 +190,27 @@ void app_panic(void) { tack_post_run(0); }
 static void seq_midi_out(uint8_t status, uint8_t d1, uint8_t d2)
 {
     plat_midi_send((uint32_t)(status >> 4) | (uint32_t)status << 8 | (uint32_t)d1 << 16 | (uint32_t)d2 << 24, TO_USB);
+}
+
+/* USB audio as the stereo mix or the 10 channels. A change re-enumerates, and takes USB-MIDI with it for a moment. USB is how
+ * an update reaches the FM-1, so the 10 channels are never saved: every power-on is stereo, and a host that has not taken them
+ * within USB10_TRY_MS goes back to it too */
+#define USB10_TRY_MS 8000u
+#ifdef PLAT_HOST
+static uint32_t usb_drops(void) { return 0; }
+static int usb_host_there(void) { return 1; }
+static void usb_switch(int on) { (void)on; }
+#else
+static uint32_t usb_drops(void) { return usb_uac10_drops(); }
+static int usb_host_there(void) { return usb.config != 0; }
+static void usb_switch(int on) { usb_uac10_switch((uint32_t)on); }
+#endif
+
+static void usb_audio_set(int on)
+{
+    ui.usb10 = (uint8_t)on;
+    ui.usb10_try = on ? plat_ms() + USB10_TRY_MS : 0u;
+    usb_switch(on);
 }
 
 /* the store into the engine, as at power-on. With a backup restored the sequencer is stopped, and what a pattern's
@@ -492,6 +515,11 @@ static void set_turn(uint32_t slot, int32_t e)
     if (ui.held >= 0) {
         ui.held_used = 1;
         app_say("LOCKS", "VOICE PAGE");
+    } else if (ui.btn >> B_OCTDN & 1u) {         /* the row below */
+        if (slot == 0u && tack_running())
+            app_say("STOP FIRST", "");
+        else if (slot == 0u)
+            usb_audio_set(e > 0);
     } else if (slot == 0u) {
         tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
     } else if (slot == 1u) {
@@ -2272,11 +2300,11 @@ static void pg_set_load(uint32_t *last)
 static void pg_set_row(uint32_t *last)
 {
     const uint32_t ext = (uint32_t)tack_ext_sync();
-    uint32_t key = rk(rk(rk(rk(13u, tack_bpm()), tack_shuffle()), ext), (uint32_t)tack_roll_rate());
+    uint32_t key = rk(rk(rk(rk(13u + (ui.btn >> B_OCTDN & 1u), tack_bpm()), tack_shuffle()), ext), (uint32_t)tack_roll_rate());
     if (key == *last)
         return;
     *last = key;
-    cv_begin(240, PG_RH, tint(C_HI));
+    cv_begin(240, PG_RH, ui.btn >> B_OCTDN & 1u ? C_BLACK : tint(C_HI));
     wd_value(0, tack_bpm(), 0, 1, 0);
     pg_column(0, "TEMPO", 1);
     wd_value(1, tack_shuffle(), 127, 1, 1);
@@ -2286,6 +2314,25 @@ static void pg_set_row(uint32_t *last)
     wd_box(PG_CW * 3 + PG_CW / 2, 0, tack_roll_name(tack_roll_rate()), C_HI);
     pg_column(3, "ROLL", 1);
     cv_blit(0, PG_Y + PG_RH);
+}
+
+/* the row an OCT- held reaches: what USB audio is */
+static void pg_set_usb(uint32_t *last)
+{
+    const int on = (ui.btn >> B_OCTDN & 1u) != 0u;
+    const uint32_t drops = usb_drops();
+    uint32_t key = rk(rk(rk(31u, (uint32_t)on), ui.usb10), drops);
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, on ? tint(C_HI) : C_BLACK);
+    wd_box(PG_CW / 2, 0, ui.usb10 ? "10 CH" : "STEREO", on ? C_HI : C_GRAY);
+    pg_column(0, "USB AUDIO", on);
+    if (ui.usb10) {
+        wd_value(1, drops, 0, 1, 0);
+        pg_column(1, "DROPS", on);
+    }
+    cv_blit(0, PG_Y + 2u * PG_RH);
 }
 
 static void pg_song_top(uint32_t *last)
@@ -2466,6 +2513,7 @@ static void pg_screen(int invalid)
     } else if (now == 2) {
         pg_set_load(&rows[0]);
         pg_set_row(&rows[1]);
+        pg_set_usb(&rows[2]);
     } else if (now == 4) {
         pg_voice_line(0, &rows[0]);
         pg_voice_line(1, &rows[1]);
@@ -2645,6 +2693,13 @@ void app_frame(void)
         bottom_key = 0;                          /* it covered the main page's bottom strip */
         ui.redraw = 1;
     }
+    if (ui.usb10_try && now - ui.usb10_try < 0x80000000u) {
+        ui.usb10_try = 0;
+        if (!usb_host_there()) {
+            usb_audio_set(0);
+            app_say("USB AUDIO", "STEREO");
+        }
+    }
     if (ui.touched_until && now >= ui.touched_until) {
         ui.touched_until = 0;
         ui.redraw = 1;
@@ -2692,6 +2747,8 @@ int app_expect(const char *what, int *got)
         *got = voice_page();
     else if (!strncmp(what, "skips", 5))     /* skipsN: the selected voice's step N rests this pass */
         *got = tack_recur_skips((uint8_t)ui.voice, (uint8_t)atoi(what + 5));
+    else if (!strcmp(what, "usb10"))
+        *got = ui.usb10;
     else if (!strcmp(what, "songpage"))
         *got = ui.song_page;
     else if (!strcmp(what, "songmode"))

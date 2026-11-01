@@ -55,6 +55,10 @@ static SeqKitLoad kit_load;
 void seq_platform_set_kit_load(SeqKitLoad fn) { kit_load = fn; }
 static SeqLocks locks_fn;
 void seq_platform_set_locks(SeqLocks fn) { locks_fn = fn; }
+
+static SeqClockPulse clock_pulse_fn;
+void seq_platform_set_clock_pulse(SeqClockPulse fn) { clock_pulse_fn = fn; }
+int seq_platform_clock_pulse(void) { return clock_pulse_fn ? clock_pulse_fn() : 0; }
 int seq_platform_locks(uint8_t track, uint8_t step) { return locks_fn ? locks_fn(track, step) : 0; }
 static SeqStepPlays plays_fn;
 static SeqLaneWrap wrap_fn;

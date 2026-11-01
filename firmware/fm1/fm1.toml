@@ -11,7 +11,7 @@ usb_audio_out = false
 licence = "GPL-3.0-only"
 repo = "https://github.com/oikoaudio/tack"
 tagline = "a drum synth for the FM-1"
-credits = "Tack's engine is the LXR firmware by Erica Synths."
+credits = "Tack's engine is the LXR firmware by Erica Synths. USB audio's 10 channels are after Acid Moogi by Tom Perez, itself from Felucca by Leo Kuroshita, GPL-3.0."
 
 # the engine, unchanged sources: firmware/fm1/shim stands in for the STM32 and libm
 o2_cflags = ["-include", "firmware/fm1/shim/fm1_prefix.h", "-Ifirmware/fm1/shim", "-Ifirmware/fm1/src",

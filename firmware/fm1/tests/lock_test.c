@@ -748,6 +748,42 @@ static void pulse_tests(void)
     check("PULSE reaches the cymbal's oscillator", b > a + 0.3f, a, b);
 }
 
+/* USB audio's 10 channels: each voice on its own, and only then. Word w of a frame, its low or high half */
+extern volatile uint8_t app_ul_want;
+extern uint32_t app_ul_out[];
+static long ul_energy(uint32_t ch)
+{
+    long sum = 0;
+    for (uint32_t f = 0; f < 64u; f++) {
+        const uint32_t word = app_ul_out[f * 5u + ch / 2u];
+        const int16_t v = (int16_t)(ch & 1u ? word >> 16 : word & 0xFFFFu);
+        sum += v < 0 ? -v : v;
+    }
+    return sum;
+}
+
+static void ul_tests(void)
+{
+    static const uint8_t VOICE_CH[6] = {2, 3, 4, 5, 6, 7};
+    for (uint32_t v = 0; v < 6u; v++) {
+        long own, most = 0;
+        for (int i = 0; i < 12; i++)
+            run(800);                            /* the last voice's tail gone */
+        app_ul_want = 1;
+        tack_post_note((uint8_t)v, 60, 127);
+        run(6);
+        own = ul_energy(VOICE_CH[v]);
+        for (uint32_t k = 0; k < 6u; k++)
+            if (k != v && ul_energy(VOICE_CH[k]) > most)
+                most = ul_energy(VOICE_CH[k]);
+        printf("  voice %u: its channel %ld, the loudest other %ld\n", (unsigned)v, own, most);
+        check("a voice has its own channel", own > 0 && most * 100 < own, 1, (int)own);
+        check("and the master has it", ul_energy(0) + ul_energy(1) > 0, 1, 0);
+        check("with no FX the return is silent", ul_energy(8) == 0 && ul_energy(9) == 0, 0, (int)ul_energy(8));
+        app_ul_want = 0;
+    }
+}
+
 /* a random LFO sent by its voice's hit: a new value at each hit, held between them, and only then */
 static void random_lfo_tests(void)
 {
@@ -892,6 +928,8 @@ int main(void)
     keys_tests();
     step_tests();
     pattern_tests();
+
+    ul_tests();
 
     printf(fails ? "FAILED\n" : "all passed\n");
     return fails != 0;

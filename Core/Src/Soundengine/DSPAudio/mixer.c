@@ -435,8 +435,22 @@ IN_ITCM_RAM static inline void mixer_addDataToOutputFilteredPan(uint8_t dest, co
 	}
 }
 //-----------------------------------------------------------------------
+#ifdef LXR_FM1_BUILD
+// the FM-1's USB audio can take each voice, as it comes out of the voice, and the FX on their own
+volatile uint8_t mixer_tapOn;
+int16_t mixer_tapVoice[6][OUTPUT_DMA_SIZE];
+int16_t mixer_tapFx[OUTPUT_DMA_SIZE*2];
+static uint8_t mixer_tapN;
+#endif
 IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float panL, const float panR,  int16_t* data,int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, int16_t *fxBuffer)
 {
+#ifdef LXR_FM1_BUILD
+	if(mixer_tapOn && mixer_tapN < 6)
+	{
+		for(uint32_t t=0;t<OUTPUT_DMA_SIZE;t++) mixer_tapVoice[mixer_tapN][t] = data[t];
+		mixer_tapN++;
+	}
+#endif
 	//check if a cable is in the selected out
 	dest = mixer_checkOutJackAvailable(dest);
 	//assert_param(dest <= MIXER_ROUTING_DAC2_R);
@@ -709,7 +723,21 @@ IN_ITCM_RAM void mixer_calcNextSampleBlock(int16_t* output,int16_t* output2)
 #endif
 
 #endif
+#ifdef LXR_FM1_BUILD
+	// the FX return is what FxBus_process adds to the outputs
+	if(mixer_tapOn)
+	{
+		for(uint32_t t=0;t<OUTPUT_DMA_SIZE*2;t++) mixer_tapFx[t] = (int16_t)(-(output[t] + output2[t]));
+	}
+#endif
 	FxBus_process(fxBusData,  &output[pos],&output[pos+1],&output2[pos],&output2[pos+1], OUTPUT_DMA_SIZE);
+#ifdef LXR_FM1_BUILD
+	if(mixer_tapOn)
+	{
+		for(uint32_t t=0;t<OUTPUT_DMA_SIZE*2;t++) mixer_tapFx[t] = (int16_t)(mixer_tapFx[t] + output[t] + output2[t]);
+	}
+	mixer_tapN = 0;
+#endif
 /*
 	if(activeParameters[UNUSED_PAR_GLO_SAT])
 	{

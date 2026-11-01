@@ -224,6 +224,8 @@ extern uint8_t activeParameters[];
 
 static int apply_locks(uint8_t track, uint8_t step);
 static void locks_init(void);
+static int clock_pulse(void);
+static uint8_t clock_w, clock_held;             /* external clock: the next slot, the times held */
 static int recur_plays(uint8_t track, uint8_t step, int8_t position);
 static void lane_wrap(uint8_t track);
 static void lanes_reset(void);
@@ -234,6 +236,7 @@ void tack_init(void)
     seq_init();
     locks_init();
     seq_platform_set_locks(apply_locks);
+    seq_platform_set_clock_pulse(clock_pulse);
     seq_platform_set_recurrence(recur_plays, lane_wrap);
     lanes_reset();
     seq_copyPatternToBackupBuffer(0);   /* as the LXR at boot: a pattern change restores from this buffer */
@@ -424,7 +427,7 @@ int tack_kit_busy(void)
 
 uint8_t tack_get_param(uint16_t param) { return param < LXR_HOST_NUM_PARAMS ? shadow[param] : 0; }
 uint32_t tack_dropped_events(void) { return ev_dropped; }
-uint16_t tack_bpm(void) { return ui_bpm; }
+uint16_t tack_bpm(void) { return ui_ext ? seq_getBpm() : ui_bpm; }   /* on external clock, the clock's */
 uint8_t tack_shuffle(void) { return ui_shuffle; }
 int tack_recording(void) { return ui_record; }
 int tack_ext_sync(void) { return ui_ext; }
@@ -1037,7 +1040,10 @@ static void drain(void)
             seq_setRecordingMode(e.a);
             break;
         case EV_EXT:
-            seq_setExtSync(e.a);
+            clock_held = 0;
+            seq_setExtSync(e.a ? 2u : 0u);      /* the LXR's 2 is MIDI clock; its 1 is the trigger input, which seq_sync ignores */
+            if (!e.a)
+                seq_setBpm(ui_bpm);             /* back from the clock's tempo */
             break;
         case EV_STRESS:
             stress = e.a;
@@ -1156,6 +1162,55 @@ void tack_note_now(uint8_t voice, uint8_t note, uint8_t vel)
     play_note(voice, note, vel);
 }
 
+/* The tempo of an external clock: the time across the last CLOCK_LONG pulses, 4 beats. MIDI in is read once a render, so a
+ * pulse is up to 5.8 ms out, and a span of 2 s at 120 BPM brings that to 0.3%. The last CLOCK_SHORT pulses disagreeing by
+ * CLOCK_JUMP is a new tempo, not noise, and the span starts again from them. A gap means the clock stopped. Steps follow
+ * the pulses (sync_tick) and take none of this: it is for the display, synced LFOs, shuffle and flams, and it moves only
+ * when it is CLOCK_STILL away, so the LFOs are not recalculated on each pulse */
+#define CLOCK_LONG 96u
+#define CLOCK_SHORT 24u
+#define CLOCK_FIRST 12u                         /* the pulses before there is a tempo to believe */
+#define CLOCK_GAP (SEQ_TICKS_PER_SECOND / 4u)   /* slower than 10 BPM */
+#define CLOCK_JUMP 0.04f
+#define CLOCK_STILL 0.6f
+static uint32_t clock_at[CLOCK_LONG + 1u];
+
+static float clock_span(uint32_t pulses)        /* BPM over the last pulses, 0 if they took no time */
+{
+    const uint32_t size = CLOCK_LONG + 1u;
+    const uint32_t ticks = clock_at[(clock_w + size - 1u) % size] - clock_at[(clock_w + size - 1u - pulses) % size];
+    return ticks ? (float)pulses * (float)SEQ_TICKS_PER_SECOND * 2.5f / (float)ticks : 0.0f;
+}
+
+static int clock_pulse(void)
+{
+    const uint32_t now = systick_ticks;
+    float bpm, d;
+    if (clock_held && now - clock_at[(clock_w + CLOCK_LONG) % (CLOCK_LONG + 1u)] > CLOCK_GAP)
+        clock_held = 0;
+    clock_at[clock_w] = now;
+    clock_w = (uint8_t)((clock_w + 1u) % (CLOCK_LONG + 1u));
+    if (clock_held <= CLOCK_LONG)
+        clock_held++;
+    if (clock_held <= CLOCK_FIRST)
+        return 1;
+    bpm = clock_span(clock_held - 1u);
+    if (clock_held > CLOCK_SHORT + 1u) {
+        const float recent = clock_span(CLOCK_SHORT);
+        d = recent - bpm;
+        if (d < 0.0f)
+            d = -d;
+        if (d > bpm * CLOCK_JUMP) {
+            bpm = recent;
+            clock_held = CLOCK_SHORT + 1u;
+        }
+    }
+    d = bpm - (float)seq_getBpm();
+    if (bpm > 0.0f && (d >= CLOCK_STILL || d <= -CLOCK_STILL))
+        seq_setBpm((uint16_t)(bpm + 0.5f));
+    return 1;
+}
+
 void tack_midi_realtime(uint8_t status)
 {
     if (!seq_getExtSync())
@@ -1211,9 +1266,21 @@ static void stress_tick(void)
     }
 }
 
+/* USB audio's 10 channels (fm1-base usb.c, FELUCCA_UAC10), frame by frame: the master, each voice as it leaves the voice, and
+ * the FX return. Five words a frame */
+#define UL_WORDS 5u
+extern volatile uint8_t mixer_tapOn;
+extern int16_t mixer_tapVoice[6][64], mixer_tapFx[128];
+volatile uint8_t app_ul_want;
+INSEQRAM uint32_t app_ul_out[256u * UL_WORDS];
+_Static_assert(TACK_BLOCK == 64, "the mixer's taps");
+
+static uint32_t pair(int32_t a, int32_t b) { return (uint32_t)(a & 0xFFFF) | (uint32_t)b << 16; }
+
 void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
 {
     int16_t dac1[TACK_BLOCK * 2], dac2[TACK_BLOCK * 2];
+    uint32_t *ul = app_ul_out;
     while (n >= TACK_BLOCK) {
         int i;
         drain();
@@ -1221,6 +1288,7 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
         /* as the LXR's audio interrupt: the sequencer, then the block it just triggered */
         seq_platform_advance(TACK_BLOCK, TACK_RATE);
         seq_tick();
+        mixer_tapOn = app_ul_want;
         lxr_host_renderBlock(dac1, dac2);
         for (i = 0; i < TACK_BLOCK * 2; i++) {
             /* every voice is routed to one pair (adjustValue in lxr_core.c); the other is silent, so the sum needs no
@@ -1228,6 +1296,16 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
             int32_t s = (int32_t)dac1[i] + dac2[i];
             s = s > 32767 ? 32767 : s < -32768 ? -32768 : s;
             lr[i] = (int32_t)(((int32_t)s * (int32_t)gain_q12) >> 4);
+        }
+        if (app_ul_want) {
+            for (i = 0; i < TACK_BLOCK; i++, ul += UL_WORDS) {
+                const int32_t l = (int32_t)dac1[2 * i] + dac2[2 * i], r = (int32_t)dac1[2 * i + 1] + dac2[2 * i + 1];
+                ul[0] = pair(l > 32767 ? 32767 : l < -32768 ? -32768 : l, r > 32767 ? 32767 : r < -32768 ? -32768 : r);
+                ul[1] = pair(mixer_tapVoice[0][i], mixer_tapVoice[1][i]);
+                ul[2] = pair(mixer_tapVoice[2][i], mixer_tapVoice[3][i]);
+                ul[3] = pair(mixer_tapVoice[4][i], mixer_tapVoice[5][i]);
+                ul[4] = pair(mixer_tapFx[2 * i], mixer_tapFx[2 * i + 1]);
+            }
         }
         lr += TACK_BLOCK * 2;
         n -= TACK_BLOCK;
