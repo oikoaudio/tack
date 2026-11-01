@@ -75,6 +75,8 @@ typedef struct {
 #define SET_OLD_SIZE (sizeof(settings_t) - TACK_SONG_ROWS - 4u)
 #define SET_KIT_NAME 248u
 _Static_assert(sizeof(settings_t) <= PLAT_STORE_MAX, "one store object");
+_Static_assert(sizeof(settings_t) == 332u && __builtin_offsetof(settings_t, song) == 264u, "what the store and a backup hold");
+_Static_assert(SET_KIT_NAME + 8u == KIT_SLOT, "the name after the parameters");
 static settings_t set;
 static uint8_t pat_buf[3840];
 
@@ -104,7 +106,8 @@ static const uint8_t *kit_params(uint32_t i)
 static struct {
     uint32_t keys, btn, redraw;
     int32_t voice, bar;
-    uint8_t stress, fx_page, set_page, song_page;
+    uint8_t stress;
+    uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
     uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
     uint8_t note_last;                   /* the detail HOME left was NOTE: where SEQ goes back to */
@@ -187,6 +190,23 @@ static void int_text(int32_t v, char *b)     /* signed, no padding */
     while (n)
         *b++ = t[--n];
     *b = 0;
+}
+
+/* a part of a line, ended, and where the next part goes */
+static char *text_put(char *to, const char *s)
+{
+    while (*s)
+        *to++ = *s++;
+    *to = 0;
+    return to;
+}
+
+static char *int_put(char *to, int32_t v)
+{
+    int_text(v, to);
+    while (*to)
+        to++;
+    return to;
 }
 
 /* audio interrupt: MIDI in, as Tack's channels: channel 1 plays the kit from note 60, 2-8 one voice each. On channel 1
@@ -293,7 +313,7 @@ static void load_saved(int running_audio)
             if (running_audio) {
                 while (tack_kit_busy())
                     ;
-                tack_post_kit(values, TACK_KIT_NO_SLOT);
+                tack_post_kit(values, 0, TACK_KIT_NO_SLOT);
             } else {
                 tack_load_kit(values);
             }
@@ -432,7 +452,7 @@ static void draw(void)
     cv_blit(0, 0);
 header_done:
     draw_grid();
-    if (ui.fx_page || ui.set_page || ui.song_page)
+    if (ui.over)
         goto strip_done;
     cv_begin(240, KNOBS_H, C_BLACK);
     {
@@ -517,7 +537,7 @@ void app_frame(void)
         h = h * 67u + (uint32_t)(tack_step_on((uint8_t)ui.voice, s) + tack_recur_len((uint8_t)ui.voice, s) * 2 +
                                  tack_recur_mask((uint8_t)ui.voice, s) * 32);
     }
-    if (ui.song_page)                            /* a row turned reaches the engine after the frame that drew it */
+    if (song_pages())                            /* a row turned reaches the engine after the frame that drew it */
         h = h * 67u + song_len() * 256u + tack_song_get(song_len()) + tack_song_get(ui.song_row) * 4u;
     input();
     if (sel_help() != ui.help_on) {

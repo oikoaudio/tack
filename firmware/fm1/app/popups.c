@@ -51,7 +51,7 @@ static void help_row(int32_t *y, const char *with, const char *does)
 
 static void draw_sel_help(void)
 {
-    const int saving = ui.song_page == PAGE_SAVE;
+    const int saving = ui.over == PAGE_SAVE;
     int32_t y = 18;
     cv_begin(240, 140, C_BLACK);
     cv_rect(0, 0, 240, 1, C_DIM);
@@ -59,9 +59,9 @@ static void draw_sel_help(void)
     cv_text(10, 3, &FONT_XS, "HOLD SEL AND", C_AMB);
     if (seq_detail())
         help_row(&y, "SELECT", "JUMP A BAR");
-    else if (!saving && ui.song_page != PAGE_SONG)
+    else if (!saving && ui.over != PAGE_SONG)
         help_row(&y, "SELECT", "SHUFFLE");
-    if (!saving && ui.song_page != PAGE_SONG && !keys_notes(ui.btn))
+    if (!saving && ui.over != PAGE_SONG && !keys_notes(ui.btn))
         help_row(&y, "WHITE KEY", "LANE LENGTH");
     if (!full_page() || seq_detail() || arp_page())
         help_row(&y, "OCT+ OCT-", "ADD, REMOVE BAR");
@@ -99,14 +99,7 @@ static void draw_popup(void)
         if (!nudge) {
             pop_centre(74, &FONT_B, "ON GRID", C_WHITE);
         } else {
-            int_text(nudge < 0 ? -nudge : nudge, t);
-            n = 0;
-            while (t[n])
-                n++;
-            const char *const rest = nudge < 0 ? "/24 STEP EARLY" : "/24 STEP LATE";
-            for (uint32_t i = 0; rest[i]; i++)
-                t[n++] = rest[i];
-            t[n] = 0;
+            text_put(int_put(t, nudge < 0 ? -nudge : nudge), nudge < 0 ? "/24 STEP EARLY" : "/24 STEP LATE");
             pop_centre(74, &FONT_B, t, C_WHITE);
         }
     } else if (ui.popup == POP_RECUR) {
@@ -145,12 +138,7 @@ static void draw_popup(void)
     } else {
         const int chance = tack_step_get(v, st, TACK_ST_PROB);
         pop_centre(8, &FONT_B, "CHANCE", C_WHITE);
-        int_text(chance, t);
-        n = 0;
-        while (t[n])
-            n++;
-        t[n++] = '%';
-        t[n] = 0;
+        text_put(int_put(t, chance), "%");
         pop_centre(34, &FONT_M, t, C_WHITE);
         cv_rect(16, 72, 180, 10, C_LINE);
         cv_rect(16, 72, 180 * chance / 100, 10, c);

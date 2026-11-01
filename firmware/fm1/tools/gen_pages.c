@@ -69,7 +69,25 @@ static void shorten(char *t)
         }
     }
 }
-static int enums;
+static int enums, en_off_on;
+
+/* what a slot is to the code, which may not read its label: a word on the panel can change */
+static const char *role_of(const char *label)
+{
+    static const char *const ROLE[][2] = {
+        {"PAN", "PAN"}, {"ONCE", "ONCE"}, {"RETRIG", "RETRIG"}, {"AMOUNT", "AMOUNT"}, {"FREQ", "FREQ"}, {"WAVE", "WAVE"},
+        {"PITCH", "PITCH"}, {"DECAY", "DECAY"},
+    };
+    for (unsigned i = 0; i < sizeof ROLE / sizeof ROLE[0]; i++)
+        if (!strcmp(label, ROLE[i][0]))
+            return ROLE[i][1];
+    return "NONE";
+}
+
+static const char *kind_of(const char *title)
+{
+    return !strcmp(title, "FILTER") ? "FILTER" : !strcmp(title, "OUTPUT") ? "OUTPUT" : !strcmp(title, "FM") ? "FM" : "OTHER";
+}
 
 /* the panel's words for the LXR's three letters, where a box has room for them */
 static const char *const WORD[][2] = {
@@ -121,6 +139,8 @@ static int enum_of(const LxrParamInfo *p)
         if (t[0] == 'V' && t[1] >= '1' && t[1] <= '6' && !t[2])   /* the voice an LFO restarts with: lfo_retrigger() */
             strcpy(t, (const char *const[]){"D1", "D2", "D3", "SN", "CY", "HH"}[t[1] - '1']);
         printf("\"%s\",", t);
+        if (p->max - p->min == 1u && v == p->min && !strcmp(t, "OFF"))
+            en_off_on = enums + 1;
     }
     printf("};\n");
     if (dest) {
@@ -154,7 +174,12 @@ int main(void)
     printf("\nstatic const TackEnum TACK_ENUM[] = {\n");
     for (int i = 0; i < enums; i++)
         printf("    {EN_NAME_%d, EN_FW_OR_0_%d, sizeof EN_NAME_%d / sizeof EN_NAME_%d[0]},\n", i, i, i, i);
-    printf("};\n\nstatic const TackPage TACK_PAGE[TACK_VOICES][%d] = {\n", (int)NPAGE);
+    printf("};\n#define TACK_EN_OFF_ON %d\n", en_off_on);
+    for (unsigned g = 0; g < NPAGE; g++)
+        for (int s = 0; s < 4; s++)
+            if (PAGE[g].s[s].label && !strcmp(PAGE[g].s[s].label, "WAVE") && (PAGE[g].graph == G_OSC || PAGE[g].graph == G_LFO))
+                printf("#define TACK_EN_%s_WAVE %d\n", PAGE[g].graph == G_OSC ? "OSC" : "LFO", en[0][g][s]);
+    printf("\nstatic const TackPage TACK_PAGE[TACK_VOICES][%d] = {\n", (int)NPAGE);
     int count[7] = {0};
     for (int v = 0; v < 7; v++) {
         printf("  {\n");
@@ -162,14 +187,14 @@ int main(void)
             if (!used[v][g])
                 continue;
             count[v]++;
-            printf("    {%d, \"%s\", %d, {", PAGE[g].group, PAGE[g].title, PAGE[g].graph);
+            printf("    {%d, \"%s\", %d, TACK_PAGE_%s, {", PAGE[g].group, PAGE[g].title, PAGE[g].graph, kind_of(PAGE[g].title));
             for (int s = 0; s < 4; s++) {
                 const LxrParamInfo *p = PAGE[g].s[s].label ? find(v, PAGE[g].s[s].suffix) : 0;
                 if (p)
-                    printf("{\"%s\", %u, %u, %d, %d, %d},", PAGE[g].s[s].label, p->param, p->max, en[v][g][s],
-                           lxr_params_isTarget(p->param), centre_of(p));
+                    printf("{\"%s\", %u, %u, %d, %d, %d, TACK_ROLE_%s},", PAGE[g].s[s].label, p->param, p->max, en[v][g][s],
+                           lxr_params_isTarget(p->param), centre_of(p), role_of(PAGE[g].s[s].label));
                 else
-                    printf("{0, 0, 0, 0, 0, 0},");
+                    printf("{0, 0, 0, 0, 0, 0, 0},");
             }
             printf("}},\n");
         }

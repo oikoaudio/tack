@@ -4,8 +4,8 @@
 # configuration with, so this reads the same sources again with them on and writes nothing.
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
+mapfile -t flags < <(python3 firmware/fm1/tests/fm1_sources.py flags)
 for f in firmware/fm1/src/tack_engine.c firmware/fm1/src/seq_platform.c engine/kit_mutate.c engine/kit_name.c engine/lfo_speed.c; do
-    ${CC:-clang} -fsyntax-only -Wall -Wextra -Werror -Wno-unused-parameter -Wno-incompatible-library-redeclaration -std=gnu11 -fcommon -ICore/Inc -Iengine -Ihost/src -Ifirmware/fm1/src \
-        -include firmware/fm1/shim/fm1_prefix.h -DPLAT_HOST -DNUM_PATTERN=16 '-DREAL_FS=44100.f' -Ifirmware/fm1/shim \
-        -Ithird_party/fm1-base/include -Xclang -cl-single-precision-constant "$f"
+    ${CC:-clang} -fsyntax-only -std=gnu11 -fcommon -Ihost/src -DPLAT_HOST "${flags[@]}" -Wall -Wextra -Werror -Wno-unused-parameter \
+        -Wno-incompatible-library-redeclaration "$f"
 done

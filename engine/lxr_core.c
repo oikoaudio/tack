@@ -8,6 +8,7 @@
  */
 
 #include "lxr_core.h"
+#include "lxr_voices.h"
 #include <string.h>
 #include <stdbool.h>
 #include "stm32f7xx_hal.h"
@@ -61,7 +62,7 @@ static void setModTarget(uint16_t param, uint8_t modTargetIdx)
 // at width 0 it is silent. Pulse width only matters for PWM, so 1 is its minimum here.
 static uint8_t adjustValue(uint16_t p, uint8_t value)
 {
-	if(p >= PAR_PWM_1 && p <= PAR_PWM_6 && value < 1) return 1;
+	if(value < lxr_param_min(p)) return (uint8_t)lxr_param_min(p);
 	// one stereo output: a voice plays there directly or through the FX bus, and the bus returns there. The
 	// device's second pair and mono jacks become that output.
 	if(p >= PAR_AUDIO_OUT1 && p <= PAR_AUDIO_OUT6 && value != MIXER_ROUTING_FX_BUS) return MIXER_ROUTING_DAC1_STEREO;

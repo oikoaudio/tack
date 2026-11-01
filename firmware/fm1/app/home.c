@@ -88,8 +88,7 @@ static void value_bar(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t v, ui
 /* Pan is stored 0-127 and the middle is 63.5, half a step from 63 and from 64, so both are the middle: L63, C, R63 */
 static int is_pan(const TackSlot *sl)
 {
-    const char *l = sl->label;
-    return l[0] == 'P' && l[1] == 'A' && l[2] == 'N' && !l[3];
+    return sl->role == TACK_ROLE_PAN;
 }
 
 static int32_t pan_side(uint32_t v)              /* -63 left to 63 right */
@@ -296,7 +295,7 @@ static const char *page_name(void)
 static const TackSlot *target_slot(void)
 {
     uint32_t i;
-    if (ui.fx_page || ui.set_page || ui.song_page)
+    if (ui.over)
         return 0;
     for (i = 0; i < TACK_NP; i++)
         if (slot(i) && slot(i)->target)
@@ -316,13 +315,12 @@ static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS;
 #define HOME_ENV_H (BOTTOM_H - HOME_TOP - HOME_GAP)
 #define HOME_MAP_Y (GRAPH_TOP + 18)       /* under its title, and ending where the envelope does */
 
-static int home_info(void) { return ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page && ui.held < 0; }
+static int home_info(void) { return ui.group == TACK_G_MAIN && !ui.over && ui.held < 0; }
 
 static void draw_home_info(uint32_t used)
 {
     const int now = tack_pattern(), next = tack_pattern_next(), mode = tack_song_mode();
     char t[16];
-    uint32_t n = 0;
     for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
         const int32_t x = HOME_X + (int32_t)(p % 8u) * (240 - EDGE - HOME_X - HOME_CELL) / 7, y = HOME_MAP_Y + (int32_t)(p / 8u) * (HOME_CELL_H + 4);
         cv_rect(x, y, HOME_CELL, HOME_CELL_H, (int)p == now ? C_HI : used >> p & 1u ? C_GRAY : C_LINE);
@@ -331,22 +329,15 @@ static void draw_home_info(uint32_t used)
     }
     /* the title: what plays on the left, and on the right which pattern it has reached or the one queued */
     if (mode) {
-        n = mode == TACK_SONG_ON ? 5u : 6u;
-        memcpy(t, mode == TACK_SONG_ON ? "SONG " : "CHAIN ", n);
-        int_text(tack_song_pos() + 1, t + n);
-        while (t[n])
-            n++;
-        t[n++] = '/';
-        int_text(mode == TACK_SONG_ON ? (int32_t)song_len() : (int32_t)tack_chain_len(), t + n);
+        char *e = int_put(text_put(t, mode == TACK_SONG_ON ? "SONG " : "CHAIN "), tack_song_pos() + 1);
+        int_text(mode == TACK_SONG_ON ? (int32_t)song_len() : (int32_t)tack_chain_len(), text_put(e, "/"));
         cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_HI);
     } else {
-        memcpy(t, "PATTERN ", 9u);
-        int_text(now + 1, t + 8);
+        int_text(now + 1, text_put(t, "PATTERN "));
         cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_WHITE);
     }
     if (next >= 0) {
-        memcpy(t, "NEXT ", 6u);
-        int_text(next + 1, t + 5);
+        int_text(next + 1, text_put(t, "NEXT "));
     } else {
         t[0] = 0;
         if (mode) {
@@ -377,11 +368,11 @@ static uint32_t bottom_key;              /* the strip on the screen */
 
 static void draw_bottom(void)
 {
-    const int overlay = ui.fx_page || ui.set_page || ui.song_page;
+    const int overlay = ui.over;
     const int graph = overlay ? TACK_GRAPH_NONE : tack_page_graph((uint32_t)ui.voice, ui.group, (uint32_t)row_now());
-    const int pages = ui.fx_page ? tack_fx_pages() : overlay || screens() < 2 ? 0 : screens();
-    const int bar = ui.fx_page ? ui.fx_page - 1 : screen_now();
-    const int echo = ui.fx_page ? tack_fx_delay_ms() : 0;
+    const int pages = ui.over == PAGE_FX ? tack_fx_pages() : overlay || screens() < 2 ? 0 : screens();
+    const int bar = ui.over == PAGE_FX ? 0 : screen_now();
+    const int echo = ui.over == PAGE_FX ? tack_fx_delay_ms() : 0;
     const TackSlot *target = target_slot();
     const uint32_t xruns = plat_xruns() - ui.xrun_base;
     const uint32_t used = home_info() ? tack_patterns_used() : 0u;
@@ -390,9 +381,7 @@ static void draw_bottom(void)
 
 #define KEY(v) (key = (key ^ (uint32_t)(v)) * 16777619u)
     KEY(ui.voice);
-    KEY(ui.fx_page);
-    KEY(ui.set_page);
-    KEY(ui.song_page);
+    KEY(ui.over);
     KEY(ui.note_oct);
     KEY(tack_recording());
     KEY(ui.held >= 0);
@@ -432,14 +421,14 @@ static void draw_bottom(void)
         for (i = 0; i < 3; i++)
             KEY(graph_value(graph, (uint32_t)i, 0));
     }
-    if (ui.fx_page)
+    if (ui.over == PAGE_FX)
         for (i = 0; i < TACK_FX_SENDS; i++)
             KEY(tack_fx_send((uint32_t)i));
-    if (ui.set_page) {
+    if (ui.over == PAGE_SET) {
         KEY(plat_cpu_pct());
         KEY(ui.cpu_peak);
     }
-    if (ui.song_page) {
+    if (song_pages()) {
         KEY(ui.song_row);
         KEY(tack_song_mode());
         KEY(tack_song_pos());
@@ -476,7 +465,7 @@ static void draw_bottom(void)
         for (i = 0; i < pages; i++)
             cv_rect(240 - EDGE - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
     }
-    if (xruns && !ui.set_page) {                 /* never hidden: a soak test reads this from any page */
+    if (xruns && ui.over != PAGE_SET) {                 /* never hidden: a soak test reads this from any page */
         char t[8];
         t[0] = 'X';
         int_text((int32_t)xruns, t + 1);

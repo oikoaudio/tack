@@ -43,7 +43,7 @@ static int pg_picture(int page, uint32_t *first, uint32_t *n)
         *n = 3;
         return PIC_LFO;
     }
-    if (same(tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)page), "FILTER")) {
+    if (tack_page_kind((uint32_t)ui.voice, ui.group, (uint32_t)page) == TACK_PAGE_FILTER) {
         *n = 2;
         return PIC_FILTER;
     }
@@ -137,9 +137,9 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
         name = tack_slot_text(sl, value);
         if (sl->target)
             wd_target(x, 0, name, lit ? C_HI : c);
-        else if (sl->en == EN_OSC_WAVE || sl->en == EN_LFO_WAVE)
-            wd_wave(x, 0, sl->en, value, lit ? C_HI : c);
-        else if (tack_slot_toggles(sl) && name && name[0] == 'O')   /* OFF, ON. FM and MIX say which */
+        else if (tack_slot_wave(sl))
+            wd_wave(x, 0, tack_slot_wave(sl), value, lit ? C_HI : c);
+        else if (tack_slot_switch(sl))
             wd_toggle(x, 0, name[1] == 'N', lit ? C_HI : c);
         else if (name)
             wd_box(x, 0, name, lit ? C_HI : c);
@@ -168,7 +168,7 @@ static void pg_top(void)
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
         cv_text(EDGE, 2, &FONT_B, page_label(ui.touched_row, sl), C_WHITE);
-        if (name && v && same(sl->label, "RETRIG"))  /* the box has room for D1, and here there is for the voice */
+        if (name && v && sl->role == TACK_ROLE_RETRIG)  /* the box has room for D1, and here there is for the voice */
             name = RETRIG_NAME[(v - 1u) % 6u];
         if (!name)
             value_text(sl, v, t);
@@ -186,15 +186,15 @@ static void pg_top(void)
         for (int k = 0; k < len; k++)
             cv_rect(240 - (8 - k) * 16, 4, 12, 11, mask >> k & 1 ? C_HI : C_DIM);
     } else {
-        if (ui.fx_page || ui.set_page || ui.song_page == PAGE_SONG || ui.song_page == PAGE_SAVE)
-            cv_text(EDGE, 2, &FONT_B, ui.fx_page ? "FX" : ui.set_page ? "SETTINGS" : ui.song_page == PAGE_SAVE ? "SAVE" : "SONG", C_HI);
+        if (ui.over == PAGE_FX || ui.over == PAGE_SET || ui.over == PAGE_SONG || ui.over == PAGE_SAVE)
+            cv_text(EDGE, 2, &FONT_B, ui.over == PAGE_FX ? "FX" : ui.over == PAGE_SET ? "SETTINGS" : ui.over == PAGE_SAVE ? "SAVE" : "SONG", C_HI);
         else
             cv_text(EDGE, 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
         t[0] = 'P';
         int_text(tack_pattern() + 1, t + 1);
         cv_text(92, 2, &FONT_B, t, tack_running() ? C_HI : C_WHITE);
         if (arp_page())
-            cv_text(122, 2, &FONT_B, vel_page() ? "VEL SHAPE" : ui.song_page == PAGE_EUCLID ? "EUCLID" : "LANE", C_HI);
+            cv_text(122, 2, &FONT_B, vel_page() ? "VEL SHAPE" : ui.over == PAGE_EUCLID ? "EUCLID" : "LANE", C_HI);
         if (seq_detail()) {
             if (tack_song_mode())                  /* what picks the pattern: the steps show whichever is playing */
                 cv_text(EDGE + 4 + text_w(&FONT_B, VOICE_NAME[ui.voice]), 5, &FONT_XS, tack_song_mode() == TACK_SONG_ON ? "SONG" : "CHN", C_HI);
@@ -211,7 +211,7 @@ static void pg_top(void)
     }
     {                                                /* a page with more than one mode: the line under the bar in as many parts */
         const int n = arp_page() ? 3 : seq_detail() || (sound_page() && screens() > 1) ? 2 : 0;
-        const int at = arp_page() ? (int)ui.song_page - PAGE_LANE : seq_detail() ? ui.note_mode != 0 : screen_now();
+        const int at = arp_page() ? (int)ui.over - PAGE_LANE : seq_detail() ? ui.note_mode != 0 : screen_now();
         if (n && !(ui.touched_until && ui.touched)) {
             const int32_t w = (240 - (n - 1) * PG_TAB_GAP) / n;
             for (int i = 0; i < n; i++)

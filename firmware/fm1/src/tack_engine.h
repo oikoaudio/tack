@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #define TACK_VOICES 7          /* 3 drums, snare, cymbal, closed hat, open hat */
+#define TACK_NOTE_CENTRE 60    /* the note a voice plays at its own pitch */
 #define TACK_BLOCK 64          /* the engine's block, its control rate */
 #define TACK_RATE 44100u       /* the FM-1's output; REAL_FS is set to match (fm1.toml) */
 #define TACK_PATTERNS 16u
@@ -49,7 +50,7 @@ int tack_post_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value);
 int tack_post_lock_clear(uint8_t voice, uint8_t step);
 /* A whole kit from the bank: values stays untouched until tack_kit_busy() is 0. The active pattern takes it as its own */
 #define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
-int tack_post_kit(const uint8_t *values, uint8_t slot);
+int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot);
 int tack_kit_busy(void);
 /* A pattern keeps its own kit with its edits, loaded as the pattern starts, so the bank is where kits come from. One with no steps
  * and no edits has none yet and plays on what is playing */
@@ -122,7 +123,15 @@ typedef struct {
     uint16_t par;
     uint8_t max, en, target;     /* en: 1 + its enum; target: a modulation destination, which no lock can reach */
     uint8_t centre;              /* a signed value: what reads as 0, as on the LXR's menu. 0: a plain number */
+    uint8_t role;                /* what it is to the code, as a label can change */
 } TackSlot;
+enum { TACK_ROLE_NONE, TACK_ROLE_PAN, TACK_ROLE_ONCE, TACK_ROLE_RETRIG, TACK_ROLE_AMOUNT, TACK_ROLE_FREQ, TACK_ROLE_WAVE,
+       TACK_ROLE_PITCH, TACK_ROLE_DECAY };
+enum { TACK_PAGE_OTHER, TACK_PAGE_FILTER, TACK_PAGE_OUTPUT, TACK_PAGE_FM };
+int tack_page_kind(uint32_t voice, uint32_t group, uint32_t sub);
+enum { TACK_WAVE_NONE, TACK_WAVE_OSC, TACK_WAVE_LFO };
+int tack_slot_wave(const TackSlot *s);       /* the wave it picks, which the screen can draw */
+int tack_slot_switch(const TackSlot *s);     /* it reads OFF and ON. A toggle like FM and MIX says which */
 int tack_pages(uint32_t voice, uint32_t group);
 const char *tack_page_title(uint32_t voice, uint32_t group, uint32_t sub);
 const TackSlot *tack_slot(uint32_t voice, uint32_t group, uint32_t sub, uint32_t slot);
@@ -230,6 +239,8 @@ const uint8_t *tack_kit(void);
 uint32_t tack_kit_size(void);
 /* Patterns changed since they were saved, a bit each. Any pattern's image, for the store: pat_image_size bytes */
 uint32_t tack_dirty(void);
+#define TACK_IMG_LENGTHS 1854u         /* where a pattern image holds the lanes' lengths, and its locks */
+#define TACK_IMG_LOCKS 2137u
 void tack_clean(uint8_t pattern);
 void tack_mark_dirty(uint8_t pattern);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);   /* its size */

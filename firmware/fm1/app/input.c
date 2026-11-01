@@ -3,11 +3,10 @@
 
 static uint32_t bottom_key;              /* (home.c's) */
 
-static void input(void)
+/* the keys: notes, voices, steps, whichever the page and the buttons held make them */
+static void input_keys(uint32_t keys, uint32_t btn)
 {
-    uint32_t keys = plat_keys(), btn = plat_buttons(), k;
-    uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys;
-    int32_t e;
+    uint32_t down = keys & ~ui.keys, up = ui.keys & ~keys, k;
 
     if (ui.held >= 0 && ui.held_pattern != (uint8_t)tack_pattern()) {   /* the step is in the pattern that left */
         ui.held = -1;
@@ -39,7 +38,7 @@ static void input(void)
             if (btn >> B_ARP & 1u) {
                 ui.arp_used = 1;
                 tack_post_mute((uint8_t)k, (uint8_t)!tack_muted((uint8_t)k));
-            } else if (ui.fx_page) {
+            } else if (ui.over == PAGE_FX) {
                 mark('F');
                 tack_post_fx_send(k, (uint8_t)!tack_fx_send(k));
             } else {
@@ -50,7 +49,7 @@ static void input(void)
                 if (ui.group != TACK_G_MAIN)
                     ui.sub = screen_page(screen, 1);
                 if (!(btn >> B_SEQ & 1u)) {
-                    tack_post_note((uint8_t)k, 60, 110);
+                    tack_post_note((uint8_t)k, TACK_NOTE_CENTRE, 110);
                     ui.lane_key = (uint8_t)(k + 1u);
                     ui.lane_at = plat_ms();
                 }
@@ -59,7 +58,7 @@ static void input(void)
         }
     for (k = 0; k < TACK_VOICES; k++)          /* (a key that selected silently has nothing to end: this does nothing) */
         if (up >> BK[k] & 1u)
-            tack_post_note_off((uint8_t)k, 60);
+            tack_post_note_off((uint8_t)k, TACK_NOTE_CENTRE);
     if (down >> BK[KEY_ROLL] & 1u) {
         ui.roll_voice = (uint8_t)ui.voice;
         ui.roll_on = 1;
@@ -84,21 +83,15 @@ static void input(void)
                     pattern_pick(k);
                 } else if (ui.chain_n < TACK_CHAIN_MAX) {
                     char t[12];
-                    uint32_t n = 0;
-                    static const char WORD[] = " PATTERNS";
                     tack_post_chain(ui.chain_n++, (uint8_t)k);
-                    int_text(ui.chain_n, t);
-                    while (t[n])
-                        n++;
-                    for (uint32_t i = 0; i < sizeof WORD; i++)
-                        t[n + i] = WORD[i];
+                    text_put(int_put(t, ui.chain_n), " PATTERNS");
                     app_say("CHAIN", t);
                 }
             } else if (keys >> BK[KEY_COPY] & 1u) {
                 pattern_copy(k);
-            } else if (ui.song_page == PAGE_SONG) {
+            } else if (ui.over == PAGE_SONG) {
                 song_key(k);
-            } else if (ui.song_page == PAGE_SAVE) {     /* the keys are the slots, for a pattern */
+            } else if (ui.over == PAGE_SAVE) {     /* the keys are the slots, for a pattern */
                 if (ui.ks_what == SAVE_PATTERN)
                     ui.ks_pat = (uint8_t)k;
             } else if ((btn >> B_SEL & 1u) || lane_key_held()) {   /* SEL or the lane's key held: the lane ends here */
@@ -118,10 +111,14 @@ static void input(void)
             ui.redraw = 1;
         }
     }
-    if ((up >> BK[KEY_COPY] & 1u) && !ui.copy_used && ui.song_page == PAGE_SONG)
+    if ((up >> BK[KEY_COPY] & 1u) && !ui.copy_used && ui.over == PAGE_SONG)
         chain_write();
     ui.keys = keys;
+}
 
+/* the buttons: pages, modes, what is held a second */
+static void input_buttons(uint32_t keys, uint32_t btn)
+{
     if (pressed(btn, B_SEQ)) {
         ui.seq_used = ui.seq_voice = 0;
         ui.redraw = 1;
@@ -139,29 +136,25 @@ static void input(void)
         ui.redraw = 1;
     }
     if (pressed(btn, B_FX)) {
-        ui.fx_page = 1;
-        ui.song_page = ui.set_page = 0;
+        ui.over = PAGE_FX;
         ui.redraw = 1;
     }
     if (pressed(btn, B_GLO))
         ui.glo_used = 0;
     if (((ui.btn & ~btn) >> B_GLO & 1u) && !ui.glo_used) {
-        ui.set_page = 1;
-        ui.song_page = ui.fx_page = 0;
+        ui.over = PAGE_SET;
         ui.redraw = 1;
     }
     if (pressed(btn, B_ARP)) {
         ui.arp_used = 0;
         if (btn >> B_SEQ & 1u) {                 /* SEQ held is the patterns, and this is what plays them in order */
             ui.arp_used = ui.seq_voice = 1;
-            ui.song_page = PAGE_SONG;
-            ui.fx_page = ui.set_page = 0;
+            ui.over = PAGE_SONG;
             ui.redraw = 1;
         }
     }
     if (((ui.btn & ~btn) >> B_ARP & 1u) && !ui.arp_used) {
-        ui.song_page = arp_page() && !vel_page() ? ui.song_page + 1u : PAGE_LANE;   /* as EDIT goes through its screens */
-        ui.fx_page = ui.set_page = 0;
+        ui.over = arp_page() && !vel_page() ? ui.over + 1u : PAGE_LANE;   /* as EDIT goes through its screens */
         ui.redraw = 1;
     }
     if (pressed(btn, B_SEL)) {
@@ -174,7 +167,7 @@ static void input(void)
         if (seq_detail() && plat_ms() - ui.sel_at < SEL_SHOW_MS)   /* the next step; a hold was to read the length or the list */
             vv_walk(1);
     }
-    if (ui.song_page == PAGE_SAVE) {             /* no page, so nothing to lose: the name's two shortcuts */
+    if (ui.over == PAGE_SAVE) {             /* no page, so nothing to lose: the name's two shortcuts */
         if (ui.ks_what != SAVE_PATTERN && pressed(btn, B_OCTDN))
             save_name_clear();
         else if (ui.ks_what != SAVE_PATTERN && pressed(btn, B_OCTUP))
@@ -245,9 +238,9 @@ static void input(void)
     if (pressed(btn, B_SAVE)) {
         if (btn >> B_SEL & 1u) {                 /* no questions: all that SAVE's page would list */
             save();
-            if (ui.song_page == PAGE_SAVE && !tack_running())
-                ui.song_page = 0;
-        } else if (ui.song_page == PAGE_SAVE) {
+            if (ui.over == PAGE_SAVE && !tack_running())
+                ui.over = 0;
+        } else if (ui.over == PAGE_SAVE) {
             save_commit();
         } else {
             save_open();
@@ -275,25 +268,32 @@ static void input(void)
         held_read(1);
         ui.redraw = 1;
     }
+}
+
+/* the dials: K1 to K4 are the page's, and the three on the left mostly the same everywhere */
+static void input_dials(uint32_t btn)
+{
+    uint32_t k;
+    int32_t e;
 
     for (k = 0; k < TACK_NP; k++)
         if ((e = plat_enc(EN_K1 + (int)k)) != 0) {
             ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-            if (ui.set_page) {
+            if (ui.over == PAGE_SET) {
                 set_turn(k, e);
             } else if (vel_page()) {
                 vel_turn(k, e);
-            } else if (ui.song_page == PAGE_SAVE) {
+            } else if (ui.over == PAGE_SAVE) {
                 save_turn(k, e);
-            } else if (ui.song_page == PAGE_EUCLID) {
+            } else if (ui.over == PAGE_EUCLID) {
                 eu_turn(k, e);
-            } else if (ui.song_page == PAGE_LANE) {
+            } else if (ui.over == PAGE_LANE) {
                 lane_turn(k, e);
-            } else if (ui.song_page) {
+            } else if (song_pages()) {
                 song_turn(k, e);
             } else if (note_view()) {
                 note_turn(k, e);
-            } else if (ui.fx_page) {
+            } else if (ui.over == PAGE_FX) {
                 fx_turn(k, e);
             } else if (voice_page()) {
                 vv_turn(k, e);
@@ -314,7 +314,7 @@ static void input(void)
         }
     if ((e = plat_enc(EN_SELECT)) != 0) {
         ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-        if (ui.song_page >= PAGE_SAVE)
+        if (ui.over == PAGE_SAVE)
             save_slot(e);
         else if (ui.held >= 0)
             recur_turn(e);
@@ -341,14 +341,14 @@ static void input(void)
         ui.redraw = 1;
     } else if ((e = plat_enc(EN_ALGO)) != 0) {
         ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-        if (ui.song_page >= PAGE_SAVE) {
+        if (ui.over == PAGE_SAVE) {
             ;
         } else if (btn >> B_SEL & 1u) {
             ui.sel_used = 1;
             mutate_turn((uint32_t)ui.voice, e);
         } else if (seq_detail()) {
             vv_turn(1u, e);
-        } else if (ui.song_page == PAGE_LANE) {  /* steps on screen, and all of them */
+        } else if (ui.over == PAGE_LANE) {  /* steps on screen, and all of them */
             mark('N');
             tack_lane_nudge_turn((uint8_t)ui.voice, e);
         } else {
@@ -358,7 +358,7 @@ static void input(void)
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {
         ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-        if (ui.song_page >= PAGE_SAVE)
+        if (ui.over == PAGE_SAVE)
             ;
         else if (ui.held >= 0)
             step_turn(TACK_ST_PROB, POP_CHANCE, e);
@@ -372,4 +372,12 @@ static void input(void)
             kit_step(e);
         ui.redraw = 1;
     }
+}
+
+static void input(void)
+{
+    const uint32_t keys = plat_keys(), btn = plat_buttons();
+    input_keys(keys, btn);
+    input_buttons(keys, btn);
+    input_dials(btn);
 }

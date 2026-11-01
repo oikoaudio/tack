@@ -19,36 +19,39 @@ static void toggle_step(uint8_t s)
 #define PITCH_ROW 20                     /* a row of no page of its own: FINE and what moves the pitch, beside the oscillator */
 static int sound_page(void)
 {
-    return ui.group != TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page;
+    return ui.group != TACK_G_MAIN && !ui.over;
 }
 
 /* the main page as one voice at a larger size, with what each step holds */
 static int voice_page(void)
 {
-    return ui.voice_view && !ui.note_mode && ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page;
+    return ui.voice_view && !ui.note_mode && ui.group == TACK_G_MAIN && !ui.over;
 }
 
 /* a page with the screen to itself, which leaves no grid: the rest edit steps */
 static int note_view(void)
 {
-    return ui.voice_view && ui.note_mode && ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page;
+    return ui.voice_view && ui.note_mode && ui.group == TACK_G_MAIN && !ui.over;
 }
 
 static int seq_detail(void) { return voice_page() || note_view(); }
 
-/* ui.song_page: SONG, which SEQ held with ARP opens, and ARP's three screens over the selected lane's bars */
+/* ui.over: SONG, which SEQ held with ARP opens, and ARP's three screens over the selected lane's bars */
 #define PAGE_SONG 1u
 #define PAGE_LANE 2u
 #define PAGE_EUCLID 3u
 #define PAGE_VEL 4u
 #define PAGE_SAVE 5u                     /* SAVE: what is saved and where, K4 and K1 or SELECT, and a second press writes it */
+#define PAGE_FX 6u
+#define PAGE_SET 7u
+static int song_pages(void) { return ui.over && ui.over <= PAGE_SAVE; }
 enum { SAVE_PATTERN, SAVE_BLEND, SAVE_KIT };
-static int vel_page(void) { return ui.song_page == PAGE_VEL; }
-static int arp_page(void) { return ui.song_page >= PAGE_LANE && ui.song_page <= PAGE_VEL; }
+static int vel_page(void) { return ui.over == PAGE_VEL; }
+static int arp_page(void) { return ui.over >= PAGE_LANE && ui.over <= PAGE_VEL; }
 
 static int keys_notes(uint32_t btn)             /* the keys play the voice: not where the keys are that page's own */
 {
-    return ui.note_mode && !ui.song_page && !ui.fx_page && !ui.set_page && !(btn >> B_SEQ & 1u) && !(btn >> B_ARP & 1u);
+    return ui.note_mode && !ui.over && !(btn >> B_SEQ & 1u) && !(btn >> B_ARP & 1u);
 }
 
 /* a bank kit's name, without the spaces that pad it */
@@ -119,7 +122,7 @@ static const char *key_word(void)
     return !keys_notes(ui.btn) && ui.held < 0 && (ui.keys >> BK[KEY_COPY] & 1u) ? "COPY TO" : 0;
 }
 
-static int full_page(void) { return sound_page() || ui.fx_page || ui.set_page || ui.song_page || seq_detail(); }
+static int full_page(void) { return sound_page() || ui.over || seq_detail(); }
 
 /* a group's pages come in the order OSC, its modulator, MOD WAVE if any, FILTER, TRANSIENT, OUTPUT; AMP EG, MOD EG if any,
  * VELOCITY; LFO, LFO SYNC */
@@ -162,7 +165,7 @@ static const TackSlot *page_slot(int page, uint32_t i)
         return tack_slot((uint32_t)ui.voice, TACK_G_MAIN, 0, 0);   /* PITCH beside the wave, on every voice */
     if (ui.group == TACK_G_EDIT && page == 0 && i == 3u && tack_pages((uint32_t)ui.voice, ui.group) >= 6)
         return tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 0);   /* six pages have no row for FINE under it */
-    if (ui.group == TACK_G_EDIT && i == 3u && same(tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)page), "OUTPUT"))
+    if (ui.group == TACK_G_EDIT && i == 3u && tack_page_kind((uint32_t)ui.voice, ui.group, (uint32_t)page) == TACK_PAGE_OUTPUT)
         return tack_send_slot((uint32_t)ui.voice);
     if (ui.group == TACK_G_ENV && i == 3u) {
         if (page == 0)
@@ -189,16 +192,16 @@ static const char *page_label(int page, const TackSlot *sl)
             return "VEL AMT";
     }
     if (page == PITCH_ROW && sl != tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 0))
-        return same(sl->label, "PITCH") ? "SWP AMT" : same(sl->label, "DECAY") ? "SWP DEC" : "SWP CRV";
-    if (ui.group == TACK_G_EDIT && same(tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)page), "FM")) {
+        return sl->role == TACK_ROLE_PITCH ? "SWP AMT" : sl->role == TACK_ROLE_DECAY ? "SWP DEC" : "SWP CRV";
+    if (ui.group == TACK_G_EDIT && tack_page_kind((uint32_t)ui.voice, ui.group, (uint32_t)page) == TACK_PAGE_FM) {
         /* the second oscillator: it modulates the first, or MODE MIX crossfades the two and AMOUNT is that crossfade */
         const TackSlot *mode = tack_slot((uint32_t)ui.voice, TACK_G_EDIT, 0, 3);
         const int mix = same(tack_slot_text(mode, tack_get_param(mode->par)), "MIX");
-        if (same(sl->label, "AMOUNT"))
+        if (sl->role == TACK_ROLE_AMOUNT)
             return mix ? "MIX" : "FM AMT";
-        if (same(sl->label, "FREQ"))
+        if (sl->role == TACK_ROLE_FREQ)
             return mix ? "FREQ 2" : "FM FREQ";
-        if (same(sl->label, "WAVE"))
+        if (sl->role == TACK_ROLE_WAVE)
             return mix ? "WAVE 2" : "FM WAVE";
     }
     return sl->label;

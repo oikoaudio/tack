@@ -79,14 +79,9 @@ static void save_frame(void)
         const uint32_t g = plat_tick_gap();
         ui.save_gap = g > ui.save_gap ? g : ui.save_gap;
         if (ui.saved == 1u) {
-            memcpy(t, "PATTERN ", 8u);
-            int_text((int32_t)i + 1, t + 8);
+            int_text((int32_t)i + 1, text_put(t, "PATTERN "));
         } else {
-            uint32_t n = 0;
-            int_text(ui.saved, t);
-            while (t[n])
-                n++;
-            memcpy(t + n, " PATTERNS", 10u);
+            text_put(int_put(t, ui.saved), " PATTERNS");
         }
         app_say("SAVED", t);
     }

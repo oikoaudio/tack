@@ -54,7 +54,7 @@ static void kit_load(int32_t i)
     if (!k || tack_kit_busy())
         return;
     memcpy(kit_buf, k, KIT_SLOT);
-    if (tack_post_kit(kit_buf + 8, (uint8_t)i))
+    if (tack_post_kit(kit_buf + 8, kit_buf, (uint8_t)i))
         mark('K');
 }
 
@@ -397,8 +397,7 @@ static void save_open(void)
     ui.ks_what = SAVE_PATTERN;
     ui.ks_pat = (uint8_t)tack_pattern();
     ui.ks_typed = 0;
-    ui.song_page = PAGE_SAVE;
-    ui.fx_page = ui.set_page = 0;
+    ui.over = PAGE_SAVE;
 }
 
 /* K4: pattern, a blend if there is one, kit */
@@ -481,7 +480,7 @@ static void kit_bank_save(void)
         tack_set_kit_name((const uint8_t *)ui.ks_name);
         tack_post_kit_home((uint8_t)slot);
     }
-    ui.song_page = 0;
+    ui.over = 0;
     int_text((int32_t)slot + 1, (char *)t);
     app_say("KIT SAVED", (char *)t);
 }
@@ -496,12 +495,12 @@ static void save_commit(void)
         app_say("STOP FIRST", "");
     } else if ((int)ui.ks_pat == tack_pattern()) {
         save();
-        ui.song_page = 0;
+        ui.over = 0;
     } else if (!ui.save_todo && !ui.save_hold) {
         tack_post_copy(ui.ks_pat);
         tack_post_pattern(ui.ks_pat);
         ui.save_as = (uint8_t)(ui.ks_pat + 1u);
-        ui.song_page = 0;
+        ui.over = 0;
     }
 }
 
@@ -510,16 +509,11 @@ static void chain_write(void)
 {
     const uint32_t n = tack_chain_len(), to = ui.song_row + n;
     char t[12];
-    uint32_t c = 0;
-    static const char WORD[] = " ROWS";
     if (tack_song_mode() != TACK_SONG_CHAIN)
         return;
     tack_post_chain_to_song(ui.song_row);
     ui.song_row = (uint8_t)(to < TACK_SONG_ROWS - 2u ? to : TACK_SONG_ROWS - 2u);
-    int_text((int32_t)n, t);
-    while (t[c])
-        c++;
-    memcpy(t + c, WORD, sizeof WORD);
+    text_put(int_put(t, (int32_t)n), " ROWS");
     app_say("CHAIN", t);
 }
 
@@ -683,8 +677,8 @@ static void pattern_pick(uint32_t k)
 /* EDIT, ENV, LFO: this group's first page, then its next, then the main page */
 static void page_press(uint8_t group)
 {
-    const int covered = ui.song_page || ui.fx_page || ui.set_page;
-    ui.song_page = ui.fx_page = ui.set_page = 0;
+    const int covered = ui.over;
+    ui.over = 0;
     if (covered && ui.group == group) {  /* back on the screen it covered */
         ;
     } else if (ui.group != group) {      /* the screen it was left on */
@@ -752,13 +746,13 @@ static void touch(uint32_t k)
 
 static int seq_in_view(void)                    /* the main page, showing a sequencer view */
 {
-    return ui.group == TACK_G_MAIN && !ui.fx_page && !ui.set_page && !ui.song_page;
+    return ui.group == TACK_G_MAIN && !ui.over;
 }
 
 static void to_main(void)
 {
     ui.last_row[ui.group] = (uint8_t)ui.sub;
-    ui.song_page = ui.fx_page = ui.set_page = 0;
+    ui.over = 0;
     ui.group = TACK_G_MAIN;
     ui.sub = 0;
 }

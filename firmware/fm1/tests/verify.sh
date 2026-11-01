@@ -52,6 +52,9 @@ for f in firmware/fm1/tests/regress/*.txt; do    # one script a bug, each from a
     regress() { (cd "$out/sim" && timeout 60 "$sim" "$root/$1" . 2>&1 | grep -v -E '^  ok' | tail -3); }
     run "regress $(basename "$f" .txt)" regress "$f"
 done
+# a misspelt expect name must fail, or a test can pass without looking at anything
+misspelt() { (cd "$out/sim" && ! timeout 60 "$sim" "$root/firmware/fm1/tests/misspelt_expect.txt" . > /dev/null 2>&1); }
+run "a misspelt expect name is an error" misspelt
 midi_once() { (cd "$out/sim" && timeout 60 "$sim" "$root/firmware/fm1/tests/midi_once.txt" . 2>&1 | quiet_grep '^  out (80|90)'); }
 notes=$(midi_once); rc=$?
 [ "$rc" = 0 ] || fail "script midi_once (exit $rc)"
@@ -107,6 +110,14 @@ check_tool() {                                   # (a stale magic in the tool wo
     grep -q "\"$(sed -n 's/^PATTERN_MAGIC = b"\(KPT[0-9]*\)".*/\1/p' firmware/fm1/tools/tack_check.py)\"" firmware/fm1/src/tack_engine.c
 }
 run "tack_check knows the pattern format" check_tool
+pages_current() {                                # gen_pages.c drops a slot whose name no longer matches: this shows it
+    bash firmware/fm1/tools/gen_pages.sh "$out/tack_pages.h" && cmp "$out/tack_pages.h" firmware/fm1/src/tack_pages.h
+}
+run "tack_pages.h matches its generator" pages_current
+pages() { python3 -I firmware/fm1/tests/pages.py "$sim" "$out/sim"; }
+run "the panel's map" pages
+random_panel() { python3 -I firmware/fm1/tests/panel_random.py "$sim" "$out/sim" 20; }
+run "random playing" random_panel
 grid() { python3 -I firmware/fm1/tests/grid.py "$sim" "$out/sim" 2>&1 | quiet_grep '^FAIL|Error'; }
 run "grid" grid
 names() {

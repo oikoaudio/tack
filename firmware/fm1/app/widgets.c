@@ -10,8 +10,6 @@
 #define PG_RH 73
 #define PG_PH 55                         /* a picture's height, its label under it */
 #define PG_TEXT RGB(186, 186, 192)       /* a label on a row the dials are not on: as bright as still reads as quiet */
-#define EN_OSC_WAVE 1                    /* a slot's en for the oscillators' waves and the LFOs', from tack_pages.h */
-#define EN_LFO_WAVE 8
 
 /* What marks the dials, one to a dial and left to right. Bit i is dial i, and a dial with nothing to do has none. A row of words has a
  * cell around each. A row of pictures has a line under each label, as a picture may belong to more than one dial */
@@ -145,11 +143,11 @@ static void wd_target(int32_t x, int32_t y, const char *name, uint16_t c)
     cv_text(x - text_w(&FONT_XS, b) / 2, y + 27, &FONT_XS, b, c);
 }
 
-static void wd_wave(int32_t x, int32_t y, uint32_t en, uint32_t wave, uint16_t c)
+static void wd_wave(int32_t x, int32_t y, int kind, uint32_t wave, uint16_t c)
 {
     float lx = 0.0f, ly = 0.0f;
     for (int32_t i = 0; i <= 46; i += 2) {
-        const float p = (float)i / 46.0f, v = en == EN_OSC_WAVE ? osc_shape(wave, p, 1.0f, i) : lfo_shape(wave, p);
+        const float p = (float)i / 46.0f, v = kind == TACK_WAVE_OSC ? osc_shape(wave, p, 1.0f, i) : lfo_shape(wave, p);
         const float nx = (float)(x - 23 + i), ny = (float)y + 27.0f - v * 18.0f;
         if (i)
             aa_line(lx, ly, nx, ny, c);

@@ -68,8 +68,7 @@ firmware/fm1/tests/verify.sh OUTDIR
 ```
 
 This builds everything and runs the panel scripts in the simulator, the engine tests and the comparison with the LXR's
-sequencer. It also checks that the plugins' renders have not changed. Its last line is not the verdict, so search its output
-for `FAIL`.
+sequencer. It also checks that the plugins' renders have not changed. Its last line is the verdict, and so is its exit code.
 
 One script can run alone, with `firmware/fm1/build/host/tack_host firmware/fm1/tests/lanes.txt OUTDIR`.
 

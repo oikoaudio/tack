@@ -50,7 +50,7 @@ static void lights(void)
         const uint32_t fire = flashing(k, now);
         if (as_notes || as_slots) {
             continue;
-        } else if (ui.fx_page) {
+        } else if (ui.over == PAGE_FX) {
             if (tack_fx_send(k))
                 keys |= 1u << BK[k];
         } else if ((int32_t)k == ui.voice) {
@@ -72,7 +72,7 @@ static void lights(void)
             for (k = 0; k < NKEYS; k++)
                 if ((int)key_note(k) == tack_step_get((uint8_t)ui.voice, (uint8_t)s, TACK_ST_NOTE))
                     keys |= 1u << k;
-    } else if (ui.song_page == PAGE_SAVE && ui.ks_what == SAVE_PATTERN) {   /* the slots, as SEQ held has them */
+    } else if (ui.over == PAGE_SAVE && ui.ks_what == SAVE_PATTERN) {   /* the slots, as SEQ held has them */
         for (k = 0; k < 16u; k++) {
             if (k == ui.ks_pat)
                 keys |= 1u << WK[k];
@@ -86,7 +86,7 @@ static void lights(void)
             else if (sel_light(k))
                 mid |= 1u << WK[k];
         }
-    } else if ((ui.btn >> B_SEQ & 1u) || (ui.keys >> BK[KEY_COPY] & 1u) || ui.song_page == PAGE_SONG) {   /* the keys are the patterns */
+    } else if ((ui.btn >> B_SEQ & 1u) || (ui.keys >> BK[KEY_COPY] & 1u) || ui.over == PAGE_SONG) {   /* the keys are the patterns */
         for (k = 0; k < 16u; k++) {
             if ((int)k == tack_pattern())
                 keys |= 1u << WK[k];
@@ -104,7 +104,7 @@ static void lights(void)
     }
     if (seq_in_view())
         btn |= 1u << (ui.voice_view ? B_SEQ : B_HOME);
-    if (ui.fx_page)
+    if (ui.over == PAGE_FX)
         btn |= 1u << B_FX;
     else if (ui.group == TACK_G_EDIT)
         btn |= 1u << B_EDIT;
@@ -114,11 +114,11 @@ static void lights(void)
         btn |= 1u << B_LFO;
     if (tack_recording())
         btn |= 1u << B_REC;
-    if (ui.set_page)
+    if (ui.over == PAGE_SET)
         btn |= 1u << B_GLO;
-    if (arp_page() || ui.song_page == PAGE_SONG)
+    if (arp_page() || ui.over == PAGE_SONG)
         btn |= 1u << (arp_page() ? B_ARP : B_SEQ);
-    if (ui.song_page >= PAGE_SAVE)
+    if (ui.over == PAGE_SAVE)
         btn |= 1u << B_SAVE;
     if (tack_running())
         btn |= 1u << B_PLAY | LED_PLAY_GREEN;

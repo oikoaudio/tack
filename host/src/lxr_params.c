@@ -9,6 +9,9 @@
 
 #include "lxr_params.h"
 #include "lxr_host.h"
+#include "lxr_voices.h"
+_Static_assert(LXR_HOST_NUM_VOICES == LXR_VOICES && LXR_HOST_NUM_VOICE_OUTS == LXR_VOICES_WITH_PARAMS && LXR_PARAMS_NUM_VOICES == LXR_VOICES_WITH_PARAMS &&
+               LXR_HOST_BASE_NOTE == LXR_NOTE_CENTRE, "one count of voices");
 #include <stdio.h>
 #include <string.h>
 #include "Parameters.h"
@@ -171,7 +174,7 @@ static void setRange(LxrParamInfo* info, Extra* x)
 	default:			info->max = 127;	break;
 	}
 	// see adjustValue() in lxr_host.c: PWM is silent at pulse width 0
-	if(p >= PAR_PWM_1 && p <= PAR_PWM_6) info->min = 1;
+	info->min = (uint16_t)lxr_param_min(p) > info->min ? (uint16_t)lxr_param_min(p) : info->min;
 }
 
 static void buildName(LxrParamInfo* info, const Extra* x, uint8_t nameIdx, const char* fxNamesJoined)

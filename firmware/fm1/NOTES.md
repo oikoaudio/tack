@@ -78,6 +78,10 @@ Before publishing:
 5. The hour's soak, and a release build from the commit that gets tagged.
 6. Fill in the manual again after any panel changes.
 
+## How it is tested
+
+Tests check behaviour and specs, and never screens, as the panel's look changes often. `tests/verify.sh` goes by exit codes and `verify_selftest.sh` proves that it does. `tests/regress/` holds a script per bug fixed, `pages.py` holds the map of which button leads where in `page_table.txt`, and `panel_random.py` plays at random from fixed seeds, for crashes and anything left held. A refactor that must not change behaviour runs the same scripts through the builds before and after it and compares their screens and audio, with nothing committed. The CPU figures differ from run to run, so those digits on GLO always do. The simulator's `reboot` keeps RAM, so it says nothing about a real power-on: what must survive one needs a load test in `lock_test`.
+
 ## What has been tested
 
 Compiled and simulator-tested:

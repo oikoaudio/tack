@@ -31,7 +31,9 @@ static const uint16_t VOICE_PARAM[TACK_VOICES][TACK_NP] = {
 uint16_t tack_voice_param(uint32_t voice, uint32_t slot) { return VOICE_PARAM[voice][slot]; }
 
 typedef struct { const char *const *names; const uint8_t *fw; uint8_t count; } TackEnum;
-typedef struct { uint8_t group; const char *title; uint8_t graph; TackSlot s[4]; } TackPage;
+typedef struct { uint8_t group; const char *title; uint8_t graph, kind; TackSlot s[4]; } TackPage;
+#include "lxr_voices.h"
+_Static_assert(TACK_VOICES == LXR_VOICES && TACK_FX_SENDS == LXR_VOICES_WITH_PARAMS && TACK_NOTE_CENTRE == LXR_NOTE_CENTRE, "one count of voices");
 #include "tack_pages.h"
 #include "tack_shapes.h"
 _Static_assert(sizeof SHAPES / sizeof SHAPES[0] == TACK_SHAPE_N, "the tables");
@@ -50,6 +52,12 @@ int tack_pages(uint32_t voice, uint32_t group)
         n += TACK_PAGE[voice][i].group == group;
     return n;
 }
+int tack_page_kind(uint32_t voice, uint32_t group, uint32_t sub)
+{
+    const TackPage *p = page_at(voice, group, sub);
+    return p ? p->kind : TACK_PAGE_OTHER;
+}
+
 const char *tack_page_title(uint32_t voice, uint32_t group, uint32_t sub)
 {
     const TackPage *p = page_at(voice, group, sub);
@@ -96,7 +104,7 @@ uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e)
 {
     int32_t top = s->max, v = value;
     if (!s->en) {
-        const int32_t low = s->par >= PAR_PWM_1 && s->par <= PAR_PWM_6;   /* the engine plays 0 as 1: adjustValue */
+        const int32_t low = (int32_t)lxr_param_min(s->par);
         v += e;
         return (uint8_t)(v < low ? low : v > top ? top : v);
     }
@@ -122,9 +130,11 @@ static int lfo_sync_slot(const TackSlot *s) { return s->par >= PAR_SYNC_LFO1 && 
 
 /* RETRIG's value holds both: 1-6 a voice, 7-12 the same voice once, as once means nothing without a voice to start it */
 static int lfo_retrig_par(const TackSlot *s) { return s->par >= PAR_RETRIGGER_LFO1 && s->par <= PAR_RETRIGGER_LFO6; }
-static int lfo_once_slot(const TackSlot *s) { return lfo_retrig_par(s) && s->label[0] == 'O'; }
+static int lfo_once_slot(const TackSlot *s) { return s->role == TACK_ROLE_ONCE; }
 
 int tack_slot_toggles(const TackSlot *s) { return s->max == 1u || lfo_sync_slot(s) || lfo_once_slot(s); }
+int tack_slot_switch(const TackSlot *s) { return s->en == TACK_EN_OFF_ON || lfo_sync_slot(s) || lfo_once_slot(s); }
+int tack_slot_wave(const TackSlot *s) { return s->en == TACK_EN_OSC_WAVE ? TACK_WAVE_OSC : s->en == TACK_EN_LFO_WAVE ? TACK_WAVE_LFO : TACK_WAVE_NONE; }
 
 const char *tack_slot_no_lock(const TackSlot *s)
 {
@@ -147,16 +157,17 @@ int tack_slot_turn(const TackSlot *s, int32_t e)
     }
     if (lfo_once_slot(s)) {
         const uint8_t now = shadow[s->par];
-        if (e > 0 && now <= 6u)                  /* with no voice to start it, its own */
-            tack_post_param(s->par, (uint8_t)((now ? now : s->par - PAR_RETRIGGER_LFO1 + 1u) + 6u));
-        else if (e < 0 && now > 6u)
-            tack_post_param(s->par, (uint8_t)(now - 6u));
+        if (e > 0 && !lxr_retrig_once(now))      /* with no voice to start it, its own */
+            tack_post_param(s->par, (uint8_t)lxr_retrig_value(now ? now : s->par - PAR_RETRIGGER_LFO1 + 1u, 1));
+        else if (e < 0 && lxr_retrig_once(now))
+            tack_post_param(s->par, (uint8_t)lxr_retrig_voice(now));
         return 1;
     }
     if (lfo_retrig_par(s)) {
-        const int32_t now = shadow[s->par], once = now > 6, to = (once ? now - 6 : now) + e;
-        const int32_t voice = to < 0 ? 0 : to > 6 ? 6 : to;
-        tack_post_param(s->par, (uint8_t)(voice && once ? voice + 6 : voice));
+        const uint32_t now = shadow[s->par];
+        const int32_t to = (int32_t)lxr_retrig_voice(now) + e;
+        const int32_t voice = to < 0 ? 0 : to > LXR_RETRIG_ONCE ? LXR_RETRIG_ONCE : to;
+        tack_post_param(s->par, (uint8_t)lxr_retrig_value((uint32_t)voice, lxr_retrig_once(now)));
         return 1;
     }
     if (lfo_sync_slot(s)) {
@@ -182,9 +193,9 @@ const char *tack_slot_text(const TackSlot *s, uint8_t value)
     if (lfo_sync_slot(s))
         return value ? "ON" : "OFF";
     if (lfo_once_slot(s))
-        return value > 6u ? "ON" : "OFF";
-    if (lfo_retrig_par(s) && value > 6u)
-        value = (uint8_t)(value - 6u);
+        return lxr_retrig_once(value) ? "ON" : "OFF";
+    if (lfo_retrig_par(s))
+        value = (uint8_t)lxr_retrig_voice(value);
     if (!s->en)
         return 0;
     const TackEnum *en = &TACK_ENUM[s->en - 1];
@@ -288,8 +299,7 @@ const TackSlot *tack_send_slot(uint32_t voice)
 {
     static TackSlot send[TACK_FX_SENDS];
     const uint32_t i = voice < TACK_FX_SENDS ? voice : TACK_FX_SENDS - 1u;
-    static const uint8_t OFF_ON = 6u;            /* en of tack_pages.h's {"OFF","ON"} */
-    send[i] = (TackSlot){"FX SEND", fx_route(voice), 1, OFF_ON, 0, 0};
+    send[i] = (TackSlot){"FX SEND", fx_route(voice), 1, TACK_EN_OFF_ON, 0, 0, TACK_ROLE_NONE};
     return &send[i];
 }
 uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
@@ -521,6 +531,7 @@ uint32_t tack_shape_steps(uint32_t shape) { return shape && shape <= TACK_SHAPE_
 
 /* a kit in the audio interrupt: the engine has one writer. Its parameters take a block's time, as on the LXR */
 static const uint8_t *volatile kit_pending;
+static const uint8_t *kit_pending_name;       /* with it, for a kit from the bank */
 static volatile uint32_t kit_applied;
 static uint32_t kit_seen;
 static volatile int kit_now;
@@ -577,10 +588,11 @@ static void kit_for_pattern(uint8_t kit)
     morph_after_kit();                           /* before this step's hits read the parameters */
 }
 
-int tack_post_kit(const uint8_t *values, uint8_t slot)
+int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot)
 {
     if (kit_pending)
         return 0;
+    kit_pending_name = name;
     kit_pending = values;
     if (!post(EV_KIT, slot, 0, 0)) {
         kit_pending = 0;
@@ -630,6 +642,10 @@ static uint8_t lock_node_n[NUM_TRACKS];
 
 static uint8_t lock_dest(uint16_t param) { return (uint8_t)(param < 127u ? param + 1u : param); }
 static uint32_t lock_key(const Lock *l) { return (uint32_t)(l->b >> 7) << 8 | l->a; }
+static Lock lock_pack(uint32_t key, uint8_t dest, uint8_t value)
+{
+    return (Lock){(uint8_t)key, dest, (uint8_t)((value & 0x7Fu) | (key >> 8) << 7)};
+}
 static uint32_t step_key(uint8_t voice, uint8_t step) { return (uint32_t)voice << 6 | step; }
 
 static void locks_init(void)
@@ -811,113 +827,110 @@ static void shuffle_follow(void) { seq_setShuffle((float)seq_patternSet.shuffle[
  * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes and starts, BITS, morph and its kit, the pattern's own kit, the locks, and in what is left the steps
  * with recurrence, 3 bytes each: the key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as
  * they need to be. Anything else is refused whole: patterns of older builds, and whatever a bad write or a bad file left */
-#define IMAGE_MAGIC 0x3754504Bu          /* "KPT7" */
+#define IMAGE_MAGIC "KPT7"
 #define IMAGE_STEPS (NUM_TRACKS * NUM_STEPS)
 #define IMAGE_SETTINGS 4u                /* BITS, how far morph goes, its kit, and whether a kit follows */
-#define IMAGE_HEAD (6u + 3u * IMAGE_STEPS + IMAGE_STEPS + NUM_BARS * NUM_TRACKS * 2u + NUM_TRACKS + 2u + 2u * NUM_TRACKS + IMAGE_SETTINGS + \
-                    sizeof(PatternKit))
+enum {                                   /* where each part starts: the one statement of the layout */
+    IMG_COUNT = 4,
+    IMG_STEPS = IMG_COUNT + 2,
+    IMG_TIMING = IMG_STEPS + 3 * IMAGE_STEPS,
+    IMG_MAIN = IMG_TIMING + IMAGE_STEPS,
+    IMG_LENGTHS = IMG_MAIN + NUM_BARS * NUM_TRACKS * 2,
+    IMG_SHUFFLE = IMG_LENGTHS + NUM_TRACKS,
+    IMG_KIT_NR = IMG_SHUFFLE + 1,
+    IMG_LANE_MODES = IMG_KIT_NR + 1,
+    IMG_LANE_STARTS = IMG_LANE_MODES + NUM_TRACKS,
+    IMG_OPTIONS = IMG_LANE_STARTS + NUM_TRACKS,
+    IMG_KIT = IMG_OPTIONS + IMAGE_SETTINGS,
+    IMG_LOCKS = IMG_KIT + (int)sizeof(PatternKit)
+};
+#define IMAGE_HEAD ((uint32_t)IMG_LOCKS)
 #define IMAGE_MAX (IMAGE_HEAD + TACK_LOCKS_MAX * sizeof(Lock))
 _Static_assert(IMAGE_MAX <= 3840u, "a pattern is one store object (PLAT_STORE_MAX)");
 _Static_assert(NUM_TRACKS == TACK_VOICES && NUM_STEPS == 64, "the image's size and its keys");
+_Static_assert(IMG_LOCKS == TACK_IMG_LOCKS && IMG_LENGTHS == TACK_IMG_LENGTHS, "the header's offsets, which lock_test uses");
+_Static_assert(sizeof(PatternKit) == 256u && LXR_HOST_NUM_PARAMS == 247, "a kit in the image, the bank and a .SND");
 
 uint32_t tack_pattern_export(uint8_t pattern, void *image)
 {
-    uint8_t *o = image;
+    uint8_t *o = image, *q;
     const LockList *p = &lock_list[pattern];
-    o[0] = (uint8_t)IMAGE_MAGIC;
-    o[1] = (uint8_t)(IMAGE_MAGIC >> 8);
-    o[2] = (uint8_t)(IMAGE_MAGIC >> 16);
-    o[3] = (uint8_t)(IMAGE_MAGIC >> 24);
-    o[4] = (uint8_t)p->n;
-    o[5] = (uint8_t)(p->n >> 8);
-    o += 6;
+    uint32_t c = 0;
+    memcpy(o, IMAGE_MAGIC, IMG_COUNT);
+    o[IMG_COUNT] = (uint8_t)p->n;
+    o[IMG_COUNT + 1] = (uint8_t)(p->n >> 8);
+    q = o + IMG_STEPS;
     for (uint32_t t = 0; t < NUM_TRACKS; t++)
         for (uint32_t s = 0; s < NUM_STEPS; s++) {
             const Step *st = &seq_patternSet.seq_subStepPattern[pattern][t][s];
-            *o++ = st->volume;
-            *o++ = st->prob;
-            *o++ = st->note;
+            *q++ = st->volume;
+            *q++ = st->prob;
+            *q++ = st->note;
         }
-    memcpy(o, seq_patternSet.seq_stepTiming[pattern], IMAGE_STEPS);
-    o += IMAGE_STEPS;
-    for (uint32_t b = 0; b < NUM_BARS; b++) {
-        memcpy(o, seq_patternSet.seq_mainSteps[b][pattern], NUM_TRACKS * 2u);
-        o += NUM_TRACKS * 2u;
-    }
-    memcpy(o, seq_patternSet.length[pattern], NUM_TRACKS);
-    o += NUM_TRACKS;
-    *o++ = seq_patternSet.shuffle[pattern];
-    *o++ = seq_patternSet.kitNr[pattern];
-    memcpy(o, seq_laneMode[pattern], NUM_TRACKS);
-    o += NUM_TRACKS;
-    memcpy(o, seq_laneStart[pattern], NUM_TRACKS);
-    o += NUM_TRACKS;
-    *o++ = bits_of[pattern];
-    *o++ = morph_of[pattern];
-    *o++ = morph_kit_of[pattern];
+    memcpy(o + IMG_TIMING, seq_patternSet.seq_stepTiming[pattern], IMAGE_STEPS);
+    for (uint32_t b = 0; b < NUM_BARS; b++)
+        memcpy(o + IMG_MAIN + b * NUM_TRACKS * 2u, seq_patternSet.seq_mainSteps[b][pattern], NUM_TRACKS * 2u);
+    memcpy(o + IMG_LENGTHS, seq_patternSet.length[pattern], NUM_TRACKS);
+    o[IMG_SHUFFLE] = seq_patternSet.shuffle[pattern];
+    o[IMG_KIT_NR] = seq_patternSet.kitNr[pattern];
+    memcpy(o + IMG_LANE_MODES, seq_laneMode[pattern], NUM_TRACKS);
+    memcpy(o + IMG_LANE_STARTS, seq_laneStart[pattern], NUM_TRACKS);
+    o[IMG_OPTIONS] = bits_of[pattern];
+    o[IMG_OPTIONS + 1] = morph_of[pattern];
+    o[IMG_OPTIONS + 2] = morph_kit_of[pattern];
     if (pattern == kit_pattern && (kit_has >> pattern & 1u || dirty >> pattern & 1u))   /* its kit as it is now */
         kit_keep(pattern);
-    *o++ = kit_has >> pattern & 1u;
-    memcpy(o, &kit_of[pattern], sizeof(PatternKit));
-    o += sizeof(PatternKit);
-    memcpy(o, p->l, p->n * sizeof(Lock));
-    o += p->n * sizeof(Lock);
-    {
-        uint32_t c = 0;
-        for (uint32_t t = 0; t < NUM_TRACKS; t++)
-            for (uint32_t s = 0; s < NUM_STEPS; s++) {
-                const Step *st = &seq_patternSet.seq_subStepPattern[pattern][t][s];
-                const uint32_t key = t << 6 | s;
-                if (st->param1Nr == NO_AUTOMATION)
-                    continue;
-                *o++ = (uint8_t)key;
-                *o++ = st->param1Val;
-                *o++ = (uint8_t)((st->param1Nr - 1u) | (key >> 8) << 7);
-                c++;
-            }
-        return IMAGE_HEAD + (p->n + c) * sizeof(Lock);
-    }
+    o[IMG_OPTIONS + 3] = kit_has >> pattern & 1u;
+    memcpy(o + IMG_KIT, &kit_of[pattern], sizeof(PatternKit));
+    memcpy(o + IMG_LOCKS, p->l, p->n * sizeof(Lock));
+    q = o + IMG_LOCKS + p->n * sizeof(Lock);
+    for (uint32_t t = 0; t < NUM_TRACKS; t++)
+        for (uint32_t s = 0; s < NUM_STEPS; s++) {
+            const Step *st = &seq_patternSet.seq_subStepPattern[pattern][t][s];
+            if (st->param1Nr == NO_AUTOMATION)
+                continue;
+            const Lock r = lock_pack(t << 6 | s, st->param1Val, (uint8_t)(st->param1Nr - 1u));
+            memcpy(q, &r, sizeof r);
+            q += sizeof r;
+            c++;
+        }
+    return IMAGE_HEAD + (p->n + c) * sizeof(Lock);
 }
 
 static int image_ok(const uint8_t *in, uint32_t len)
 {
     const uint8_t *q;
     uint32_t n, c, last = 0, run = 0;
-    if (len < IMAGE_HEAD || (uint32_t)in[0] << 0 != (IMAGE_MAGIC & 0xFFu) || in[1] != (uint8_t)(IMAGE_MAGIC >> 8) ||
-        in[2] != (uint8_t)(IMAGE_MAGIC >> 16) || in[3] != (uint8_t)(IMAGE_MAGIC >> 24))
+    if (len < IMAGE_HEAD || memcmp(in, IMAGE_MAGIC, IMG_COUNT))
         return 0;
-    n = (uint32_t)in[4] | (uint32_t)in[5] << 8;
+    n = (uint32_t)in[IMG_COUNT] | (uint32_t)in[IMG_COUNT + 1] << 8;
     if (n > TACK_LOCKS_MAX || len < IMAGE_HEAD + n * sizeof(Lock) || (len - IMAGE_HEAD) % sizeof(Lock))
         return 0;
     c = (len - IMAGE_HEAD) / sizeof(Lock) - n;
     if (n + c > TACK_LOCKS_MAX)
         return 0;
-    q = in + 6;
+    q = in + IMG_STEPS;
     for (uint32_t i = 0; i < IMAGE_STEPS; i++, q += 3)
         if (q[1] > 127u || q[2] > 127u)
             return 0;
-    for (uint32_t i = 0; i < IMAGE_STEPS; i++, q++) {
+    for (uint32_t i = 0; i < IMAGE_STEPS; i++) {
         StepTiming t;
-        memcpy(&t, q, 1);
+        memcpy(&t, in + IMG_TIMING + i, 1);
         if (t.shift > 2u * SHIFT_ZERO || t.flam > 5u)
             return 0;
     }
-    q += NUM_BARS * NUM_TRACKS * 2u;
-    for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
-        if (*q > NUM_STEPS)
+    for (uint32_t i = 0; i < NUM_TRACKS; i++) {
+        const uint8_t mode = in[IMG_LANE_MODES + i];
+        if (in[IMG_LENGTHS + i] > NUM_STEPS || LANE_DIR(mode) >= LANE_DIRECTIONS || mode >= LANE_MODE(0u, LANE_SPEEDS) ||
+            in[IMG_LANE_STARTS + i] >= NUM_STEPS)
             return 0;
-    if (q[0] > 127u || q[1] > 128u)
+    }
+    if (in[IMG_SHUFFLE] > 127u || in[IMG_KIT_NR] > 128u)
         return 0;
-    q += 2;
-    for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
-        if (LANE_DIR(*q) >= LANE_DIRECTIONS || *q >= LANE_MODE(0u, LANE_SPEEDS))
-            return 0;
-    for (uint32_t i = 0; i < NUM_TRACKS; i++, q++)
-        if (*q >= NUM_STEPS)
-            return 0;
+    q = in + IMG_OPTIONS;
     if (q[0] > 127u || q[1] > 127u || q[2] > TACK_MORPH_KITS || q[3] > 1u)
         return 0;
-    q += IMAGE_SETTINGS + sizeof(PatternKit);
+    q = in + IMG_LOCKS;
     for (uint32_t i = 0; i < n; i++, q += sizeof(Lock)) {
         Lock l;
         memcpy(&l, q, sizeof l);
@@ -930,9 +943,11 @@ static int image_ok(const uint8_t *in, uint32_t len)
         last = at;
     }
     last = 0;
-    for (uint32_t i = 0; i < c; i++, q += 3) {
-        const uint32_t key = (uint32_t)(q[2] >> 7) << 8 | q[0], slots = (q[2] & 0x7Fu) + 1u;
-        if (key >> 6 >= NUM_TRACKS || (i && key <= last) || slots < 2u || slots > TACK_RECUR_MAX || !q[1] || (q[1] >> slots))
+    for (uint32_t i = 0; i < c; i++, q += sizeof(Lock)) {        /* a recurrence: mask in dest, the length - 1 as the value */
+        Lock r;
+        memcpy(&r, q, sizeof r);
+        const uint32_t key = lock_key(&r), slots = (r.b & 0x7Fu) + 1u;
+        if (key >> 6 >= NUM_TRACKS || (i && key <= last) || slots < 2u || slots > TACK_RECUR_MAX || !r.dest || (r.dest >> slots))
             return 0;
         last = key;
     }
@@ -941,51 +956,45 @@ static int image_ok(const uint8_t *in, uint32_t len)
 
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
 {
-    const uint8_t *in = image;
+    const uint8_t *in = image, *q;
     LockList *p = &lock_list[pattern];
     uint32_t n;
     if (!image_ok(in, len))
         return -1;
-    n = (uint32_t)in[4] | (uint32_t)in[5] << 8;
-    in += 6;
+    n = (uint32_t)in[IMG_COUNT] | (uint32_t)in[IMG_COUNT + 1] << 8;
+    q = in + IMG_STEPS;
     for (uint32_t t = 0; t < NUM_TRACKS; t++)
         for (uint32_t s = 0; s < NUM_STEPS; s++) {
             Step *st = &seq_patternSet.seq_subStepPattern[pattern][t][s];
-            st->volume = *in++;
-            st->prob = *in++;
-            st->note = *in++;
+            st->volume = *q++;
+            st->prob = *q++;
+            st->note = *q++;
             st->param1Nr = st->param2Nr = NO_AUTOMATION;
             st->param1Val = st->param2Val = 0;
         }
-    memcpy(seq_patternSet.seq_stepTiming[pattern], in, IMAGE_STEPS);
-    in += IMAGE_STEPS;
-    for (uint32_t b = 0; b < NUM_BARS; b++) {
-        memcpy(seq_patternSet.seq_mainSteps[b][pattern], in, NUM_TRACKS * 2u);
-        in += NUM_TRACKS * 2u;
-    }
-    memcpy(seq_patternSet.length[pattern], in, NUM_TRACKS);
-    in += NUM_TRACKS;
-    seq_patternSet.shuffle[pattern] = *in++;
-    seq_patternSet.kitNr[pattern] = *in++;
-    memcpy(seq_laneMode[pattern], in, NUM_TRACKS);
-    in += NUM_TRACKS;
-    memcpy(seq_laneStart[pattern], in, NUM_TRACKS);
-    in += NUM_TRACKS;
-    bits_of[pattern] = in[0];
-    morph_of[pattern] = in[1];
-    morph_kit_of[pattern] = in[2];
-    kit_has = (uint16_t)(in[3] ? kit_has | 1u << pattern : kit_has & ~(1u << pattern));
-    in += IMAGE_SETTINGS;
-    memcpy(&kit_of[pattern], in, sizeof(PatternKit));
-    in += sizeof(PatternKit);
-    memcpy(p->l, in, n * sizeof(Lock));
+    memcpy(seq_patternSet.seq_stepTiming[pattern], in + IMG_TIMING, IMAGE_STEPS);
+    for (uint32_t b = 0; b < NUM_BARS; b++)
+        memcpy(seq_patternSet.seq_mainSteps[b][pattern], in + IMG_MAIN + b * NUM_TRACKS * 2u, NUM_TRACKS * 2u);
+    memcpy(seq_patternSet.length[pattern], in + IMG_LENGTHS, NUM_TRACKS);
+    seq_patternSet.shuffle[pattern] = in[IMG_SHUFFLE];
+    seq_patternSet.kitNr[pattern] = in[IMG_KIT_NR];
+    memcpy(seq_laneMode[pattern], in + IMG_LANE_MODES, NUM_TRACKS);
+    memcpy(seq_laneStart[pattern], in + IMG_LANE_STARTS, NUM_TRACKS);
+    bits_of[pattern] = in[IMG_OPTIONS];
+    morph_of[pattern] = in[IMG_OPTIONS + 1];
+    morph_kit_of[pattern] = in[IMG_OPTIONS + 2];
+    kit_has = (uint16_t)(in[IMG_OPTIONS + 3] ? kit_has | 1u << pattern : kit_has & ~(1u << pattern));
+    memcpy(&kit_of[pattern], in + IMG_KIT, sizeof(PatternKit));
+    memcpy(p->l, in + IMG_LOCKS, n * sizeof(Lock));
     p->n = (uint16_t)n;
-    in += n * sizeof(Lock);
-    for (uint32_t i = (len - IMAGE_HEAD) / sizeof(Lock) - n; i; i--, in += 3) {
-        const uint32_t key = (uint32_t)(in[2] >> 7) << 8 | in[0];
+    q = in + IMG_LOCKS + n * sizeof(Lock);
+    for (uint32_t i = (len - IMAGE_HEAD) / sizeof(Lock) - n; i; i--, q += sizeof(Lock)) {
+        Lock r;
+        memcpy(&r, q, sizeof r);
+        const uint32_t key = lock_key(&r);
         Step *st = &seq_patternSet.seq_subStepPattern[pattern][key >> 6][key & 63u];
-        st->param1Nr = (uint8_t)((in[2] & 0x7Fu) + 1u);
-        st->param1Val = in[1];
+        st->param1Nr = (uint8_t)((r.b & 0x7Fu) + 1u);
+        st->param1Val = r.dest;
     }
     shuffle_follow();
     seq_copyPatternToBackupBuffer(seq_activePattern);
@@ -1144,7 +1153,7 @@ static void morph_kinds(void)
                     if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6)) {
                         morph_kind[s->par] = s->par >= PAR_RETRIGGER_LFO1 && s->par <= PAR_RETRIGGER_LFO6 ? MORPH_SWITCH : MORPH_BLEND;
                         mutate_top[s->par] = s->max;
-                        mutate_voice[s->par] = (uint8_t)(v < 5u ? v : 5u);   /* the hats share their oscillators */
+                        mutate_voice[s->par] = (uint8_t)lxr_param_voice(v);
                     }
                 }
     for (uint32_t k = 0; k < sizeof FX_KIND / sizeof FX_KIND[0]; k++)
@@ -1231,8 +1240,8 @@ void tack_kit_blended(uint8_t *values)
         values[p] = morph_value(p, morph_a[p]);
 }
 
-uint8_t tack_lfo_sync(uint32_t voice) { return shadow[PAR_SYNC_LFO1 + (voice < 5u ? voice : 5u)]; }
-int tack_lfo_once(uint32_t voice) { return shadow[PAR_RETRIGGER_LFO1 + (voice < 5u ? voice : 5u)] > 6u; }
+uint8_t tack_lfo_sync(uint32_t voice) { return shadow[PAR_SYNC_LFO1 + lxr_param_voice(voice)]; }
+int tack_lfo_once(uint32_t voice) { return lxr_retrig_once(shadow[PAR_RETRIGGER_LFO1 + lxr_param_voice(voice)]); }
 
 int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed)
 {
@@ -1240,7 +1249,7 @@ int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed)
     if (mutate_waiting)
         return mutate_walk.step;
     memcpy(mutate_next, shadow, sizeof mutate_next);
-    step = kit_walk(&mutate_walk, mutate_next, mutate_top, mutate_voice, voice < TACK_VOICES ? (uint8_t)(voice < 5u ? voice : 5u) : KIT_MUTATE_ALL, steps, seed);
+    step = kit_walk(&mutate_walk, mutate_next, mutate_top, mutate_voice, voice < TACK_VOICES ? (uint8_t)lxr_param_voice(voice) : KIT_MUTATE_ALL, steps, seed);
     mutate_waiting = 1;
     if (!post(EV_MUTATE, 0, 0, 0)) {
         mutate_waiting = 0;
@@ -1447,7 +1456,7 @@ static void set_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value)
     LockList *p = &lock_list[seq_activePattern];
     const uint32_t key = step_key(voice, step), first = lock_lower(p, key), n = step_locks(p, first, key);
     const uint8_t d = lock_dest(param);
-    const Lock l = {(uint8_t)key, d, (uint8_t)((value & 0x7Fu) | (key >> 8) << 7)};
+    const Lock l = lock_pack(key, d, value);
     uint32_t i = first;
     while (i < first + n && p->l[i].dest < d)
         i++;
@@ -1506,7 +1515,7 @@ static void lane_extend(uint8_t v, uint8_t length)
         for (uint32_t i = 0; i < m; i++) {
             const Lock l = p->l[a + i];
             const uint32_t key = lock_key(&l) + 16u;
-            p->l[at + i] = (Lock){(uint8_t)key, l.dest, (uint8_t)((l.b & 0x7Fu) | (key >> 8) << 7)};
+            p->l[at + i] = lock_pack(key, l.dest, l.b);
         }
         p->n = (uint16_t)(p->n + m);
     }
@@ -1773,8 +1782,9 @@ static void drain(void)
                 lxr_host_loadKit(kit_pending);
                 morph_capture();
                 kit_applied++;
-                if (e.a != TACK_KIT_NO_SLOT) {         /* a bank slot is its name, then what was posted */
-                    memcpy(kit_name_now, kit_pending - sizeof kit_name_now, sizeof kit_name_now);
+                if (e.a != TACK_KIT_NO_SLOT) {
+                    if (kit_pending_name)
+                        memcpy(kit_name_now, kit_pending_name, sizeof kit_name_now);
                     kit_now = e.a + 1;
                     seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(e.a + 1u);
                     kit_keep(seq_activePattern);
@@ -1985,7 +1995,7 @@ static void stress_tick(void)
     if (n++ % 35u == 0u) {
         stress_locks();
         for (uint8_t v = 0; v < TACK_VOICES; v++)
-            lxr_host_noteOn(v, 60, 127);
+            lxr_host_noteOn(v, LXR_NOTE_CENTRE, 127);
     }
 }
 

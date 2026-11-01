@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 #include "kit_mutate.h"
+#include "lxr_voices.h"
 #include <string.h>
 
 #define MUTATE_REACH 12u                         /* of 127: a step is a variation of the kit, and many steps wander off */
@@ -44,7 +45,7 @@ static void mutate_step(uint8_t *kit, const uint8_t *top, const uint8_t *voice, 
         } else if (a & 1u) {                     /* half of them, so that a step has a direction */
             const uint32_t span = (p >= PAR_COARSE1 && p <= PAR_FINE6 && !((p - PAR_COARSE1) & 1u) ? 3u : MUTATE_REACH * (max + 1u) / 128u) + 1u;
             const int32_t v = (int32_t)kit[p] + (int32_t)(b % span) - (int32_t)(c % span);
-            const int32_t low = p >= PAR_PWM_1 && p <= PAR_PWM_6 ? 1 : mutate_has_floor(p) && kit[p] >= MUTATE_FLOOR ? (int32_t)MUTATE_FLOOR : 0;
+            const int32_t low = mutate_has_floor(p) && kit[p] >= MUTATE_FLOOR ? (int32_t)MUTATE_FLOOR : (int32_t)lxr_param_min(p);
             kit[p] = (uint8_t)(v < low ? low : v > (int32_t)max ? (int32_t)max : v);
         }
     }

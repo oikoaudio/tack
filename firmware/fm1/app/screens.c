@@ -295,42 +295,28 @@ static void save_note_pattern(char *a, uint32_t todo)
     if ((int)ui.ks_pat == tack_pattern()) {
         for (uint32_t p = 0; p < TACK_PATTERNS; p++)
             n += todo >> p & 1u;
-        memcpy(a, "SAVE ", 5u);
-        int_text((int32_t)n, a + 5);
-        memcpy(a + (n >= 10u ? 7 : 6), n == 1u ? " PATTERN" : " PATTERNS", n == 1u ? 9u : 10u);
+        text_put(int_put(text_put(a, "SAVE "), (int32_t)n), n == 1u ? " PATTERN" : " PATTERNS");
     } else {
         const int used = tack_patterns_used() >> ui.ks_pat & 1u;
-        memcpy(a, used ? "OVERWRITE P" : "SAVE AS P", used ? 12u : 10u);
-        int_text(ui.ks_pat + 1, a + (used ? 11 : 9));
+        int_text(ui.ks_pat + 1, text_put(a, used ? "OVERWRITE P" : "SAVE AS P"));
     }
 }
 
 static void save_note_kit(char *a, char *b, const uint8_t *now)
 {
-    uint32_t n;
     char t[9];
     if (now) {
         kit_name_of(now, t);
-        memcpy(a, "OVERWRITE ", 10u);
-        memcpy(a + 10, t, 9u);
+        text_put(text_put(a, "OVERWRITE "), t);
     } else {
-        memcpy(a, "SAVE AS NEW KIT", 16u);
+        text_put(a, "SAVE AS NEW KIT");
     }
     if (ui.ks_what == SAVE_BLEND) {
-        memcpy(b, "MORPH ", 7u);
-        int_text(tack_morph(), b + 6);
-        n = 6;
-        while (b[n])
-            n++;
-        memcpy(b + n, " OF ", 5u);
-        n += 4;
-        kit_name_of((const uint8_t *)(ui.kit_name[0] ? ui.kit_name : "INIT KIT"), b + n);
-        while (b[n])
-            n++;
-        memcpy(b + n, " > ", 4u);
-        morph_name(b + n + 3);
+        char *e = text_put(int_put(text_put(b, "MORPH "), tack_morph()), " OF ");
+        kit_name_of((const uint8_t *)(ui.kit_name[0] ? ui.kit_name : "INIT KIT"), t);
+        morph_name(text_put(text_put(e, t), " > "));
     } else {
-        memcpy(b, "AS IT SOUNDS NOW", 17u);
+        text_put(b, "AS IT SOUNDS NOW");
     }
 }
 
@@ -476,7 +462,7 @@ static void pg_voice_line(uint32_t line, uint32_t *last)
     const uint8_t v = (uint8_t)ui.voice;
     const int head = tack_running() ? tack_playhead(v) : -1, len = tack_length(v);
     const int low = note_low();
-    uint32_t key = rk(rk(rk(rk(rk(23u, v), (uint32_t)ui.bar), (uint32_t)len), note_cursor()), (uint32_t)low + 1000u * ui.song_page);
+    uint32_t key = rk(rk(rk(rk(rk(23u, v), (uint32_t)ui.bar), (uint32_t)len), note_cursor()), (uint32_t)low + 1000u * ui.over);
     for (uint32_t i = 0; i < 8u; i++) {
         const uint8_t st = (uint8_t)(ui.bar * 16 + (int)(line * 8u + i));
         key = rk(key, st == head);
@@ -658,8 +644,8 @@ static void pg_screen(int invalid)
 {
     static uint32_t rows[SCREEN_ROWS];
     static int was;
-    const int now = ui.fx_page ? 1 : ui.set_page ? 2 : vel_page() ? 6 : ui.song_page == PAGE_LANE ? 7 : ui.song_page == PAGE_EUCLID ? 8
-                    : ui.song_page == PAGE_SAVE ? (ui.ks_what == SAVE_PATTERN ? 10 : 9) : ui.song_page ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
+    const int now = ui.over == PAGE_FX ? 1 : ui.over == PAGE_SET ? 2 : vel_page() ? 6 : ui.over == PAGE_LANE ? 7 : ui.over == PAGE_EUCLID ? 8
+                    : ui.over == PAGE_SAVE ? (ui.ks_what == SAVE_PATTERN ? 10 : 9) : song_pages() ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
     if (invalid || now != was) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
         rows[0] = rows[1] = rows[2] = 0xFFFFFFFFu;

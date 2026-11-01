@@ -7,18 +7,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include "tack_engine.h"
 
-#define TACK_VOICES 7
-#define TACK_BLOCK 64
-void tack_init(void);
-void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12);
-int tack_post_param(uint16_t param, uint8_t value);
-int tack_post_step(uint8_t voice, uint8_t step, uint8_t on);
-int tack_post_run(uint8_t on);
-int tack_post_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value);
-int tack_post_lock_clear(uint8_t voice, uint8_t step);
-int tack_post_length(uint8_t voice, uint8_t length);
-int tack_playhead(uint8_t voice);
 float probe_filter(int voice);
 int probe_param_filter1(void);
 int probe_filter_type(int voice);
@@ -26,59 +16,10 @@ float probe_fx_settings(void);
 int probe_fx_type(void);
 int probe_param_vol1(void);
 int probe_kit_size(void);
-typedef const uint8_t *(*TackKitFind)(uint32_t slot);
-void tack_set_kit_find(TackKitFind fn);
-int tack_post_kit(const uint8_t *values, uint8_t slot);
-int tack_kit_busy(void);
-int tack_kit_now(void);
-uint32_t tack_dirty(void);
-void tack_clean(uint8_t pattern);
-void tack_load_kit(const uint8_t *values);
-const uint8_t *tack_kit(void);
 int probe_param_filter_type1(void);
-int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel);
-int tack_post_fx_send(uint32_t voice, uint8_t on);
-uint16_t tack_fx_param(uint32_t slot);
-uint8_t tack_fx_max(uint32_t slot);
-uint8_t tack_get_param(uint16_t param);
-typedef struct { const char *label; uint16_t par; uint8_t max, en, target; } TackSlot;
-int tack_pages(uint32_t voice, uint32_t group);
-const TackSlot *tack_slot(uint32_t voice, uint32_t group, uint32_t sub, uint32_t slot);
-uint8_t tack_slot_step(const TackSlot *s, uint8_t value, int32_t e);
-const char *tack_slot_text(const TackSlot *s, uint8_t value);
 void lxr_host_loadKit(const uint8_t *values);
-int tack_length(uint8_t voice);
-int tack_step_on(uint8_t voice, uint8_t step);
-int tack_locked(uint8_t voice, uint8_t step);
-int tack_lock_get(uint8_t voice, uint8_t step, uint16_t param, uint8_t *value);
-int tack_lock_room(uint8_t voice, uint8_t step, uint16_t param);
-int tack_lock_count(void);
 float probe_lfo_rnd(int voice);
 float probe_cymbal_pwm(void);
-int tack_post_note(uint8_t voice, uint8_t note, uint8_t vel);
-int tack_recur_len(uint8_t voice, uint8_t step);
-uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
-int tack_recur_room(uint8_t voice, uint8_t step);
-int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
-enum { TACK_LOCK_ROOM, TACK_LOCK_STEP_FULL, TACK_LOCK_PATTERN_FULL };
-int tack_post_pattern(uint8_t pattern);
-int tack_post_clear(uint8_t voice);
-int tack_post_shuffle(uint8_t amount);
-void tack_clear_pattern(uint8_t pattern);
-uint32_t tack_pattern_export(uint8_t pattern, void *image);
-int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);
-int tack_euclid_turn(uint8_t voice, uint32_t slot, int32_t e);
-uint8_t tack_euclid_get(uint8_t voice, uint32_t slot);
-int tack_post_roll(uint8_t voice, uint8_t on);
-int tack_post_roll_rate(uint8_t rate);
-int tack_post_copy(uint8_t dst);
-int tack_post_clear(uint8_t voice);
-int tack_post_pattern(uint8_t pattern);
-int tack_post_bpm(uint16_t bpm);
-int tack_pattern(void);
-int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
-int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot);
-int tack_lane_nudge_turn(uint8_t voice, int32_t e);
 
 static int fails;
 static void check(const char *name, int ok, double a, double b)
@@ -773,14 +714,14 @@ static void pattern_tests(void)
     bank[0][vol] = 100;
     bank[1][vol] = 50;
     tack_set_kit_find(bank_find);
-    tack_post_kit(bank[0], 0);
+    tack_post_kit(bank[0], 0, 0);
     run(2);
     tack_kit_busy();
     check("a kit taken on pattern 1 is playing", tack_get_param((uint16_t)vol) == 100 && tack_kit_now() == 1,
           tack_get_param((uint16_t)vol), tack_kit_now());
     tack_post_pattern(4);
     run(2);
-    tack_post_kit(bank[1], 1);
+    tack_post_kit(bank[1], 0, 1);
     run(2);
     tack_post_pattern(0);
     run(2);
@@ -861,8 +802,8 @@ static void pattern_tests(void)
 
 /* the list of locks: more than the sequencer's two slots, in any order, and only good images come back from the store */
 static uint8_t image[3840], broken[3840];
-#define IMG_LOCKS 2137u                  /* the head: 6 + 3 * 448 + 448 + 56 + 7 + 2 + 2 * 7 + 4 + 256 */
-#define IMG_LEN 1854u
+#define IMG_LOCKS TACK_IMG_LOCKS
+#define IMG_LEN TACK_IMG_LENGTHS
 
 static uint32_t mutate(uint32_t len, void (*f)(uint8_t *))
 {
