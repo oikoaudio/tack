@@ -65,11 +65,11 @@ static const struct { const char* name; int channel; } outputPorts[] =
 #define portChannel(k, port) ((k)->type->voice < 0 ? outputPorts[port].channel : 0)
 
 // changes made in the editor, passed from the main thread to whichever thread next processes or flushes
-enum { GUI_BEGIN_EDIT, GUI_SET_VALUE, GUI_END_EDIT, GUI_NOTE_ON };
+enum { GUI_BEGIN_EDIT, GUI_SET_VALUE, GUI_END_EDIT };
 typedef struct
 {
 	uint8_t type;
-	uint32_t id;	// parameter id, or the voice for GUI_NOTE_ON
+	uint32_t id;	// parameter id
 	double value;
 } GuiEvent;
 #define GUI_QUEUE_SIZE 256
@@ -414,10 +414,6 @@ static void applyGuiEvents(Tack* k, const clap_output_events_t* out, bool queued
 	for(; r != w; r++)
 	{
 		const GuiEvent* e = &k->guiEvents[r % GUI_QUEUE_SIZE];
-		if(e->type == GUI_NOTE_ON) {
-			if(k->active) k->engine.api->queueNoteOn(0, e->id, LXR_HOST_BASE_NOTE, 100);
-			continue;
-		}
 		if(e->type == GUI_SET_VALUE) {
 			const clap_event_param_value_t ev = {
 				.header = { sizeof ev, 0, CLAP_CORE_EVENT_SPACE_ID, CLAP_EVENT_PARAM_VALUE, 0 },
@@ -860,7 +856,6 @@ static void guiSetValue(void* ctx, uint32_t id, double value)
 	guiPush(k, GUI_SET_VALUE, id, value);
 }
 
-static void guiAudition(void* ctx, uint8_t voice) { guiPush(ctx, GUI_NOTE_ON, voice, 0); }
 static const char* guiKitName(void* ctx) { return ((Tack*)ctx)->kitName; }
 static const char* guiKitPath(void* ctx) { return ((Tack*)ctx)->kitPath; }
 static bool guiKitEdited(void* ctx) { return ((Tack*)ctx)->kitEdited; }
@@ -979,7 +974,7 @@ static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloat
 	Tack* k = plugin->plugin_data;
 	// on X11 the editor needs a timer from the host to handle its window events
 	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || (!TACK_GUI_OWN_TIMER && !k->hostTimer)) return false;
-	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiAudition, guiKitName, guiSaveKit,
+	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiKitName, guiSaveKit,
 		guiKitPath, guiKitEdited, guiLoadKit, k->type->voice, guiHasParam, guiOffersValue, guiValueText, guiKitVoice,
 		guiModulation, guiLoadVoice, guiMutate, guiMutateStep, guiTempo };
 	k->gui = tack_guiCreate(&host);

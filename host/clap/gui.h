@@ -24,8 +24,6 @@ typedef struct
 	void (*beginEdit)(void* ctx, uint32_t id);
 	void (*setValue)(void* ctx, uint32_t id, double value);
 	void (*endEdit)(void* ctx, uint32_t id);
-	/** plays a voice: 0-5 as in the engine, 6 the open hi-hat */
-	void (*audition)(void* ctx, uint8_t voice);
 	const char* (*kitName)(void* ctx);
 	/** saves the kit under name to the user pack; returns a TACK_SAVE_ result (presets.h) */
 	int (*saveKit)(void* ctx, const char* name, bool overwrite);

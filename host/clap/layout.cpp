@@ -44,7 +44,26 @@ void shortValue(const char* value, char* out, size_t size)
 	else snprintf(out, size, "%s", value);
 }
 
-float headerHeight(int pluginVoice) { return pluginVoice < 0 ? HEADER_H : HEADER_H - TAB_ROW_H; }
+float labelWidth(const char* label, float (*textWidth)(const char* begin, const char* end))
+{
+	float w = 0;
+	for(const char* word = label; *word; ) {
+		const char* end = strchr(word, ' ');
+		if(!end) end = word + strlen(word);
+		w += (w > 0 ? WORD_GAP : 0) + textWidth(word, end);
+		word = *end ? end + 1 : end;
+	}
+	return w;
+}
+
+float headerHeight(int pluginVoice) { return pluginVoice < 0 ? TABS_Y + HEADER_ITEM_H + MARGIN : HEADER_ROW_Y + HEADER_ITEM_H + MARGIN; }
+
+Rect tabRect(int t)
+{
+	const int n = LXR_PARAMS_FX_VOICE + 1;
+	const float w = (windowWidth() - 2 * MARGIN - (n - 1) * GAP) / n;
+	return { MARGIN + t * (w + GAP), TABS_Y, w, HEADER_ITEM_H };
+}
 
 //-----------------------------------------------------------
 // what a tab shows: groups of controls, one per box

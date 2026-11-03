@@ -104,22 +104,39 @@ static void edit(TackGui* g, uint32_t id, double v)
 // a point of a layout rect on the screen; o is the screen position of what the rect is relative to
 static ImVec2 at(ImVec2 o, float x, float y) { return ImVec2(o.x + x, o.y + y); }
 
-// draws a cell's short label centred in its band
+static float textWidth(const char* begin, const char* end) { return ImGui::CalcTextSize(begin, end).x; }
+
+// a cell's short label, centred in its band
 static void drawLabel(const char* label, ImVec2 o, const Rect& band, ImU32 color)
 {
 	const char* text = shortLabel(label);
-	const float w = ImGui::CalcTextSize(text).x;
 	const ImVec4 clip(o.x + band.x, o.y + band.y, o.x + band.right(), o.y + band.bottom() + 2);
-	ImGui::GetWindowDrawList()->AddText(nullptr, 0, at(o, band.x + std::max(0.f, (band.w - w) * 0.5f), band.y), color, text,
-		nullptr, 0, &clip);
+	float x = band.x + std::max(0.f, (band.w - labelWidth(text, textWidth)) * 0.5f);
+	for(const char* word = text; *word; ) {
+		const char* end = strchr(word, ' ');
+		if(!end) end = word + strlen(word);
+		ImGui::GetWindowDrawList()->AddText(nullptr, 0, at(o, x, band.y), color, word, end, 0, &clip);
+		x += textWidth(word, end) + WORD_GAP;
+		word = *end ? end + 1 : end;
+	}
 }
 
-// the full name, and the value if it doesn't fit, when the pointer rests on a control
+// turned on in the logo's menu, for every editor in the process
+static bool showTooltips = false;
+
+static void hint(const char* text)
+{
+	if(showTooltips && text && ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal)) ImGui::SetTooltip("%s", text);
+}
+
+// only what the cell doesn't show: the full name of a shortened label, and a value that doesn't fit (or null)
 static void tooltip(const char* label, const char* value)
 {
-	if(!ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) return;
-	if(value) ImGui::SetTooltip("%s: %s", label, value);
-	else ImGui::SetTooltip("%s", label);
+	const bool shortened = strcmp(shortLabel(label), label) != 0;
+	char text[160] = "";
+	if(shortened && value) snprintf(text, sizeof text, "%s: %s", label, value);
+	else if(shortened || value) snprintf(text, sizeof text, "%s", shortened ? label : value);
+	hint(text[0] ? text : nullptr);
 }
 
 // pulse width only shapes oscillators set to the PWM waveform: the voice's oscillator, or its FM or mod oscillators
@@ -215,7 +232,7 @@ static void knob(TackGui* g, const Cell& cell, const LxrParamInfo* p, ImVec2 o)
 	dl->AddText(nullptr, 0, at(o, vb.x + std::max(0.f, (vb.w - vw) * 0.5f), vb.y),
 		ImGui::GetColorU32(hovered || ImGui::IsItemActive() ? ImGuiCol_Text : ImGuiCol_TextDisabled), text, nullptr, 0, &clip);
 	if(!ImGui::IsItemActive()) {
-		if(inactive) tooltip("Pulse Width: only affects waveforms set to PWM", nullptr);
+		if(inactive) hint("Only with PWM");
 		else tooltip(cell.label, vw > vb.w ? text : nullptr);
 	}
 	ImGui::PopID();
@@ -249,7 +266,7 @@ static void syncSwitch(TackGui* g, const Cell& cell, ImVec2 o)
 			edit(g, p->param, lfo_sync_near((uint8_t)value(g, freq), tempo));
 		}
 	}
-	tooltip("Sync: Freq follows the tempo as a fraction of the bar", nullptr);
+	hint("Sync: Freq follows the tempo");
 	ImGui::PopID();
 }
 
@@ -258,8 +275,7 @@ static void outputsSwitch(TackGui* g, const Cell& cell, ImVec2 o)
 	const bool individual = value(g, OUTPUTS_ID) >= 0.5;
 	ImGui::PushID(OUTPUTS_ID);
 	if(switchButton(cell, o, individual ? "Individual" : "Stereo", false)) edit(g, OUTPUTS_ID, individual ? 0 : 1);
-	tooltip(individual ? "Individual: each Direct voice on its own output, and Main has the voices that go through the FX"
-		: "Stereo: everything on Main", nullptr);
+	hint(individual ? "Individual: Direct voices on their own outputs" : "Stereo: everything on Main");
 	ImGui::PopID();
 }
 
@@ -273,7 +289,7 @@ static void toggle(TackGui* g, const Cell& cell, ImVec2 o)
 	valueText(g, p->param, p->min, first, sizeof first);
 	ImGui::PushID(p->param);
 	if(switchButton(cell, o, current, v != p->min && !strcmp(first, "Off"))) edit(g, p->param, v == p->min ? p->max : p->min);
-	tooltip(cell.label, current);
+	tooltip(cell.label, nullptr);
 	ImGui::PopID();
 }
 
@@ -306,17 +322,17 @@ static void selector(TackGui* g, const Cell& cell, ImVec2 o)
 		}
 		ImGui::EndCombo();
 	}
-	if(!ImGui::IsPopupOpen("##v", ImGuiPopupFlags_AnyPopupId)) tooltip(cell.label, current);
+	const bool cut = strcmp(shown, current) || ImGui::CalcTextSize(shown).x > cell.control.w - FRAME_H - FRAME_PAD_X;
+	if(!ImGui::IsPopupOpen("##v", ImGuiPopupFlags_AnyPopupId)) tooltip(cell.label, cut ? current : nullptr);
 	ImGui::PopID();
 }
 
-// one front panel sub-page: its title in capitals and the voice's colour over a thin rule, so that it reads as the
-// box's heading, then its cells
+// one front panel sub-page
 static void drawBox(TackGui* g, const Box& b)
 {
 	ImGui::SetCursorPos(ImVec2(b.rect.x, b.rect.y));
 	ImGui::PushID(b.title);
-	ImGui::BeginChild("box", ImVec2(b.rect.w, b.rect.h), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+	ImGui::BeginChild("box", ImVec2(b.rect.w, b.rect.h), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
 	const ImVec2 o = ImGui::GetWindowPos();
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	char heading[32];
@@ -532,8 +548,7 @@ static void chromaticSwitch(TackGui* g)
 	const ImVec2 p = ImGui::GetCursorScreenPos();
 	if(ImGui::InvisibleButton("chromatic", size)) edit(g, TACK_GUI_CHROMATIC_ID, on ? 0 : 1);
 	const bool hovered = ImGui::IsItemHovered();
-	if(hovered)
-		ImGui::SetTooltip(on ? "Chromatic: notes set the pitch, C3 is the tuned pitch" : "Not chromatic: every note plays the tuned pitch");
+	hint(on ? "Chromatic (C3 is the tuned pitch)" : "Not chromatic");
 
 	ImDrawList* dl = ImGui::GetWindowDrawList();
 	dl->AddRectFilled(p, ImVec2(p.x + size.x, p.y + size.y), ImGui::GetColorU32(hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button), 3);
@@ -547,106 +562,194 @@ static void chromaticSwitch(TackGui* g)
 		dl->AddRectFilled(ImVec2(x0 + k * w - w * 0.35f, y0), ImVec2(x0 + k * w + w * 0.35f, y0 + h * 0.6f), black);
 }
 
-// audition the selected voice
-static void drawAudition(TackGui* g)
+static bool headerButton(const char* text, float width) { return ImGui::Button(text, ImVec2(width, HEADER_ITEM_H)); }
+
+static void headerText(float x, ImU32 colour, const char* text)
 {
-	if(g->tab >= LXR_PARAMS_FX_VOICE) return;
-	ImGui::SameLine(0, 24);
-	if(g->tab == 5) {
-		if(ImGui::Button("Trig closed")) g->host.audition(g->host.ctx, 5);
-		ImGui::SameLine();
-		if(ImGui::Button("Trig open")) g->host.audition(g->host.ctx, 6);
-	} else if(ImGui::Button("Trig")) {
-		g->host.audition(g->host.ctx, g->tab);
-	}
+	const ImVec2 o = ImGui::GetWindowPos();
+	ImGui::GetWindowDrawList()->AddText(ImVec2(o.x + x, o.y + HEADER_ROW_Y + (HEADER_ITEM_H - FONT_SIZE) * 0.5f), colour, text);
 }
 
-// Mutate: a step for the whole kit or for the voice on the open tab, a step back, and how far the walk has come. A walk
-// follows the same way each time, so after a step back the next step comes back along it. The button of the walk the
-// count belongs to is lit
+// a die face of five pips, size units square, at the top left corner p
+static void drawDie(ImDrawList* dl, ImVec2 p, float size, ImU32 face, ImU32 pip)
+{
+	dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size), face, size * 0.2f);
+	const float r = size * 0.1f, in = size * 0.27f;
+	for(ImVec2 c : { ImVec2(in, in), ImVec2(size - in, in), ImVec2(size * 0.5f, size * 0.5f), ImVec2(in, size - in),
+			ImVec2(size - in, size - in) })
+		dl->AddCircleFilled(ImVec2(p.x + c.x, p.y + c.y), r, pip, 8);
+}
+
+// Mutate, over the Mix & FX tab: a die that steps the open tab's voice, two dice with Shift that step the whole kit,
+// and an arrow back. A walk follows the same way each time, so after a step back the next step comes back along it.
+// The count is bright while it's the steps of the walk the die would take
 static void drawMutate(TackGui* g)
 {
 	const int step = g->host.mutateStep(g->host.ctx);
-	// a voice plugin has only its voice: one button, which says what it does
-	if(g->host.voice < 0) {
-		ImGui::AlignTextToFramePadding();
-		ImGui::TextDisabled("Mutate");
+	const bool kitPlugin = g->host.voice < 0, wholeKit = kitPlugin && ImGui::GetIO().KeyShift;
+	// -1 the whole kit; nothing on Mix & FX without Shift, which has no voice
+	const int scope = wholeKit ? -1 : g->tab < LXR_PARAMS_FX_VOICE ? g->tab : -2;
+	const Rect over = tabRect(LXR_PARAMS_FX_VOICE);
+	const float x = windowWidth() - MARGIN - over.w, dieW = over.w - HEADER_ITEM_GAP - HEADER_ITEM_H;
+	const bool walking = step && g->mutateScope == scope;
+	ImGui::SetCursorPos(ImVec2(x, HEADER_ROW_Y));
+	if(headerButton("##mutate", dieW) && scope != -2) {
+		g->host.mutate(g->host.ctx, scope, 1);
+		g->mutateScope = scope;
 	}
-	bool first = g->host.voice >= 0;
-	auto stepButton = [&](const char* text, int scope, const char* tip) {
-		const bool lit = step && g->mutateScope == scope;
-		if(!first) ImGui::SameLine(0, 4);
-		first = false;
-		if(lit) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-		if(ImGui::Button(text)) {
-			g->host.mutate(g->host.ctx, scope, 1);
-			g->mutateScope = scope;
-		}
-		if(lit) ImGui::PopStyleColor();
-		if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
-	};
-	if(g->host.voice < 0) {
-		stepButton("Kit", -1, "A small random change to the whole kit. Levels, pans and the FX stay");
-		ImGui::BeginDisabled(g->tab >= LXR_PARAMS_FX_VOICE);
-		stepButton("Voice", g->tab, "A small random change to the voice on the open tab");
-		ImGui::EndDisabled();
+	char tip[48];
+	if(!kitPlugin) snprintf(tip, sizeof tip, "Mutate");
+	else if(wholeKit) snprintf(tip, sizeof tip, "Mutate the kit");
+	else if(scope >= 0) snprintf(tip, sizeof tip, "Mutate %s (Shift: the kit)", tabNames[scope]);
+	else snprintf(tip, sizeof tip, "Shift: mutate the kit");
+	hint(tip);
+	// the dice centred in room for two, then the count
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	const ImVec2 o = ImGui::GetItemRectMin();
+	const ImU32 face = ImGui::GetColorU32(scope == -2 ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+	// the pips are holes in the face, the button's colour as it is now
+	const ImU32 pip = ImGui::GetColorU32(ImGui::IsItemActive() ? ImGuiCol_ButtonActive
+		: ImGui::IsItemHovered() ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+	const float slot = 2 * DIE + HEADER_ITEM_GAP, dieY = o.y + (HEADER_ITEM_H - DIE) * 0.5f;
+	const float x0 = o.x + (dieW - slot - HEADER_ITEM_GAP - ImGui::CalcTextSize("99").x) * 0.5f;
+	if(wholeKit) {
+		drawDie(dl, ImVec2(x0, dieY), DIE, face, pip);
+		drawDie(dl, ImVec2(x0 + DIE + HEADER_ITEM_GAP, dieY), DIE, face, pip);
 	} else {
-		stepButton("Mutate", -1, "A small random change to the voice");
+		drawDie(dl, ImVec2(x0 + (slot - DIE) * 0.5f, dieY), DIE, face, pip);
 	}
-	ImGui::SameLine(0, 4);
+	char count[8];
+	snprintf(count, sizeof count, "%d", step);
+	dl->AddText(ImVec2(x0 + slot + HEADER_ITEM_GAP, o.y + (HEADER_ITEM_H - FONT_SIZE) * 0.5f),
+		ImGui::GetColorU32(walking ? ImGuiCol_Text : ImGuiCol_TextDisabled), count);
+
+	ImGui::SetCursorPos(ImVec2(x + dieW + HEADER_ITEM_GAP, HEADER_ROW_Y));
 	ImGui::BeginDisabled(!step);
 	if(ImGui::ArrowButton("mutateBack", ImGuiDir_Left)) g->host.mutate(g->host.ctx, TACK_MUTATE_AGAIN, -1);
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("One step back");
+	hint("Step back");
 	ImGui::EndDisabled();
-	ImGui::SameLine(0, 6);
-	ImGui::AlignTextToFramePadding();
-	if(step) ImGui::Text("%d", step);
-	else ImGui::TextDisabled("0");
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("Steps from the kit as it was");
+}
+
+static void drawTabs(TackGui* g)
+{
+	const ImVec2 o = ImGui::GetWindowPos();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	for(int t = 0; t <= LXR_PARAMS_FX_VOICE; t++) {
+		const Rect r = tabRect(t);
+		ImGui::SetCursorPos(ImVec2(r.x, r.y));
+		ImGui::PushID(t);
+		if(ImGui::InvisibleButton("tab", ImVec2(r.w, r.h))) g->tab = t;
+		ImGui::PopID();
+		const bool selected = g->tab == t, hovered = ImGui::IsItemHovered();
+		const ImVec4 c = voiceColour(t < LXR_PARAMS_FX_VOICE ? t : -1);
+		const ImU32 fill = selected ? ImGui::GetColorU32(darker(c, 0.5f))
+			: ImGui::GetColorU32(hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+		dl->AddRectFilled(at(o, r.x, r.y), at(o, r.right(), r.bottom()), fill, ImGui::GetStyle().FrameRounding);
+		if(t < LXR_PARAMS_FX_VOICE)
+			dl->AddRectFilled(at(o, r.x, r.bottom() - TAB_LINE), at(o, r.right(), r.bottom()), ImGui::GetColorU32(c),
+				ImGui::GetStyle().FrameRounding, ImDrawFlags_RoundCornersBottom);
+		const float w = ImGui::CalcTextSize(tabNames[t]).x;
+		dl->AddText(at(o, r.x + (r.w - w) * 0.5f, r.y + (r.h - TAB_LINE - FONT_SIZE) * 0.5f),
+			ImGui::GetColorU32(ImGuiCol_Text), tabNames[t]);
+	}
+}
+
+// the logo's letters, a row of LOGO_COLS bits to a line
+static const uint8_t logoT[LOGO_ROWS] = { 0x1f, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 };
+static const uint8_t logoA[LOGO_ROWS] = { 0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11 };
+static const uint8_t logoC[LOGO_ROWS] = { 0x0f, 0x10, 0x10, 0x10, 0x10, 0x10, 0x0f };
+static const uint8_t logoK[LOGO_ROWS] = { 0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11 };
+static const uint8_t* const logo[] = { logoT, logoA, logoC, logoK };
+static_assert(sizeof logo / sizeof logo[0] == LOGO_LETTERS);
+
+static void drawLogo(float x, ImU32 colour)
+{
+	const ImVec2 o = ImGui::GetWindowPos();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	const float y0 = HEADER_ROW_Y + (HEADER_ITEM_H - LOGO_ROWS * LOGO_CELL) * 0.5f;
+	for(int l = 0; l < LOGO_LETTERS; l++)
+		for(int row = 0; row < LOGO_ROWS; row++)
+			for(int col = 0; col < LOGO_COLS; col++)
+				if(logo[l][row] & (1 << (LOGO_COLS - 1 - col))) {
+					const float cx = x + (l * (LOGO_COLS + 1) + col) * LOGO_CELL, cy = y0 + row * LOGO_CELL;
+					dl->AddRectFilled(at(o, cx, cy), at(o, cx + LOGO_CELL, cy + LOGO_CELL), colour);
+				}
 }
 
 static void drawHeader(TackGui* g)
 {
-	// the plugin's name; a voice plugin's chromatic switch next to it, then the kits' voices it can play like
-	// Tack's kits
-	static const char* const titles[] = { "TACK DRUM", "TACK DRUM", "TACK DRUM", "TACK SNARE", "TACK CYMBAL", "TACK HI-HAT" };
-	// a band in the voice's colour along the top
+	static const char* const voiceNames[] = { "DRUM", "DRUM", "DRUM", "SNARE", "CYMBAL", "HI-HAT" };
 	const ImVec4 colour = voiceColour(g->tab);
 	const ImVec2 origin = ImGui::GetWindowPos();
-	ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + ImGui::GetWindowWidth(), origin.y + 4),
+	ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + ImGui::GetWindowWidth(), origin.y + TOP_BAND),
 		ImGui::GetColorU32(colour));
-	// the name opens the about box
-	const char* title = g->host.voice < 0 ? "TACK" : titles[g->host.voice];
-	const ImVec2 at = ImGui::GetCursorPos();
-	if(ImGui::InvisibleButton("about", ImGui::CalcTextSize(title))) ImGui::OpenPopup("###about");
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("About Tack");
-	ImGui::SetCursorPos(at);
-	ImGui::TextColored(g->host.voice < 0 ? ImGui::GetStyleColorVec4(ImGuiCol_SliderGrab) : colour, "%s", title);
-	const char* kit = g->host.kitName(g->host.ctx);
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(FRAME_PAD_X, (HEADER_ITEM_H - FONT_SIZE) / 2));
+	float x = MARGIN;
+	auto place = [&](float w, float gap = HEADER_ITEM_GAP) {
+		ImGui::SetCursorPos(ImVec2(x, HEADER_ROW_Y));
+		x += w + gap;
+	};
+	// the logo, and a voice plugin's voice after it, open Tack's menu
+	const float aboutX = x;
+	drawLogo(x, ImGui::GetColorU32(ImGuiCol_SliderGrab));
+	x += LOGO_W;
 	if(g->host.voice >= 0) {
-		ImGui::SameLine(0, 12);
-		chromaticSwitch(g);
+		x += HEADER_GROUP_GAP / 2;
+		headerText(x, ImGui::GetColorU32(colour), voiceNames[g->host.voice]);
+		x += ImGui::CalcTextSize(voiceNames[g->host.voice]).x;
 	}
-	ImGui::SameLine(0, 16);
-	if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
-	ImGui::SameLine(0, 2);
-	if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
-	ImGui::SameLine(0, 2);
+	ImGui::SetCursorPos(ImVec2(aboutX, HEADER_ROW_Y));
+	if(ImGui::InvisibleButton("logo", ImVec2(x - aboutX, HEADER_ITEM_H))) ImGui::OpenPopup("tackMenu");
+	bool about = false;
+	if(ImGui::BeginPopup("tackMenu")) {
+		ImGui::MenuItem("Tooltips", nullptr, &showTooltips);
+		ImGui::Separator();
+		about = ImGui::MenuItem("About Tack");
+		ImGui::EndPopup();
+	}
+	if(about) ImGui::OpenPopup("###about");
+	x += HEADER_GROUP_GAP;
+	const char* kit = g->host.kitName(g->host.ctx);
+	// the whole kit's name is over the Drum 2 tab, as wide, and its arrows start over Drum 3
+	const bool overTabs = g->host.voice < 0;
+	const float kitW = overTabs ? tabRect(1).w : KIT_BUTTON_W;
+	float arrowsX = 0;
+	if(overTabs) {
+		x = tabRect(1).x;
+		arrowsX = tabRect(2).x;
+	} else {
+		place(30, HEADER_GROUP_GAP);
+		chromaticSwitch(g);
+		place(HEADER_ITEM_H);
+		if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
+		place(HEADER_ITEM_H);
+		if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
+	}
+	place(kitW);
 	// the kit's name opens the browser; * once it's been edited
 	char label[64];
 	snprintf(label, sizeof label, "%s%s###kit", kit && kit[0] ? kit : "(no name)", g->host.kitEdited(g->host.ctx) ? " *" : "");
 	if(!ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsMouseReleased(ImGuiMouseButton_Left)) g->keepClosed = false;
-	if(ImGui::Button(label, ImVec2(110, 0))) {
+	if(ImGui::Button(label, ImVec2(kitW, HEADER_ITEM_H))) {
 		if(!g->keepClosed) {
 			openBrowser(g);
 			ImGui::OpenPopup("Kits");
 		}
 		g->keepClosed = false;
 	}
-	if(ImGui::IsItemHovered())
-		ImGui::SetTooltip(g->host.voice < 0 ? "Choose a kit from the kit folder" : "Choose a voice from the kits in the kit folder");
-	ImGui::SameLine(0, 8);
-	if(ImGui::Button("Save")) {
+	hint(g->host.voice < 0 ? "Kits" : "Voices from the kits");
+	// over Drum 3, the arrows and Save fill the tab
+	float saveW = HEADER_BUTTON_W;
+	if(overTabs) {
+		x = arrowsX;
+		place(HEADER_ITEM_H);
+		if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
+		place(HEADER_ITEM_H);
+		if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
+		saveW = tabRect(2).right() - x;
+	}
+	place(saveW);
+	if(headerButton("Save", saveW)) {
 		// start from the kit's name, as far as the device allows it
 		int n = 0;
 		for(const char* c = kit ? kit : ""; *c && n < 8; c++)
@@ -657,32 +760,9 @@ static void drawHeader(TackGui* g)
 		ImGui::OpenPopup("###save");
 		puglGrabFocus(g->view);
 	}
-	ImGui::SameLine(0, 16);
 	drawMutate(g);
-	if(g->host.voice >= 0) {
-		// no tabs, and no play button: notes play the voice
-		ImGui::Separator();
-		return;
-	}
-
-	// the tabs: each voice's with a line in its colour, the open one filled with it
-	for(int t = 0; t <= LXR_PARAMS_FX_VOICE; t++) {
-		if(t) ImGui::SameLine();
-		const bool selected = g->tab == t;
-		const ImVec4 c = voiceColour(t < LXR_PARAMS_FX_VOICE ? t : -1);
-		if(selected) ImGui::PushStyleColor(ImGuiCol_Button, darker(c, 0.5f));
-		if(ImGui::Button(tabNames[t], ImVec2(90, 0))) g->tab = t;
-		if(selected) ImGui::PopStyleColor();
-		if(t < LXR_PARAMS_FX_VOICE) {
-			const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
-			ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(a.x, b.y - 2), b, ImGui::GetColorU32(c), 3,
-				ImDrawFlags_RoundCornersBottom);
-		}
-	}
-
-	drawAudition(g);
-	ImGui::Separator();
-	// the boxes start at headerHeight() whatever the header's exact height
+	if(g->host.voice < 0) drawTabs(g);
+	ImGui::PopStyleVar();
 }
 
 static int kitNameFilter(ImGuiInputTextCallbackData* data)
@@ -869,6 +949,7 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		break;
 	}
 	case PUGL_MOTION:
+		setMods(io, event->motion.state);
 		io.AddMousePosEvent((float)(event->motion.x / g->scale), (float)(event->motion.y / g->scale));
 		break;
 	case PUGL_BUTTON_PRESS:
@@ -889,6 +970,9 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 	case PUGL_KEY_PRESS:
 	case PUGL_KEY_RELEASE: {
 		setMods(io, event->key.state);
+		// the state is from before the key, and Mutate shows what Shift does as soon as it's down
+		if(event->key.key == PUGL_KEY_SHIFT_L || event->key.key == PUGL_KEY_SHIFT_R)
+			io.AddKeyEvent(ImGuiMod_Shift, event->type == PUGL_KEY_PRESS);
 		const ImGuiKey key = imguiKey(event->key.key);
 		if(key != ImGuiKey_None) io.AddKeyEvent(key, event->type == PUGL_KEY_PRESS);
 		// keys the editor doesn't use go back to the host, so that space still starts and stops it (macOS)
