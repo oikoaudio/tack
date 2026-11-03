@@ -114,6 +114,8 @@ endif()
 if(LXR_HOST_SANITIZE)
     target_compile_options(lxr_engine PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_link_options(lxr_engine PUBLIC -fsanitize=address,undefined)
+    # every program too, as a test host that loads the plugin (multi_test, gui_test) must have the runtime first
+    add_link_options(-fsanitize=address,undefined)
 endif()
 
 add_executable(lxr_render src/lxr_render.c)

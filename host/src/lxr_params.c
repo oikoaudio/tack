@@ -52,7 +52,7 @@ static LxrParamInfo infos[END_OF_SOUND_PARAMETERS];
 static Extra extras[END_OF_SOUND_PARAMETERS];
 static char groupNames[LXR_PARAMS_NUM_VOICES + 1][LXR_PARAMS_NUM_GROUPS][24];
 // labels of the FX page parameters per FX sub-page
-static char fxLabels[END_OF_SOUND_PARAMETERS][5][24];
+static char fxLabels[END_OF_SOUND_PARAMETERS][6][24];       /* by FX type, 1 to 5: the reverb is 5 */
 static int16_t indexOfParam[END_OF_SOUND_PARAMETERS];
 static int count = -1;
 
