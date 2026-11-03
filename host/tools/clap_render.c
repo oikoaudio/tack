@@ -3,15 +3,18 @@
  *
  * Minimal CLAP host for testing Tack: loads the plugin, plays notes, writes all outputs summed to a WAV.
  *
- *   clap_render Tack.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount [@seconds] ...]
+ *   clap_render Tack.clap out.wav [rate] [-s] [-o] [-p kit.snd] [[channel:]note | id=value | id~amount [@seconds] ...]
  *
  * Notes are MIDI note numbers, played at velocity 1.0 every 0.75 s (default: the 7 voices, notes 60-66), on MIDI
  * channel 1 unless a channel (1-16) is given: 2:48 plays drum 1 an octave below its tuned pitch.
  * id=value sets a parameter (plugin value) through params.flush before playing; id=value@seconds sends it as an
  * event to process() at that time, as automation would. id~amount and id~amount@seconds do the same with the
  * host's modulation of the parameter (CLAP_EVENT_PARAM_MOD, in plugin values) instead of its value.
+ * It says how many of the outputs had sound: 1 with everything on Main.
  * -s saves the state after setting parameters, destroys the instance, creates a new one and loads the state into it
  * before playing, so the output should match a render without -s.
+ * -o sets the outputs switch to Individual, which only the editor and the state hold: it loads the instance's state
+ *    back with the switch on, as a project saved that way would, before parameters are set.
  * -p loads a kit file through the preset-load extension, as a host's preset browser would, before anything else.
  * $TACK_PLUGIN_ID picks one of the plugins in the file (e.g. com.oikoaudio.tack.snare); default the first.
  *
@@ -83,7 +86,7 @@ static const clap_plugin_t* createPlugin(const clap_plugin_factory_t* factory, c
 int main(int argc, char** argv)
 {
 	if(argc < 3) {
-		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [-p kit.snd] [[channel:]note | id=value | id~amount ...]\n", argv[0]);
+		fprintf(stderr, "usage: %s plugin.clap out.wav [rate] [-s] [-o] [-p kit.snd] [[channel:]note | id=value | id~amount ...]\n", argv[0]);
 		return 1;
 	}
 	const double fs = argc > 3 ? atof(argv[3]) : 48000;
@@ -91,7 +94,7 @@ int main(int argc, char** argv)
 	EventList paramEvents = {0};
 	struct { AnyEvent ev; uint32_t at; } timed[MAX_ITEMS];
 	int numTimed = 0;
-	bool roundTrip = false;
+	bool roundTrip = false, individual = false;
 	const char* kitPath = NULL;
 	for(int i = 4; i < argc; i++) {
 		const char* eq = strchr(argv[i], '=');
@@ -104,6 +107,8 @@ int main(int argc, char** argv)
 		} };
 		if(!strcmp(argv[i], "-s")) {
 			roundTrip = true;
+		} else if(!strcmp(argv[i], "-o")) {
+			individual = true;
 		} else if(!strcmp(argv[i], "-p") && i + 1 < argc) {
 			kitPath = argv[++i];
 		} else if(tilde && strchr(tilde, '@') && numTimed < MAX_ITEMS) {
@@ -148,6 +153,21 @@ int main(int argc, char** argv)
 			return 1;
 		}
 		printf("loaded kit %s\n", kitPath);
+	}
+
+	if(individual) {
+		// Tack's state: "KTL1", the number of kit parameters, the kit, then the outputs switch
+		Buffer buf = {0};
+		const clap_plugin_state_t* st = plugin->get_extension(plugin, CLAP_EXT_STATE);
+		clap_ostream_t os = { &buf, bufWrite };
+		uint32_t n;
+		if(!st->save(plugin, &os) || buf.size < 8 || memcmp(buf.data, "KTL1", 4)) { fprintf(stderr, "no state to change\n"); return 1; }
+		memcpy(&n, buf.data + 4, 4);
+		if(buf.size <= 8 + (size_t)n) { fprintf(stderr, "the state has no outputs switch\n"); return 1; }
+		buf.data[8 + n] = 1;
+		clap_istream_t is = { &buf, bufRead };
+		if(!st->load(plugin, &is)) { fprintf(stderr, "state load failed\n"); return 1; }
+		printf("outputs Individual\n");
 	}
 
 	clap_output_events_t outEvents = { NULL, evPush };
@@ -209,6 +229,7 @@ int main(int argc, char** argv)
 	};
 
 	int next = 0;
+	bool sounded[MAX_ITEMS] = {false};
 	for(uint32_t pos = 0; pos < numFrames; pos += BLOCK)
 	{
 		const uint32_t n = numFrames - pos < BLOCK ? numFrames - pos : BLOCK;
@@ -236,6 +257,7 @@ int main(int argc, char** argv)
 			for(uint32_t port = 0; port < numPorts; port++) {
 				l += portData[port][0][i];
 				r += portData[port][1][i];
+				if(portData[port][0][i] != 0 || portData[port][1][i] != 0) sounded[port] = true;
 			}
 			audio[(pos + i)*2 + 0] = sat16(lrintf(l * 32768.f));
 			audio[(pos + i)*2 + 1] = sat16(lrintf(r * 32768.f));
@@ -249,6 +271,9 @@ int main(int argc, char** argv)
 
 	if(lxr_host_writeWav(argv[2], audio, numFrames, 2, (uint32_t)fs)) { perror(argv[2]); return 1; }
 	printf("wrote %u frames at %u Hz to %s\n", numFrames, (uint32_t)fs, argv[2]);
+	uint32_t numSounded = 0;
+	for(uint32_t port = 0; port < numPorts; port++) numSounded += sounded[port];
+	printf("sound on %u outputs\n", numSounded);
 	free(audio);
 	return 0;
 }

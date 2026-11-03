@@ -13,6 +13,7 @@
 #include <cstring>
 #include <strings.h>
 #include <cstdlib>
+#include <cctype>
 #include <ctime>
 #include <algorithm>
 #include <vector>
@@ -25,47 +26,14 @@
 #include "kit_name.h"
 #include "lfo_speed.h"
 #include "presets.h"
+#include "layout.h"
 
 template<typename T> static T clampTo(T v, T lo, T hi) { return v < lo ? lo : (v > hi ? hi : v); }
 static const float PI = 3.14159265f;
 
-// A box holds a front panel sub-page as one row of controls, each with a short label (the full name is a tooltip).
-// On voice tabs the boxes sit in three rows that follow the signal: what makes the sound, what shapes it, what
-// modulates it. Every sub-page has a fixed slot, as wide as the group is on any voice, so nothing moves between tabs.
-static const float CELL_W = 64, CELL_H = 80, KNOB = 36, BOX_PAD = 8, TITLE_H = 20, LABEL_H = 14;
-// rows are stretched to the window's width, so the box being drawn may have wider cells than CELL_W
-static float cellW = CELL_W;
-static const float BOX_H = TITLE_H + CELL_H + 2 * BOX_PAD, GAP = 6, MARGIN = 10, HEADER_H = 66;
-// a voice plugin's header has no row of tabs: the boxes start this much higher
-static const float TAB_ROW_H = 25;
-static float headerHeight(int voice) { return voice < 0 ? HEADER_H : HEADER_H - TAB_ROW_H; }
-
-// front panel sub-pages per row: oscillator, FM (mod osc on cymbal and hi-hat), transient; filter, amp EG, mix;
-// modulation (velocity on cymbal and hi-hat), LFO
-static const int ROWS = 3, SLOTS_PER_ROW = 3;
-static const int rowSlots[ROWS][SLOTS_PER_ROW] = { { 0, 3, 4 }, { 5, 1, 7 }, { 2, 6, -1 } };
-
-// short labels that fit a control; anything not listed is short enough already
-static const char* const shortLabels[][2] =
-{
-	{"Waveform", "Wave"}, {"Waveform 1", "Wave 1"}, {"Waveform 2", "Wave 2"}, {"Pulse Width", "PW"},
-	{"Repeat Count", "Repeat"}, {"Decay Closed", "Closed"}, {"Decay Open", "Open"},
-	{"Pitch Mod Amount", "Pitch Amt"}, {"Velocity Destination", "Velo Dest"}, {"Velocity Amount", "Velo Amt"},
-	{"Velocity Volume Mod", "Velo Vol"}, {"Destination", "Dest"}, {"Volume Mod", "Vol Mod"},
-	{"Frequency", "Freq"}, {"Frequency 1", "Freq 1"}, {"Frequency 2", "Freq 2"}, {"Noise Frequency", "Noise Frq"},
-	{"Noise/Osc Mix", "Noise Mix"}, {"Resonance", "Reso"}, {"Overdrive", "Drive"}, {"Clock Sync", "Sync"},
-	{"Retrigger", "Retrig"}, {"Panning", "Pan"}, {"Sample Rate", "Smp Rate"}, {"Audio Out", "Output"},
-	{"Threshold", "Thresh"}, {"Reflection", "Reflect"}, {"Feedback", "Fdbk"},
-};
-
-static const char* shortLabel(const char* label)
-{
-	for(const auto& s : shortLabels)
-		if(!strcmp(label, s[0])) return s[1];
-	return label;
-}
-
-static const char* const tabNames[] = { "Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Mix & FX" };
+// where the boxes and cells go and what kind of control each is: layout.h
+using namespace layout;
+static_assert(OUTPUTS_ID == TACK_GUI_SEPARATE_OUTPUTS_ID, "the outputs switch's id");
 
 // each kind of voice has a colour: red drums, orange snare, yellow cymbal and cream hi-hat.
 // A voice plugin wears its voice's; Tack the open tab's. Values stay the accent orange.
@@ -107,6 +75,9 @@ struct TackGui
 	int browseFolder = -1;	// shown in the browser; -1 the built-in Init Kit
 	bool browserOpen = false;
 	bool keepClosed = false;	// the click that closed the browser was on the kit button, which would reopen it
+
+	// what the last Mutate step changed: the whole kit (-1) or a voice, so that its button shows whose walk it is
+	int mutateScope = -1;
 };
 
 //-----------------------------------------------------------
@@ -130,16 +101,17 @@ static void edit(TackGui* g, uint32_t id, double v)
 //-----------------------------------------------------------
 // controls
 
-// draws a control's short label centred in its cell, in a smaller font if it is still too wide
-static void drawLabel(const char* label, ImVec2 pos, ImU32 color)
+// a point of a layout rect on the screen; o is the screen position of what the rect is relative to
+static ImVec2 at(ImVec2 o, float x, float y) { return ImVec2(o.x + x, o.y + y); }
+
+// draws a cell's short label centred in its band
+static void drawLabel(const char* label, ImVec2 o, const Rect& band, ImU32 color)
 {
 	const char* text = shortLabel(label);
 	const float w = ImGui::CalcTextSize(text).x;
-	const float scale = w > (cellW - 6) ? std::max(0.75f, (cellW - 6) / w) : 1.f;
-	const ImVec4 clip(pos.x, pos.y, pos.x + cellW, pos.y + LABEL_H + 2);
-	ImGui::GetWindowDrawList()->AddText(ImGui::GetFont(), ImGui::GetFontSize() * scale,
-		ImVec2(pos.x + std::max(0.f, (cellW - w * scale) * 0.5f), pos.y + (1 - scale) * ImGui::GetFontSize() * 0.5f),
-		color, text, nullptr, 0, &clip);
+	const ImVec4 clip(o.x + band.x, o.y + band.y, o.x + band.right(), o.y + band.bottom() + 2);
+	ImGui::GetWindowDrawList()->AddText(nullptr, 0, at(o, band.x + std::max(0.f, (band.w - w) * 0.5f), band.y), color, text,
+		nullptr, 0, &clip);
 }
 
 // the full name, and the value if it doesn't fit, when the pointer rests on a control
@@ -165,12 +137,12 @@ static bool voiceUsesPwm(TackGui* g, int voice)
 	return false;
 }
 
-// a knob for a stepped parameter: drag vertically (Shift for fine), wheel steps by one, double-click resets
-static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
+// a knob for a stepped parameter: drag vertically (Shift for fine), wheel steps by one, double-click resets. p is the
+// cell's parameter, or the one it stands for (an LFO's Freq in sync turns its Sync's fractions)
+static void knob(TackGui* g, const Cell& cell, const LxrParamInfo* p, ImVec2 o)
 {
 	ImGuiIO& io = ImGui::GetIO();
 	ImDrawList* dl = ImGui::GetWindowDrawList();
-	const ImVec2 pos = ImGui::GetCursorScreenPos();
 	const double v = value(g, p->param);
 	// an LFO in sync: this is its Freq, turning through the fractions. 0 is the Sync switch's
 	const bool fraction = lxr_params_lfoFreqOf(p->param) >= 0;
@@ -181,7 +153,8 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	const bool inactive = isPulseWidth(p) && !voiceUsesPwm(g, p->voice);
 	if(inactive) ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.35f);
 	ImGui::PushID(p->param);
-	ImGui::InvisibleButton("knob", ImVec2(cellW, CELL_H));
+	ImGui::SetCursorScreenPos(at(o, cell.cell.x, cell.cell.y));
+	ImGui::InvisibleButton("knob", ImVec2(cell.cell.w, cell.cell.h));
 	const bool hovered = ImGui::IsItemHovered();
 	ImGuiStorage* store = ImGui::GetStateStorage();
 	const ImGuiID accumId = ImGui::GetID("accum");
@@ -209,8 +182,9 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 	}
 
 	// drawing: an arc from 7 to 5 o'clock, filled up to the value
-	const ImVec2 c(pos.x + cellW * 0.5f, pos.y + KNOB * 0.5f + 4);
-	const float r = KNOB * 0.5f;
+	const Rect& k = cell.control;
+	const ImVec2 c = at(o, k.x + k.w * 0.5f, k.y + k.h * 0.5f);
+	const float r = k.w * 0.5f;
 	const float a0 = 0.75f * PI, a1 = 2.25f * PI;
 	const float t = range > 0 ? (float)((v - lo) / range) : 0;
 	const float a = a0 + (a1 - a0) * t;
@@ -230,36 +204,44 @@ static void knob(TackGui* g, const LxrParamInfo* p, const char* label)
 		dl->PathStroke(ImGui::GetColorU32(ImGuiCol_PlotHistogram), ImDrawFlags_None, 2.f);
 	}
 
-	// label and value, centred and clipped to the cell
+	// label and value, centred and clipped to their bands. The value is dim, and bright on the knob the pointer is on
 	char text[64];
 	if(fraction) snprintf(text, sizeof text, "%s", lfo_fraction_name((uint8_t)v));
 	else valueText(g, p->param, (uint16_t)v, text, sizeof text);
-	drawLabel(label, ImVec2(pos.x, pos.y + KNOB + 8), ImGui::GetColorU32(ImGuiCol_Text));
-	const ImVec4 clip(pos.x, pos.y, pos.x + cellW, pos.y + CELL_H);
+	drawLabel(cell.label, o, cell.labelBand, ImGui::GetColorU32(ImGuiCol_Text));
+	const Rect& vb = cell.valueBand;
+	const ImVec4 clip(o.x + vb.x, o.y + vb.y, o.x + vb.right(), o.y + vb.bottom());
 	const float vw = ImGui::CalcTextSize(text).x;
-	dl->AddText(nullptr, 0, ImVec2(pos.x + std::max(0.f, (cellW - vw) * 0.5f), pos.y + KNOB + 10 + LABEL_H),
-		ImGui::GetColorU32(ImGuiCol_TextDisabled), text, nullptr, 0, &clip);
+	dl->AddText(nullptr, 0, at(o, vb.x + std::max(0.f, (vb.w - vw) * 0.5f), vb.y),
+		ImGui::GetColorU32(hovered || ImGui::IsItemActive() ? ImGuiCol_Text : ImGuiCol_TextDisabled), text, nullptr, 0, &clip);
 	if(!ImGui::IsItemActive()) {
 		if(inactive) tooltip("Pulse Width: only affects waveforms set to PWM", nullptr);
-		else tooltip(label, vw > cellW ? text : nullptr);
+		else tooltip(cell.label, vw > vb.w ? text : nullptr);
 	}
 	ImGui::PopID();
 	if(inactive) ImGui::PopStyleVar();
 }
 
-// An LFO's Sync: on or off, and each way the other control takes the nearest speed at the host's tempo
-static void syncSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
+// a switch: a button that names the setting, for an option with two values. A click changes it; lit for one that is on
+static bool switchButton(const Cell& cell, ImVec2 o, const char* text, bool lit)
 {
-	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	drawLabel(cell.label, o, cell.labelBand, ImGui::GetColorU32(ImGuiCol_Text));
+	ImGui::SetCursorScreenPos(at(o, cell.control.x, cell.control.y));
+	if(lit) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+	const bool clicked = ImGui::Button(text, ImVec2(cell.control.w, cell.control.h));
+	if(lit) ImGui::PopStyleColor();
+	return clicked;
+}
+
+// An LFO's Sync: on or off, and each way the other control takes the nearest speed at the host's tempo
+static void syncSwitch(TackGui* g, const Cell& cell, ImVec2 o)
+{
+	const LxrParamInfo* p = cell.param;
 	const uint8_t v = (uint8_t)value(g, p->param);
 	const uint16_t freq = (uint16_t)lxr_params_lfoFreqOf(p->param);
 	const float tempo = g->host.tempo(g->host.ctx);
 	ImGui::PushID(p->param);
-	ImGui::BeginGroup();
-	drawLabel(label, pos, ImGui::GetColorU32(ImGuiCol_Text));
-	ImGui::SetCursorScreenPos(ImVec2(pos.x + 2, pos.y + LABEL_H + 6));
-	if(v) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
-	if(ImGui::Button(v ? "On" : "Off", ImVec2(cellW - 4, 0))) {
+	if(switchButton(cell, o, v ? "On" : "Off", v)) {
 		if(v) {
 			edit(g, freq, lfo_freq_near(v, tempo));
 			edit(g, p->param, 0);
@@ -267,52 +249,51 @@ static void syncSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
 			edit(g, p->param, lfo_sync_near((uint8_t)value(g, freq), tempo));
 		}
 	}
-	if(v) ImGui::PopStyleColor();
 	tooltip("Sync: Freq follows the tempo as a fraction of the bar", nullptr);
-	ImGui::SetCursorScreenPos(pos);
-	ImGui::Dummy(ImVec2(cellW, CELL_H));
-	ImGui::EndGroup();
 	ImGui::PopID();
 }
 
-// the outputs switch, in the Master box on Mix & FX. It isn't a kit parameter, so it has an entry of its own
-static const LxrParamInfo outputsInfo = { TACK_GUI_SEPARATE_OUTPUTS_ID, "Outputs", "Outputs", 0, 1, true,
-	LXR_PARAMS_FX_VOICE, 0, "Outputs" };
-
-// the outputs switch, drawn like Sync: the button names the setting, and a click changes it
-static void outputsSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
+static void outputsSwitch(TackGui* g, const Cell& cell, ImVec2 o)
 {
-	const ImVec2 pos = ImGui::GetCursorScreenPos();
-	const bool individual = value(g, p->param) >= 0.5;
-	ImGui::PushID(p->param);
-	ImGui::BeginGroup();
-	drawLabel(label, pos, ImGui::GetColorU32(ImGuiCol_Text));
-	ImGui::SetCursorScreenPos(ImVec2(pos.x + 2, pos.y + LABEL_H + 6));
-	if(ImGui::Button(individual ? "Individual" : "Stereo", ImVec2(cellW - 4, 0))) edit(g, p->param, individual ? 0 : 1);
+	const bool individual = value(g, OUTPUTS_ID) >= 0.5;
+	ImGui::PushID(OUTPUTS_ID);
+	if(switchButton(cell, o, individual ? "Individual" : "Stereo", false)) edit(g, OUTPUTS_ID, individual ? 0 : 1);
 	tooltip(individual ? "Individual: each Direct voice on its own output, and Main has the voices that go through the FX"
 		: "Stereo: everything on Main", nullptr);
-	ImGui::SetCursorScreenPos(pos);
-	ImGui::Dummy(ImVec2(cellW, CELL_H));
-	ImGui::EndGroup();
 	ImGui::PopID();
 }
 
-// a drop-down list for parameters with named values
-static void selector(TackGui* g, const LxrParamInfo* p, const char* label)
+// an option with two values, such as Direct or FX. It is lit when it is on, for an option that is off or on
+static void toggle(TackGui* g, const Cell& cell, ImVec2 o)
 {
-	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	const LxrParamInfo* p = cell.param;
+	const uint16_t v = (uint16_t)value(g, p->param);
+	char current[64], first[64];
+	valueText(g, p->param, v, current, sizeof current);
+	valueText(g, p->param, p->min, first, sizeof first);
+	ImGui::PushID(p->param);
+	if(switchButton(cell, o, current, v != p->min && !strcmp(first, "Off"))) edit(g, p->param, v == p->min ? p->max : p->min);
+	tooltip(cell.label, current);
+	ImGui::PopID();
+}
+
+// a drop-down list for an option with more than two values
+static void selector(TackGui* g, const Cell& cell, ImVec2 o)
+{
+	const LxrParamInfo* p = cell.param;
 	const uint16_t v = (uint16_t)value(g, p->param);
 	char current[64];
 	valueText(g, p->param, v, current, sizeof current);
 
 	ImGui::PushID(p->param);
-	ImGui::BeginGroup();
-	drawLabel(label, pos, ImGui::GetColorU32(ImGuiCol_Text));
-	ImGui::SetCursorScreenPos(ImVec2(pos.x + 2, pos.y + LABEL_H + 6));
-	ImGui::SetNextItemWidth(cellW - 4);
+	drawLabel(cell.label, o, cell.labelBand, ImGui::GetColorU32(ImGuiCol_Text));
+	ImGui::SetCursorScreenPos(at(o, cell.control.x, cell.control.y));
+	ImGui::SetNextItemWidth(cell.control.w);
 	// the list may need more room than the box, e.g. for modulation destinations
-	ImGui::SetNextWindowSizeConstraints(ImVec2(cellW, 0), ImVec2(320, 400));
-	if(ImGui::BeginCombo("##v", current, ImGuiComboFlags_HeightLarge)) {
+	ImGui::SetNextWindowSizeConstraints(ImVec2(cell.cell.w, 0), ImVec2(320, 400));
+	char shown[64];
+	shortValue(current, shown, sizeof shown);
+	if(ImGui::BeginCombo("##v", shown, ImGuiComboFlags_HeightLarge)) {
 		for(uint16_t i = p->min; i <= p->max; i++) {
 			if(!g->host.offersValue(g->host.ctx, p->param, i)) continue;
 			char text[96];
@@ -325,239 +306,58 @@ static void selector(TackGui* g, const LxrParamInfo* p, const char* label)
 		}
 		ImGui::EndCombo();
 	}
-	if(!ImGui::IsPopupOpen("##v", ImGuiPopupFlags_AnyPopupId)) tooltip(label, current);
-	ImGui::SetCursorScreenPos(pos);
-	ImGui::Dummy(ImVec2(cellW, CELL_H));
-	ImGui::EndGroup();
+	if(!ImGui::IsPopupOpen("##v", ImGuiPopupFlags_AnyPopupId)) tooltip(cell.label, current);
 	ImGui::PopID();
 }
 
-static float boxWidth(int cells) { return cells * CELL_W + 2 * BOX_PAD; }
-
-// one front panel sub-page: a titled box of the given width with its controls in a row of the given number of cells
-static void box(TackGui* g, const char* title, const LxrParamInfo* const* params, const char* const* labels, int n,
-	float width, int cells)
+// one front panel sub-page: its title in capitals and the voice's colour over a thin rule, so that it reads as the
+// box's heading, then its cells
+static void drawBox(TackGui* g, const Box& b)
 {
-	cellW = (width - 2 * BOX_PAD) / cells;
-	ImGui::PushID(title);
-	ImGui::BeginChild("box", ImVec2(width, BOX_H), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
-	ImGui::TextUnformatted(title);
-	for(int i = 0; i < n; i++)
-	{
-		if(i) ImGui::SameLine(0, 0);
-		const int sync = lxr_params_lfoSyncOf(params[i]->param);
-		if(lxr_params_lfoFreqOf(params[i]->param) >= 0) syncSwitch(g, params[i], labels[i]);
-		else if(params[i] == &outputsInfo) outputsSwitch(g, params[i], labels[i]);
-		else if(params[i]->isEnum) selector(g, params[i], labels[i]);
-		else if(sync >= 0 && value(g, (uint32_t)sync) != 0) knob(g, lxr_params_info(lxr_params_indexOf((uint16_t)sync)), labels[i]);
-		else knob(g, params[i], labels[i]);
+	ImGui::SetCursorPos(ImVec2(b.rect.x, b.rect.y));
+	ImGui::PushID(b.title);
+	ImGui::BeginChild("box", ImVec2(b.rect.w, b.rect.h), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+	const ImVec2 o = ImGui::GetWindowPos();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	char heading[32];
+	size_t len = 0;
+	for(; b.title[len] && len < sizeof heading - 1; len++) heading[len] = (char)toupper((unsigned char)b.title[len]);
+	heading[len] = 0;
+	const ImVec4 colour = voiceColour(g->tab);
+	dl->AddText(at(o, BOX_PAD, BOX_PAD), ImGui::GetColorU32(colour), heading);
+	dl->AddLine(at(o, BOX_PAD, BOX_PAD + RULE_Y), at(o, b.rect.w - BOX_PAD, BOX_PAD + RULE_Y),
+		ImGui::GetColorU32(darker(colour, 0.4f)));
+	for(const Cell& c : b.cells) {
+		switch(c.kind) {
+		case SYNC_CELL: syncSwitch(g, c, o); break;
+		case OUTPUTS_CELL: outputsSwitch(g, c, o); break;
+		case SWITCH_CELL: toggle(g, c, o); break;
+		case LIST_CELL: selector(g, c, o); break;
+		case KNOB_CELL: {
+			// an LFO's Freq in sync turns through its Sync's fractions
+			const int sync = lxr_params_lfoSyncOf(c.param->param);
+			knob(g, c, sync >= 0 && value(g, (uint32_t)sync) != 0 ? lxr_params_info(lxr_params_indexOf((uint16_t)sync)) : c.param, o);
+			break;
+		}
+		}
 	}
 	ImGui::EndChild();
 	ImGui::PopID();
 }
 
 //-----------------------------------------------------------
-// what a tab shows
+// a tab: its boxes, as the layout has them
 
-struct Group { const char* title; const LxrParamInfo* params[8]; const char* labels[8]; int n; };
-
-// g: the parameters the plugin has; nullptr for all of them, as for sizing the window
-static int collectGroups(const TackGui* g, int voice, uint8_t fxType, Group* groups)
+static bool guiHas(void* ctx, uint32_t id)
 {
-	int numGroups = 0;
-	auto addGroup = [&](const char* title) -> Group& {
-		Group& gr = groups[numGroups++];
-		gr.title = title;
-		gr.n = 0;
-		return gr;
-	};
-	auto add = [](Group& gr, const LxrParamInfo* p, const char* label) {
-		if(gr.n < 8) { gr.params[gr.n] = p; gr.labels[gr.n] = label; gr.n++; }
-	};
-
-	if(voice < LXR_PARAMS_FX_VOICE) {
-		for(uint8_t grp = 0; grp < LXR_PARAMS_NUM_GROUPS; grp++) {
-			const char* title = lxr_params_groupName(voice, grp);
-			if(!title) continue;
-			Group& gr = addGroup(title);
-			for(int i = 0; i < lxr_params_count(); i++) {
-				const LxrParamInfo* p = lxr_params_info(i);
-				if(p->voice == voice && p->group == grp && (!g || g->host.hasParam(g->host.ctx, p->param))) add(gr, p, p->label);
-			}
-		}
-	} else {
-		// the FX bus' own settings, then the controls of the selected FX type, named for it, then master
-		Group& common = addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, 0));
-		Group* typeGroup = fxType >= 1 && fxType <= 5 ? &addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType)) : nullptr;
-		Group& master = addGroup(lxr_params_groupName(LXR_PARAMS_FX_VOICE, LXR_PARAMS_FX_MASTER_GROUP));
-		for(int i = 0; i < lxr_params_count(); i++) {
-			const LxrParamInfo* p = lxr_params_info(i);
-			if(p->voice != LXR_PARAMS_FX_VOICE) continue;
-			if(p->group == LXR_PARAMS_FX_MASTER_GROUP) add(master, p, p->label);
-			else if(p->group == 0) add(common, p, p->label);
-			else if(typeGroup) {
-				const char* label = lxr_params_fxLabel(p->param, fxType);
-				if(label) add(*typeGroup, p, label);
-			}
-		}
-	}
-	return numGroups;
-}
-
-// a slot is as many cells wide as its group has controls on any voice
-static int slotCells(int group)
-{
-	int cells = 1;
-	for(int voice = 0; voice < LXR_PARAMS_NUM_VOICES; voice++) {
-		int n = 0;
-		for(int i = 0; i < lxr_params_count(); i++) {
-			const LxrParamInfo* p = lxr_params_info(i);
-			n += p->voice == voice && p->group == group;
-		}
-		cells = std::max(cells, n);
-	}
-	return cells;
-}
-
-// a box in a row; group is NULL for a slot that stays empty on this tab
-struct Slot { const Group* group; int cells; };
-
-// The FX tab: the FX bus' settings, the selected FX type's controls and master; then a kit mixer, each voice's
-// volume and pan, and its output (which is how a voice reaches the FX bus) and drive.
-enum { FX_COMMON, FX_TYPE, FX_MASTER, MIX_VOLUME, MIX_PAN, MIX_OUTPUT, MIX_DRIVE, FX_TAB_GROUPS };
-static const char* const mixerLabels[] = { "Volume", "Panning", "Audio Out", "Overdrive" };
-static const char* const mixerTitles[] = { "Volume", "Pan", "Output", "Drive" };
-
-static void collectFxTab(uint8_t fxType, Group* groups)
-{
-	for(int i = 0; i < FX_TAB_GROUPS; i++) groups[i].n = 0;
-	groups[FX_COMMON].title = lxr_params_groupName(LXR_PARAMS_FX_VOICE, 0);
-	groups[FX_TYPE].title = fxType >= 1 && fxType <= 5 ? lxr_params_groupName(LXR_PARAMS_FX_VOICE, fxType) : nullptr;
-	groups[FX_MASTER].title = lxr_params_groupName(LXR_PARAMS_FX_VOICE, LXR_PARAMS_FX_MASTER_GROUP);
-	auto add = [](Group& gr, const LxrParamInfo* p, const char* label) {
-		if(gr.n < 8) { gr.params[gr.n] = p; gr.labels[gr.n] = label; gr.n++; }
-	};
-	for(int i = 0; i < lxr_params_count(); i++) {
-		const LxrParamInfo* p = lxr_params_info(i);
-		if(p->voice != LXR_PARAMS_FX_VOICE) continue;
-		if(p->group == LXR_PARAMS_FX_MASTER_GROUP) add(groups[FX_MASTER], p, p->label);
-		else if(p->group == 0) add(groups[FX_COMMON], p, p->label);
-		else if(groups[FX_TYPE].title) {
-			const char* label = lxr_params_fxLabel(p->param, fxType);
-			if(label) add(groups[FX_TYPE], p, label);
-		}
-	}
-	for(int m = 0; m < 4; m++) {
-		Group& gr = groups[MIX_VOLUME + m];
-		gr.title = mixerTitles[m];
-		for(int voice = 0; voice < LXR_PARAMS_NUM_VOICES; voice++)
-			for(int i = 0; i < lxr_params_count(); i++) {
-				const LxrParamInfo* p = lxr_params_info(i);
-				if(p->voice == voice && p->group == LXR_PARAMS_NUM_GROUPS - 1 && !strcmp(p->label, mixerLabels[m]))
-					add(gr, p, tabNames[voice]);
-			}
-	}
-	add(groups[FX_MASTER], &outputsInfo, outputsInfo.label);
-}
-
-// the FX type box is as wide as the widest type, so nothing moves when the type changes
-static int fxTypeCells()
-{
-	int cells = 1;
-	Group groups[FX_TAB_GROUPS];
-	for(uint8_t fx = 1; fx <= 5; fx++) {
-		collectFxTab(fx, groups);
-		cells = std::max(cells, groups[FX_TYPE].n);
-	}
-	return cells;
-}
-
-// the rows of a tab: three for every tab
-static int tabRows(const TackGui* g, int tab, uint8_t fxType, Group* groups, Slot rows[ROWS][SLOTS_PER_ROW], int counts[ROWS])
-{
-	if(tab < LXR_PARAMS_FX_VOICE) {
-		const int n = collectGroups(g, tab, 0, groups);
-		for(int r = 0; r < ROWS; r++) {
-			counts[r] = 0;
-			for(int i = 0; i < SLOTS_PER_ROW && rowSlots[r][i] >= 0; i++) {
-				const int group = rowSlots[r][i];
-				const Group* found = nullptr;
-				for(int j = 0; j < n; j++)
-					if(groups[j].n && groups[j].params[0]->group == group) found = &groups[j];
-				rows[r][counts[r]++] = { found, slotCells(group) };
-			}
-		}
-		return ROWS;
-	}
-	collectFxTab(fxType, groups);
-	static const int fxRows[ROWS][SLOTS_PER_ROW] = {
-		{ FX_COMMON, FX_TYPE, FX_MASTER }, { MIX_VOLUME, MIX_PAN, -1 }, { MIX_OUTPUT, MIX_DRIVE, -1 }
-	};
-	for(int r = 0; r < ROWS; r++) {
-		counts[r] = 0;
-		for(int i = 0; i < SLOTS_PER_ROW && fxRows[r][i] >= 0; i++) {
-			const Group& gr = groups[fxRows[r][i]];
-			const int cells = fxRows[r][i] == FX_TYPE ? fxTypeCells() : std::max(gr.n, 2);
-			rows[r][counts[r]++] = { gr.title && gr.n ? &gr : nullptr, cells };
-		}
-	}
-	return ROWS;
-}
-
-static float naturalWidth(const Slot* slots, int n)
-{
-	float w = (n - 1) * GAP;
-	for(int i = 0; i < n; i++) w += boxWidth(slots[i].cells);
-	return w;
-}
-
-// the widest row of any tab sets the window's width; the other rows are stretched to it
-static uint32_t windowWidth()
-{
-	static uint32_t width;
-	if(width) return width;
-	float widest = 0;
-	Group groups[FX_TAB_GROUPS > LXR_PARAMS_NUM_GROUPS + 1 ? FX_TAB_GROUPS : LXR_PARAMS_NUM_GROUPS + 1];
-	Slot rows[ROWS][SLOTS_PER_ROW];
-	int counts[ROWS];
-	for(int tab = 0; tab <= LXR_PARAMS_FX_VOICE; tab++) {
-		tabRows(nullptr, tab, 1, groups, rows, counts);
-		for(int r = 0; r < ROWS; r++) widest = std::max(widest, naturalWidth(rows[r], counts[r]));
-	}
-	width = (uint32_t)(widest + 2 * MARGIN);
-	return width;
-}
-
-static uint32_t windowHeight(int voice)
-{
-	return (uint32_t)(headerHeight(voice) + ROWS * BOX_H + (ROWS - 1) * GAP + MARGIN);
+	const TackGui* g = (const TackGui*)ctx;
+	return g->host.hasParam(g->host.ctx, id);
 }
 
 static void drawTab(TackGui* g)
 {
-	Group groups[FX_TAB_GROUPS > LXR_PARAMS_NUM_GROUPS + 1 ? FX_TAB_GROUPS : LXR_PARAMS_NUM_GROUPS + 1];
-	Slot rows[ROWS][SLOTS_PER_ROW];
-	int counts[ROWS];
-	tabRows(g, g->tab, (uint8_t)value(g, lxr_params_fxTypeParam()), groups, rows, counts);
-
-	const float inner = windowWidth() - 2 * MARGIN;
-	for(int r = 0; r < ROWS; r++) {
-		// spread the row's spare width over its boxes by their size
-		int cells = 0;
-		for(int i = 0; i < counts[r]; i++) cells += rows[r][i].cells;
-		const float extra = inner - naturalWidth(rows[r], counts[r]);
-		float x = MARGIN;
-		for(int i = 0; i < counts[r]; i++) {
-			const Slot& slot = rows[r][i];
-			const float w = boxWidth(slot.cells) + extra * slot.cells / cells;
-			if(slot.group) {
-				ImGui::SetCursorPos(ImVec2(x, headerHeight(g->host.voice) + r * (BOX_H + GAP)));
-				box(g, slot.group->title, slot.group->params, slot.group->labels, slot.group->n, w, slot.cells);
-			}
-			x += w + GAP;
-		}
-	}
-	cellW = CELL_W;
+	for(const Box& b : tab(g->host.voice, g->tab, (uint8_t)value(g, lxr_params_fxTypeParam()), guiHas, g).boxes)
+		drawBox(g, b);
 }
 
 // what the browser lists: whole kits in Tack, in a voice plugin the voices of kits it can play
@@ -761,6 +561,50 @@ static void drawAudition(TackGui* g)
 	}
 }
 
+// Mutate: a step for the whole kit or for the voice on the open tab, a step back, and how far the walk has come. A walk
+// follows the same way each time, so after a step back the next step comes back along it. The button of the walk the
+// count belongs to is lit
+static void drawMutate(TackGui* g)
+{
+	const int step = g->host.mutateStep(g->host.ctx);
+	// a voice plugin has only its voice: one button, which says what it does
+	if(g->host.voice < 0) {
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("Mutate");
+	}
+	bool first = g->host.voice >= 0;
+	auto stepButton = [&](const char* text, int scope, const char* tip) {
+		const bool lit = step && g->mutateScope == scope;
+		if(!first) ImGui::SameLine(0, 4);
+		first = false;
+		if(lit) ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+		if(ImGui::Button(text)) {
+			g->host.mutate(g->host.ctx, scope, 1);
+			g->mutateScope = scope;
+		}
+		if(lit) ImGui::PopStyleColor();
+		if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+	};
+	if(g->host.voice < 0) {
+		stepButton("Kit", -1, "A small random change to the whole kit. Levels, pans and the FX stay");
+		ImGui::BeginDisabled(g->tab >= LXR_PARAMS_FX_VOICE);
+		stepButton("Voice", g->tab, "A small random change to the voice on the open tab");
+		ImGui::EndDisabled();
+	} else {
+		stepButton("Mutate", -1, "A small random change to the voice");
+	}
+	ImGui::SameLine(0, 4);
+	ImGui::BeginDisabled(!step);
+	if(ImGui::ArrowButton("mutateBack", ImGuiDir_Left)) g->host.mutate(g->host.ctx, TACK_MUTATE_AGAIN, -1);
+	if(ImGui::IsItemHovered()) ImGui::SetTooltip("One step back");
+	ImGui::EndDisabled();
+	ImGui::SameLine(0, 6);
+	ImGui::AlignTextToFramePadding();
+	if(step) ImGui::Text("%d", step);
+	else ImGui::TextDisabled("0");
+	if(ImGui::IsItemHovered()) ImGui::SetTooltip("Steps from the kit as it was");
+}
+
 static void drawHeader(TackGui* g)
 {
 	// the plugin's name; a voice plugin's chromatic switch next to it, then the kits' voices it can play like
@@ -802,7 +646,7 @@ static void drawHeader(TackGui* g)
 	if(ImGui::IsItemHovered())
 		ImGui::SetTooltip(g->host.voice < 0 ? "Choose a kit from the kit folder" : "Choose a voice from the kits in the kit folder");
 	ImGui::SameLine(0, 8);
-	if(ImGui::Button(g->host.voice < 0 ? "Save kit" : "Save")) {
+	if(ImGui::Button("Save")) {
 		// start from the kit's name, as far as the device allows it
 		int n = 0;
 		for(const char* c = kit ? kit : ""; *c && n < 8; c++)
@@ -813,24 +657,8 @@ static void drawHeader(TackGui* g)
 		ImGui::OpenPopup("###save");
 		puglGrabFocus(g->view);
 	}
-	ImGui::SameLine(0, 8);
-	if(ImGui::Button(g->host.voice < 0 ? "Mutate kit" : "Mutate")) g->host.mutate(g->host.ctx, -1, 1);
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("A small random change to the sound. Levels, pans and the FX stay");
-	if(g->host.voice < 0) {
-		ImGui::SameLine(0, 2);
-		ImGui::BeginDisabled(g->tab >= LXR_PARAMS_FX_VOICE);
-		if(ImGui::Button("Mutate voice")) g->host.mutate(g->host.ctx, g->tab, 1);
-		if(ImGui::IsItemHovered()) ImGui::SetTooltip("The same, for the voice on the open tab");
-		ImGui::EndDisabled();
-	}
-	const int mutated = g->host.mutateStep(g->host.ctx);
-	char back[32];
-	snprintf(back, sizeof back, mutated ? "Back (%d)###back" : "Back###back", mutated);
-	ImGui::SameLine(0, 2);
-	ImGui::BeginDisabled(!mutated);
-	if(ImGui::Button(back)) g->host.mutate(g->host.ctx, TACK_MUTATE_AGAIN, -1);
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("One step back along the way Mutate came");
-	ImGui::EndDisabled();
+	ImGui::SameLine(0, 16);
+	drawMutate(g);
 	if(g->host.voice >= 0) {
 		// no tabs, and no play button: notes play the voice
 		ImGui::Separator();
@@ -1084,6 +912,8 @@ static void applyStyle()
 	s.WindowPadding = ImVec2(10, 8);
 	s.ChildRounding = 4;
 	s.FrameRounding = 3;
+	// lists and switches are the layout's height
+	s.FramePadding = ImVec2(FRAME_PAD_X, FRAME_PAD_Y);
 	s.ItemSpacing = ImVec2(6, 6);
 	ImVec4* c = s.Colors;
 	c[ImGuiCol_WindowBg] = ImVec4(0.09f, 0.09f, 0.10f, 1);
@@ -1128,6 +958,8 @@ TackGui* tack_guiCreate(const TackGuiHost* host)
 	g->imgui = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g->imgui);
 	ImGui::GetIO().IniFilename = nullptr;
+	// the layout's font: ImGui's pixel font at its own size
+	ImGui::GetIO().Fonts->AddFontDefaultBitmap();
 	applyStyle();
 	ImGui::SetCurrentContext(previous);
 

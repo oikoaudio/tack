@@ -594,6 +594,8 @@ void lxr_params_valueText(uint16_t param, uint16_t value, char* buf, size_t size
 		snprintf(buf, size, "%u", value);
 		break;
 	}
+	// the firmware's names mix "off" and "Off", "sin" and "Sin": every name starts with a capital
+	if(buf[0] >= 'a' && buf[0] <= 'z') buf[0] = (char)(buf[0] - 'a' + 'A');
 }
 
 void lxr_params_mutateTable(uint8_t* top, uint8_t* voice)
