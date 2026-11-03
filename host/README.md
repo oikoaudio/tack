@@ -316,8 +316,7 @@ build/mac/clap_render build/mac/Tack.clap out.wav
 (mingw-w64, tested through Wine) and macOS (one bundle for Apple silicon and Intel, macOS 11 or newer). Each job runs
 `host/tools/smoke_test.sh` and, on Linux and macOS, clap-validator. The Linux job also runs Steinberg's VST3 validator
 and the macOS job `auval` on the five Audio Units. Each job keeps the platform's zip as an artifact. It
-runs for pull requests that are ready for review, for pushes to main and by hand. While the repository is private,
-only runs by hand and releases build anything, since private repositories pay for Actions minutes.
+runs for pull requests that are ready for review, for pushes to main and by hand.
 
 `host/tools/smoke_test.sh build/host` runs the same tests locally (`host/tools/smoke_test.sh build/win wine` for the
 Windows build). `make_kit out.snd NAME [param=value ...]` writes the test kits it needs, since none can be bundled.

@@ -6,8 +6,8 @@ Erica Synths, which Tack extends. The engine code under `Core/` is the firmware'
 in [Changes to the firmware](#changes-to-the-firmware). Tack adds the plugins and their editor, the FM-1 firmware and
 the code that runs the engine on a computer. It is made by oikoaudio.
 
-[Website](https://oikoaudio.com/tack/) · [Try the FM-1 firmware in a browser](https://oikoaudio.com/tack/fm1/try/) ·
-[Install it on an FM-1](https://oikoaudio.com/tack/fm1/install/) · [Plugin downloads](https://github.com/oikoaudio/tack/releases)
+[Download the plugins](https://github.com/oikoaudio/tack/releases/latest) · [Install it on an FM-1](https://oikoaudio.com/tack/fm1/install/) ·
+[Try the FM-1 firmware in a browser](https://oikoaudio.com/tack/fm1/try/) · [Website](https://oikoaudio.com/tack/)
 
 <p><img src="docs/images/plugin-editor.png" width="912" alt="The Tack plugin's editor: a tab per voice, with boxes of dials for the oscillator, FM, transient, filter, envelopes, mix and LFO."></p>
 
@@ -60,12 +60,19 @@ Tack works on Linux x86-64 and on an Apple silicon Mac (M1). The CLAP and the VS
 both, and the Audio Unit in Logic Pro. It also builds for Windows. The Windows build renders the same as Linux under
 Wine, but nobody has played it in a DAW yet. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux
 and Windows, and CI checks the Audio Unit with `auval`.
-There are no prebuilt binaries, so build Tack from source.
+
+Download the zip for your platform from the [latest release](https://github.com/oikoaudio/tack/releases/latest): Linux
+x86-64, Windows x86-64, or macOS for Apple silicon and Intel. Each holds `Tack.clap` and `Tack.vst3`, and on macOS also
+`Tack.component`. Copy them to your plugin folders: `~/.clap` and `~/.vst3` on Linux,
+`C:\Program Files\Common Files\CLAP` and `VST3` on Windows, and `~/Library/Audio/Plug-Ins/CLAP`, `VST3` and `Components`
+on macOS. The macOS build is not signed, so macOS blocks it as downloaded: after copying, clear the download flag with
+`xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins`. The FM-1 firmware installs from its
+[install page](https://oikoaudio.com/tack/fm1/install/) in Chrome or Edge.
 
 Report a problem with the [bug report form](https://github.com/oikoaudio/tack/issues/new?template=bug-report.yml).
 Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
-## Building and installing
+## Building from source
 
 You need CMake 3.21 or newer, Ninja, a C and C++ compiler and the OpenGL and X11 development files. Tack is tested
 with gcc 15. CMake fetches the CLAP SDK, clap-wrapper, the VST3 SDK, Apple's AudioUnitSDK, pugl and Dear ImGui at pinned
