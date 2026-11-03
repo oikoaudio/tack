@@ -88,8 +88,16 @@ This repository no longer builds firmware for the LXR-02 itself, as nobody here 
 
 ## Changes to the firmware
 
-This fork changes the firmware's code in six places. The first four are bug fixes in the sound engine, found while
-running it on a computer. None of them has been reported upstream.
+Tack changes the LXR-02 firmware's code under `Core/` in the places below. Each row names the commits that made the
+change. Rows marked FM-1 sit behind `LXR_FM1_BUILD`, so only the FM-1 firmware compiles them, and the plugins never do.
+
+The repository also leaves out what only the LXR-02's own build needs: the STM32 HAL and CMSIS drivers, the USB-MIDI and
+SD card code, FatFs, the linker script and the CMake build for the device (e9d680a). NOTICE.md lists what remains.
+
+### Fixes
+
+These are bugs in the original code, found while running it on a computer. They are in the engine code Tack shares
+with the LXR-02, so they may matter there too, but they have only been tested on a computer and on the FM-1.
 
 | Commit | File | Change |
 |---|---|---|
@@ -97,6 +105,31 @@ running it on a computer. None of them has been reported upstream.
 | bccf2ac | `Core/Src/Soundengine/DSPAudio/FX/Delay.c`, `Delay.h`, `MidiParser.c` | Switching the delay from normal to ping-pong while it ran kept pointers that are only valid in normal mode, and the next samples read and wrote up to index 49150 of the 32768-entry delay buffer. `Delay_setType()` now masks the pointers for the new mode. |
 | 05ee9e3 | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | The interpolating wavetable oscillators read one sample past the end of each 1024-sample table, from the next table or past the end of the array. They now wrap to the start of the same table. The init kit renders bit-identically. |
 | 3f7b14f | `Core/Src/Soundengine/DSPAudio/FX/Distortion.c` | At full-scale input the diode distortion read one entry past the end of `table_1n914`. It now interpolates from the last pair of entries, which gives the same result. |
+| 10566bb | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | Sample playback is compiled out, but a wave above PWM still takes that branch and left the voice's buffer unwritten, so stack memory went through the filter and out. MemorySanitizer showed it on the factory kit ACID. The buffer is now cleared. |
+| 5ddc22e | `Core/Src/Soundengine/DSPAudio/FX/Reverb.c` | The reverb's first loop ran through the second loop's all-pass, so one fixed buffer cell reached the output as a steady level. The original code's own comment names `ap[0]`. |
+| 818dad9 | `Core/Src/Soundengine/DSPAudio/TiltEq.c` | At the middle of TONE the tilt's corner reached 0 Hz, its low pass stopped following the input, and its last value stayed on the output as a DC offset. The corner now stops at 10 Hz. |
+| 1d33c56 | `Core/Src/Soundengine/MIDI/MidiParser.c` | Three legal kit values sent as NRPN controllers wrote up to 128 bytes past `midiParser_originalCcValues`. The handler now ignores a number past 126. |
+| 030b62d, ce78e8e, e1039ce | `Core/Src/Soundengine/Sequencer/sequencer.c` | A stored lane length of 0 means 16, and some code divided by the raw value. Every read now goes through `seq_trackLength()`. |
+| 030b62d | `Core/Src/Soundengine/Sequencer/clockSync.c` | MIDI Start and the first clock in the same audio block gave no time between pulses, and `sync_calcBpm()` divided by zero. It now returns a tempo of 1 for that case. |
+
+### Additions
+
+| Commit | File | Change |
+|---|---|---|
+| e1039ce, 24ef310 | `Core/Inc/Soundengine/FxBus.h`, `Core/Src/Soundengine/DSPAudio/FX/Reverb.c`, `Reverb.h`, `VerbTools/AllpassDelay.c`, `VerbModDelay.h`, `MidiParser.c`, `Core/Src/menu/menu.c`, `Core/Inc/menu/MenuText.h`, `menuPages.h` | The reverb, which the original compiles out with `USE_REVERB 0`, is on as FX type 5. It is stereo, with a right output from Dattorro's taps and the early reflections weighted differently on each side. It gains a 24 dB per octave low cut on the dial that set its type, and a high cut on the dial that went to `Reverb_setComposition()`. MIX adds it to the dry sound, which stays as it is, and the early reflections' dial crossfades between them and the late tail. The modulated all-passes read between samples, as the original's length filter left them at a fixed 2048, and move 16 samples each way, and the loop's two all-passes get a gain of 0.35. Those take out the tail's flutter and growl. |
+| dca45f4 | `Core/Src/Soundengine/FxBus.c`, `MidiParser.c` | The delay and the reverb share `FX_BUFFER`, and each played what the other left behind. A change from one to the other now clears it, 2048 words a block with the FX off. |
+| e1039ce, dca45f4 | `Core/Src/Soundengine/DSPAudio/FX/Delay.c`, `Delay.h`, `MidiParser.c`, `lfo.c`, `MenuText.h` | The delay has two more modes, normal and ping-pong in sync, where TIME picks one of ten fractions of the bar from 1/32 to 1/2 and follows the tempo. A change of mode or tempo during the delay's crossfade keeps the time it was going to. |
+| 91c076b, e1039ce, dca45f4 | `Core/Src/Soundengine/DSPAudio/lfo.c`, `lfo.h`, `MidiParser.c`, `MenuText.h` | RETRIG has each voice twice, the second as once. Once, the LFO plays start to end from that voice's hit and finishes on the value the target is set to. An LFO aimed at another LFO's RETRIG picks the voice and leaves once as it was. |
+| 91c076b | `Core/Src/menu/Cc2Text.c`, `MidiParser.c` | FX dry/wet is a modulation target, number 229, after every voice's, so the targets kits store keep their numbers. A modulator's value is scaled to the parameter's range of 0 to 100. |
+| e863a5a, e3fa93b | `Core/Src/Soundengine/DSPAudio/lfo.c` | A random LFO started by a voice's hit takes a new value with the hit, which reaches the target before the voice starts and holds until the next hit. |
+| 24ef310 | `Core/Src/Soundengine/DSPAudio/1PoleLp.c`, `1PoleLp.h`, `DrumVoice.c`, `Snare.c`, `CymbalVoice.c`, `HiHat.c`, `distortion.c`, `mixer.c` | Less work for the same output: a smoothing filter that has reached its input is skipped for the block, and a voice at full sample rate skips the rate reducer. |
+| dca45f4 | `Core/Inc/Preset/InitKit.h` | `extern const` instead of `const extern`, for a build without warnings. |
+| 030b62d | `Core/Inc/Soundengine/config.h` | FM-1: the FX buffer and the sequencer's data go in the FM-1's large memory region, as they don't fit in its main RAM. |
+| 030b62d | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | FM-1: wavetable interpolation multiplies in 32 bits, as the FM-1's core has been seen to corrupt a register with 64-bit multiplies among 16-bit loads. FM's phase offsets convert through a signed integer, which gives what the desktop computes. |
+| aa704be, 9e57eb9 | `Core/Src/Soundengine/DSPAudio/mixer.c`, `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | FM-1: copies of each voice and of the FX return for 10-channel USB audio, and a count of each voice's hits for the key lights. |
+| 3d6598a | `Core/Src/Soundengine/FxBus.c` | FM-1: the distortion puts out a steady level with no input, and that exact level comes off its output, so nothing plays at rest. |
+| aa704be, 3d6598a | `Core/Src/Soundengine/Sequencer/clockSync.c`, `clockSync.h` | FM-1: one pulse of the sequencer is its own function, so steps can run from a clock counted in audio frames that MIDI clock corrects. |
+| 9e57eb9, ce78e8e, 8e162c5, dca45f4 | `Core/Src/Soundengine/Sequencer/sequencer.c`, `sequencer.h`, `Core/Inc/Preset/SeqStep.h` | FM-1: each lane has a direction (forward, reverse, ping-pong, bounce or random), a speed (1, 1/2 or 1/4) and a start step. Nudge moves in single pulses near the grid. Parameter locks, recurrence and lane wraps come from the FM-1's own code. Under external clock the rest of a step plays before the next one starts, and a nudged hit gives way only to a hit on the same lane and pulse. |
 | 2d0bd12 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
 | 2d0bd12 | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
 
@@ -113,7 +146,7 @@ the LXR-02 firmware under. It comes without any warranty.
 The additional terms apply to Tack as well.
 
 - "Erica Synths", "LXR" and "LXR-02" and their logos are trademarks of Erica Synths. The GPL grants no right to use
-  them. Tack uses them only to say where its code comes from.
+  them. Tack uses them only to say where its code comes from and what it is compatible with.
 - Modified versions must be marked as modified and must not be presented as official Erica Synths software. Tack is
   a modified version.
 - The LXR hardware, including its front panel and appearance, is the property of Erica Synths and is not covered by
@@ -137,6 +170,8 @@ plugin build also fetches the CLAP SDK (MIT), clap-wrapper (MIT), the VST3 SDK (
 its plugins.
 
 ## Credits
+
+Tack is Swedish for **Thank you**.
 
 Tack's sound is the LXR-02's: the voices, the FX bus and the kit format are the work of Sonic Potions and Erica
 Synths. The LXR-02 is Sonic Potions' design, made and sold by Erica Synths, who published its firmware at
