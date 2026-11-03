@@ -24,6 +24,9 @@ void app_frame(void);
 void app_input_only(void);
 void app_say(const char *a, const char *b);
 #define APP_SYSEX                        /* kits from a computer (tools/fm1_kits.py) */
+#ifdef PLAT_WEB
+#define APP_WEB                          /* web.c: the try-it page puts a demo's kits in the bank */
+#endif
 /* backup and restore over USB: tools/fm1 backup. The kit bank goes through fm1_kits.py */
 #define APP_BACKUP_OBJS {OBJ_SETTINGS, OBJ_PAT0, OBJ_PAT0 + 1, OBJ_PAT0 + 2, OBJ_PAT0 + 3, OBJ_PAT0 + 4, OBJ_PAT0 + 5, \
                          OBJ_PAT0 + 6, OBJ_PAT0 + 7, OBJ_PAT0 + 8, OBJ_PAT0 + 9, OBJ_PAT0 + 10, OBJ_PAT0 + 11, \
