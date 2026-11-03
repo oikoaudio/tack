@@ -1,8 +1,6 @@
 # Tack for the M-VAVE FM-1
 
-Tack replaces the firmware of an M-VAVE FM-1 with a seven-voice drum synth and a step sequencer. It is a whole firmware, so
-the FM-1's own synth is gone while Tack is on it. The voices, the FX and the sequencer come from the LXR firmware by Sonic
-Potions and Erica Synths, compiled for the FM-1's chip. The panel and the screens are new.
+Tack replaces the firmware of an M-VAVE FM-1 with a seven-voice drum synth and a step sequencer. It is a whole firmware, so the FM-1's own synth is gone while Tack is on it. The voices, the FX and the sequencer come from the LXR firmware by Sonic Potions and Erica Synths, compiled for the FM-1's chip. The panel and the screens are new.
 
 <p>
 <img src="../../docs/images/fm1-overview.png" width="240" alt="Tack on the FM-1, HOME: seven lanes of steps, the selected voice's four main dials, the pattern map and the envelope.">
@@ -10,8 +8,7 @@ Potions and Erica Synths, compiled for the FM-1's chip. The panel and the screen
 <img src="../../docs/images/fm1-edit.png" width="240" alt="Tack on the FM-1, EDIT: three rows of dials and pictures for one voice, with the knobs on the middle row.">
 </p>
 
-Tack 0.9 is the first release. It has run on an FM-1 throughout its development. The plugins are in [host/](../../host)
-and share the engine with this firmware.
+Tack 0.9 is the first release. It has run on an FM-1 throughout its development. The plugins are in [host/](../../host) and share the engine with this firmware.
 
 | | |
 |---|---|
@@ -53,8 +50,7 @@ CC=clang python3 third_party/fm1-base/tools/build.py firmware/fm1 --host # the s
 
 ## Use a connected FM-1
 
-`tools/fm1` runs the device tools from any folder. Close anything using the FM-1's MIDI port first, and plug it straight into
-the computer, as a hub can stop it reconnecting during an install.
+`tools/fm1` runs the device tools from any folder. Close anything using the FM-1's MIDI port first, and plug it straight into the computer, as a hub can stop it reconnecting during an install.
 
 | Command | What it does |
 |---|---|
@@ -73,8 +69,7 @@ Saved patterns load only on a build with the same pattern format.
 firmware/fm1/tests/verify.sh OUTDIR
 ```
 
-This builds everything and runs the panel scripts in the simulator, the engine tests and the comparison with the LXR's
-sequencer. It also checks that the plugins' renders have not changed. Its last line is the verdict, and so is its exit code.
+This builds everything and runs the panel scripts in the simulator, the engine tests and the comparison with the LXR's sequencer. It also checks that the plugins' renders have not changed. Its last line is the verdict, and so is its exit code.
 
 One script can run alone, with `firmware/fm1/build/host/tack_host firmware/fm1/tests/lanes.txt OUTDIR`.
 
@@ -93,13 +88,10 @@ One script can run alone, with `firmware/fm1/build/host/tack_host firmware/fm1/t
 | `tests/` | The simulator scripts, engine tests and comparisons |
 | `site/` | What goes on the install page, beside what `tools/make_web.py` writes |
 
-Outside this folder, `engine/` is the control layer shared with the plugins, `Core/` is the LXR engine and sequencer, and
-`third_party/fm1-base` is the platform: audio, MIDI, flash and the simulator.
+Outside this folder, `engine/` is the control layer shared with the plugins, `Core/` is the LXR engine and sequencer, and `third_party/fm1-base` is the platform: audio, MIDI, flash and the simulator.
 
-Only the audio interrupt writes engine and sequencer state. The main loop posts events to a queue, and the render drains it
-before each 64-frame block.
+Only the audio interrupt writes engine and sequencer state. The main loop posts events to a queue, and the render drains it before each 64-frame block.
 
 ## Licence
 
-GPL-3.0-only, with the terms in [NOTICE.md](../../NOTICE.md). Tack is not affiliated with or endorsed by Erica Synths, Sonic
-Potions or M-VAVE.
+GPL-3.0-only, with the terms in [NOTICE.md](../../NOTICE.md). Tack is not affiliated with or endorsed by Erica Synths, Sonic Potions or M-VAVE.
