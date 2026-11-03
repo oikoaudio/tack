@@ -1,13 +1,8 @@
 # Tack
 
-Tack is a digital drum synth with seven voices, in two forms: CLAP, VST® 3 and Audio Unit plugins for your DAW, and
-firmware for the M-VAVE FM-1, with a step sequencer. Its sound engine is the LXR-02 firmware by Sonic Potions and
-Erica Synths, which Tack extends. The engine code under `Core/` is the firmware's, with the fixes and additions listed
-in [Changes to the firmware](#changes-to-the-firmware). Tack adds the plugins and their editor, the FM-1 firmware and
-the code that runs the engine on a computer. It is made by oikoaudio.
+Tack is a digital drum synth with seven voices, in two forms: CLAP, VST® 3 and Audio Unit plugins for your DAW, and firmware for the M-VAVE FM-1, with a step sequencer. Its sound engine is the LXR-02 firmware by Sonic Potions and Erica Synths, which Tack extends. The engine code under `Core/` is the firmware's, with the fixes and additions listed in [Changes to the firmware](#changes-to-the-firmware). Tack adds the plugins and their editor, the FM-1 firmware and the code that runs the engine on a computer. It is made by oikoaudio.
 
-[Download the plugins](https://github.com/oikoaudio/tack/releases/latest) · [Install it on an FM-1](https://oikoaudio.com/tack/fm1/install/) ·
-[Try the FM-1 firmware in a browser](https://oikoaudio.com/tack/fm1/try/) · [Website](https://oikoaudio.com/tack/)
+[Download the plugins](https://github.com/oikoaudio/tack/releases/latest) · [Install it on an FM-1](https://oikoaudio.com/tack/fm1/install/) · [Try the FM-1 firmware in a browser](https://oikoaudio.com/tack/fm1/try/) · [Website](https://oikoaudio.com/tack/)
 
 <p><img src="docs/images/plugin-editor.png" width="912" alt="The Tack plugin's editor: a tab per voice, with boxes of dials for the oscillator, FM, transient, filter, envelopes, mix and LFO."></p>
 
@@ -21,8 +16,7 @@ Tack is not affiliated with or endorsed by Erica Synths, Sonic Potions or M-VAVE
 
 ## Plugins
 
-Tack comes as `Tack.clap`, `Tack.vst3` and, on macOS, `Tack.component`, the Audio Unit. Each holds the
-same five plugins.
+Tack comes as `Tack.clap`, `Tack.vst3` and, on macOS, `Tack.component`, the Audio Unit. Each holds the same five plugins.
 
 | Plugin | Plays |
 |---|---|
@@ -32,51 +26,29 @@ same five plugins.
 | Tack Cymbal | The cymbal |
 | Tack Hi-hat | The closed and open hi-hat |
 
-In Tack, notes on MIDI channel 1 from C3 up trigger the voices, one note each. Channels 2 to 8 each play one voice
-chromatically. The single-voice plugins play chromatically on any channel, or at the voice's tuned pitch on every note
-when their Chromatic switch is off.
+In Tack, notes on MIDI channel 1 from C3 up trigger the voices, one note each. Channels 2 to 8 each play one voice chromatically. The single-voice plugins play chromatically on any channel, or at the voice's tuned pitch on every note when their Chromatic switch is off.
 
-Every sound parameter on the device's front panel is a plugin parameter, 227 in Tack, and the host can automate and
-modulate them. Each plugin has its own editor. The editor does not copy the hardware's front panel or its look.
+Every sound parameter on the device's front panel is a plugin parameter, 227 in Tack, and the host can automate and modulate them. Each plugin has its own editor. The editor does not copy the hardware's front panel or its look.
 
 ## Kits
 
-Tack loads kit files in the device's `.SND` format, the files the LXR-02 writes to its SD card. Put folders of kits
-in the kit folder, `~/.local/share/Tack/Kits/` on Linux (or `$XDG_DATA_HOME/Tack/Kits/` if that is set) and
-`Documents/Tack/Kits` on Windows and macOS. Each folder in it is a pack.
-Tack lists the kits in its own kit browser, and the CLAP also lists them in the host's preset browser. The single-voice plugins offer the
-matching voices of every kit, so Tack Snare lists each kit's snare.
+Tack loads kit files in the device's `.SND` format, the files the LXR-02 writes to its SD card. Put folders of kits in the kit folder, `~/.local/share/Tack/Kits/` on Linux (or `$XDG_DATA_HOME/Tack/Kits/` if that is set) and `Documents/Tack/Kits` on Windows and macOS. Each folder in it is a pack. Tack lists the kits in its own kit browser, and the CLAP also lists them in the host's preset browser. The single-voice plugins offer the matching voices of every kit, so Tack Snare lists each kit's snare.
 
-Saving a kit writes a `.SND` file to the `User` pack in the format the device writes, and the device can load it. On
-the device's SD card a kit file needs a slot number in its name, such as `05-NAME.SND`. The single-voice plugins save
-a kit with only their voice in it. Tack's browser marks such files with the kind of voice, "Clap (Snare)", and
-picking one replaces only that voice of the open kit. A drum goes onto the drum tab that is open.
+Saving a kit writes a `.SND` file to the `User` pack in the format the device writes, and the device can load it. On the device's SD card a kit file needs a slot number in its name, such as `05-NAME.SND`. The single-voice plugins save a kit with only their voice in it. Tack's browser marks such files with the kind of voice, "Clap (Snare)", and picking one replaces only that voice of the open kit. A drum goes onto the drum tab that is open.
 
 No kits come with Tack. The factory kits and third-party kits belong to their authors.
 
 ## Status
 
-Tack works on Linux x86-64 and on an Apple silicon Mac (M1). The CLAP and the VST3 are tested in Bitwig 6.1.6 on
-both, and the Audio Unit in Logic Pro. It also builds for Windows. The Windows build renders the same as Linux under
-Wine, but nobody has played it in a DAW yet. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux
-and Windows, and CI checks the Audio Unit with `auval`.
+Tack works on Linux x86-64 and on an Apple silicon Mac (M1). The CLAP and the VST3 are tested in Bitwig 6.1.6 on both, and the Audio Unit in Logic Pro. It also builds for Windows. The Windows build renders the same as Linux under Wine, but nobody has played it in a DAW yet. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux and Windows, and CI checks the Audio Unit with `auval`.
 
-Download the zip for your platform from the [latest release](https://github.com/oikoaudio/tack/releases/latest): Linux
-x86-64, Windows x86-64, or macOS for Apple silicon and Intel. Each holds `Tack.clap` and `Tack.vst3`, and on macOS also
-`Tack.component`. Copy them to your plugin folders: `~/.clap` and `~/.vst3` on Linux,
-`C:\Program Files\Common Files\CLAP` and `VST3` on Windows, and `~/Library/Audio/Plug-Ins/CLAP`, `VST3` and `Components`
-on macOS. The macOS build is not signed, so macOS blocks it as downloaded: after copying, clear the download flag with
-`xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins`. The FM-1 firmware installs from its
-[install page](https://oikoaudio.com/tack/fm1/install/) in Chrome or Edge.
+Download the zip for your platform from the [latest release](https://github.com/oikoaudio/tack/releases/latest): Linux x86-64, Windows x86-64, or macOS for Apple silicon and Intel. Each holds `Tack.clap` and `Tack.vst3`, and on macOS also `Tack.component`. Copy them to your plugin folders: `~/.clap` and `~/.vst3` on Linux, `C:\Program Files\Common Files\CLAP` and `VST3` on Windows, and `~/Library/Audio/Plug-Ins/CLAP`, `VST3` and `Components` on macOS. The macOS build is not signed, so macOS blocks it as downloaded: after copying, clear the download flag with `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins`. The FM-1 firmware installs from its [install page](https://oikoaudio.com/tack/fm1/install/) in Chrome or Edge.
 
-Report a problem with the [bug report form](https://github.com/oikoaudio/tack/issues/new?template=bug-report.yml).
-Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
+Report a problem with the [bug report form](https://github.com/oikoaudio/tack/issues/new?template=bug-report.yml). Report security problems privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Building from source
 
-You need CMake 3.21 or newer, Ninja, a C and C++ compiler and the OpenGL and X11 development files. Tack is tested
-with gcc 15. CMake fetches the CLAP SDK, clap-wrapper, the VST3 SDK, Apple's AudioUnitSDK, pugl and Dear ImGui at pinned
-versions, and libsamplerate if it isn't installed.
+You need CMake 3.21 or newer, Ninja, a C and C++ compiler and the OpenGL and X11 development files. Tack is tested with gcc 15. CMake fetches the CLAP SDK, clap-wrapper, the VST3 SDK, Apple's AudioUnitSDK, pugl and Dear ImGui at pinned versions, and libsamplerate if it isn't installed.
 
 ```sh
 cmake -S host -B build/host -G Ninja
@@ -84,13 +56,9 @@ cmake --build build/host
 cmake --build build/host --target install_tack
 ```
 
-The last command copies `Tack.clap` to `~/.clap` and `Tack.vst3` to `~/.vst3`. Add `-DTACK_VST3_AU=OFF` to the
-first command to build only the CLAP. [host/README.md](host/README.md#windows-and-macos) has the
-commands for Windows and macOS.
+The last command copies `Tack.clap` to `~/.clap` and `Tack.vst3` to `~/.vst3`. Add `-DTACK_VST3_AU=OFF` to the first command to build only the CLAP. [host/README.md](host/README.md#windows-and-macos) has the commands for Windows and macOS.
 
-[host/README.md](host/README.md) is the technical reference. It covers the MIDI note map, parameters and modulation,
-outputs and FX routing, how kits load and save, the command-line tools for testing without a DAW, and the bugs fixed in
-the firmware code.
+[host/README.md](host/README.md) is the technical reference. It covers the MIDI note map, parameters and modulation, outputs and FX routing, how kits load and save, the command-line tools for testing without a DAW, and the bugs fixed in the firmware code.
 
 ## Repository layout
 
@@ -102,21 +70,17 @@ the firmware code.
 | `Core/Src/Soundengine/` | The firmware's sound engine, which Tack compiles. |
 | `Core/` | The rest of the LXR-02 firmware's source. It no longer builds for the device, and what Tack does not compile may go. |
 
-This repository no longer builds firmware for the LXR-02 itself, as nobody here has one to test on. The
-[upstream repository](https://github.com/erica-synths/lxr-desktop-app) does, and this repository's history holds the build as it was.
+This repository no longer builds firmware for the LXR-02 itself, as nobody here has one to test on. The [upstream repository](https://github.com/erica-synths/lxr-desktop-app) does, and this repository's history holds the build as it was.
 
 ## Changes to the firmware
 
-Tack changes the LXR-02 firmware's code under `Core/` in the places below. Each row names the commits that made the
-change. Rows marked FM-1 sit behind `LXR_FM1_BUILD`, so only the FM-1 firmware compiles them, and the plugins never do.
+Tack changes the LXR-02 firmware's code under `Core/` in the places below. Each row names the commits that made the change. Rows marked FM-1 sit behind `LXR_FM1_BUILD`, so only the FM-1 firmware compiles them, and the plugins never do.
 
-The repository also leaves out what only the LXR-02's own build needs: the STM32 HAL and CMSIS drivers, the USB-MIDI and
-SD card code, FatFs, the linker script and the CMake build for the device (e9d680a). NOTICE.md lists what remains.
+The repository also leaves out what only the LXR-02's own build needs: the STM32 HAL and CMSIS drivers, the USB-MIDI and SD card code, FatFs, the linker script and the CMake build for the device (e9d680a). NOTICE.md lists what remains.
 
 ### Fixes
 
-These are bugs in the original code, found while running it on a computer. They are in the engine code Tack shares
-with the LXR-02, so they may matter there too, but they have only been tested on a computer and on the FM-1.
+These are bugs in the original code, found while running it on a computer. They are in the engine code Tack shares with the LXR-02, so they may matter there too, but they have only been tested on a computer and on the FM-1.
 
 | Commit | File | Change |
 |---|---|---|
@@ -153,59 +117,36 @@ with the LXR-02, so they may matter there too, but they have only been tested on
 | 2d0bd12 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
 | 2d0bd12 | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
 
-Tack also plays a few things differently from the device. Those changes live in its own code under `host/`, not
-in the firmware, and [host/README.md](host/README.md) describes them: the pulse width minimum, the init kit's FX
-values and the output routing.
+Tack also plays a few things differently from the device. Those changes live in its own code under `host/`, not in the firmware, and [host/README.md](host/README.md) describes them: the pulse width minimum, the init kit's FX values and the output routing.
 
 ## License
 
-Tack is free software under the GNU General Public License version 3 only, in [LICENSE](LICENSE), with the additional
-permission and additional terms under section 7 in [NOTICE.md](NOTICE.md). These are the terms Erica Synths published
-the LXR-02 firmware under. It comes without any warranty.
+Tack is free software under the GNU General Public License version 3 only, in [LICENSE](LICENSE), with the additional permission and additional terms under section 7 in [NOTICE.md](NOTICE.md). These are the terms Erica Synths published the LXR-02 firmware under. It comes without any warranty.
 
 The additional terms apply to Tack as well.
 
-- "Erica Synths", "LXR" and "LXR-02" and their logos are trademarks of Erica Synths. The GPL grants no right to use
-  them. Tack uses them only to say where its code comes from and what it is compatible with.
-- Modified versions must be marked as modified and must not be presented as official Erica Synths software. Tack is
-  a modified version.
-- The LXR hardware, including its front panel and appearance, is the property of Erica Synths and is not covered by
-  any license in this repository.
+- "Erica Synths", "LXR" and "LXR-02" and their logos are trademarks of Erica Synths. The GPL grants no right to use them. Tack uses them only to say where its code comes from and what it is compatible with.
+- Modified versions must be marked as modified and must not be presented as official Erica Synths software. Tack is a modified version.
+- The LXR hardware, including its front panel and appearance, is the property of Erica Synths and is not covered by any license in this repository.
 
-The firmware descends from Julian Schmidt's original LXR firmware, copyright 2013 Julian Schmidt, which Sonic Potions
-published under its own license, in [LICENSES/SonicPotions-LXR.txt](LICENSES/SonicPotions-LXR.txt). That license
-forbids selling the code or using it in a commercial product or activity, requires modified versions to come with
-their complete source, and requires its notice, conditions and disclaimer to come with every copy. The LXR-02
-firmware's release doesn't say how that license relates to the GPL, so Tack keeps to both.
+The firmware descends from Julian Schmidt's original LXR firmware, copyright 2013 Julian Schmidt, which Sonic Potions published under its own license, in [LICENSES/SonicPotions-LXR.txt](LICENSES/SonicPotions-LXR.txt). That license forbids selling the code or using it in a commercial product or activity, requires modified versions to come with their complete source, and requires its notice, conditions and disclaimer to come with every copy. The LXR-02 firmware's release doesn't say how that license relates to the GPL, so Tack keeps to both.
 
 - Tack is free. It is never sold, bundled with anything paid, or offered behind a paywall.
-- Every release comes with its complete source: the repository with fm1-base and felucca-bsp, which the firmware is
-  built from, and the libraries built into the plugin.
-- Every release includes the Sonic Potions license, the GPL and NOTICE.md, the plugin's zips and the firmware's
-  download alike.
+- Every release comes with its complete source: the repository with fm1-base and felucca-bsp, which the firmware is built from, and the libraries built into the plugin.
+- Every release includes the Sonic Potions license, the GPL and NOTICE.md, the plugin's zips and the firmware's download alike.
 
 If you redistribute Tack or build on it, keep to the same terms.
 
-Third-party code in the repository keeps its own license, listed in [NOTICE.md](NOTICE.md#third-party-components). The
-plugin build also fetches the CLAP SDK (MIT), clap-wrapper (MIT), the VST3 SDK (MIT), AudioUnitSDK (Apache 2.0), pugl
-(ISC), Dear ImGui (MIT) and libsamplerate (BSD-2-Clause), and each release includes the licenses of those built into
-its plugins.
+Third-party code in the repository keeps its own license, listed in [NOTICE.md](NOTICE.md#third-party-components). The plugin build also fetches the CLAP SDK (MIT), clap-wrapper (MIT), the VST3 SDK (MIT), AudioUnitSDK (Apache 2.0), pugl (ISC), Dear ImGui (MIT) and libsamplerate (BSD-2-Clause), and each release includes the licenses of those built into its plugins.
 
 ## Credits
 
 Tack is Swedish for **Thank you**.
 
-Tack's sound is the LXR-02's: the voices, the FX bus and the kit format are the work of Sonic Potions and Erica
-Synths. The LXR-02 is Sonic Potions' design, made and sold by Erica Synths, who published its firmware at
-[github.com/erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app), copyright 2012-2026
-Erica Synths. This repository is a fork of it.
+Tack's sound is the LXR-02's: the voices, the FX bus and the kit format are the work of Sonic Potions and Erica Synths. The LXR-02 is Sonic Potions' design, made and sold by Erica Synths, who published its firmware at [github.com/erica-synths/lxr-desktop-app](https://github.com/erica-synths/lxr-desktop-app), copyright 2012-2026 Erica Synths. This repository is a fork of it.
 
-That firmware grew out of the original LXR by Julian Schmidt of Sonic Potions, published at
-[github.com/SonicPotions/LXR](https://github.com/SonicPotions/LXR), and many of its source files still carry his name.
-The Sonic Potions firmware also has code from Rudeog, Patrick Dowling and Andrew Shakinovsky, whom its README thanks.
+That firmware grew out of the original LXR by Julian Schmidt of Sonic Potions, published at [github.com/SonicPotions/LXR](https://github.com/SonicPotions/LXR), and many of its source files still carry his name. The Sonic Potions firmware also has code from Rudeog, Patrick Dowling and Andrew Shakinovsky, whom its README thanks.
 
-Tack's plugin, editor and host code is by oikoaudio, at
-[github.com/oikoaudio/tack](https://github.com/oikoaudio/tack). The VST3 and the Audio Unit are made from the CLAP
-with [clap-wrapper](https://github.com/free-audio/clap-wrapper) by the CLAP team.
+Tack's plugin, editor and host code is by oikoaudio, at [github.com/oikoaudio/tack](https://github.com/oikoaudio/tack). The VST3 and the Audio Unit are made from the CLAP with [clap-wrapper](https://github.com/free-audio/clap-wrapper) by the CLAP team.
 
 VST is a registered trademark of Steinberg Media Technologies GmbH.
