@@ -1,6 +1,8 @@
 # a smaller bank put on the FM-1 leaves PRESET and the morph kit past its end: turning back must lead into it, not say END
 wait 600
 data kits4.bin 770048
+turn PRESET 1                # from the init kit, the bank's first kit: one more is the second
+wait 60
 turn PRESET 1
 wait 60
 turn PRESET 1

@@ -50,7 +50,10 @@ int tack_post_lock(uint8_t voice, uint8_t step, uint16_t param, uint8_t value);
 int tack_post_lock_clear(uint8_t voice, uint8_t step);
 /* A whole kit from the bank: values stays untouched until tack_kit_busy() is 0. The active pattern takes it as its own */
 #define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
+#define TACK_KIT_INIT 0xFEu    /* the init kit: in no slot, and the pattern takes it */
 int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot);
+/* the init kit into the pattern, as a bank kit goes in: 0 when a kit is still on its way */
+int tack_post_init_kit(void);
 int tack_kit_busy(void);
 void tack_view_sync(void);             /* once a frame: tack_get_param follows a kit that went in */
 /* A pattern keeps its own kit with its edits, loaded as the pattern starts, so the bank is where kits come from. One with no steps

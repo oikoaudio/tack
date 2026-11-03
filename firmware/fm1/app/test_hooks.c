@@ -207,6 +207,8 @@ int app_expect(const char *what, int *got)
         *got = tack_locked((uint8_t)ui.voice, (uint8_t)atoi(what + 5));
     else if (!strcmp(what, "kit"))
         *got = ui.kit;
+    else if (!strcmp(what, "kitnow"))         /* the bank's kit playing: slot + 1, 0 the init kit or none */
+        *got = tack_kit_now();
     else if (!strcmp(what, "bar"))
         *got = ui.bar;
     else if (!strcmp(what, "notemode"))

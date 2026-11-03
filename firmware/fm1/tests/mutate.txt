@@ -1,7 +1,9 @@
 # Mutate: firmware/fm1/build/host/tack_host firmware/fm1/tests/mutate.txt OUTDIR
-# verify.sh writes kits.bin here: KITONE with every parameter 40 and KITTWO with every parameter 50, and the bank's second kit is the one PRESET lands on
+# verify.sh writes kits.bin here: KITONE with every parameter 40 and KITTWO with every parameter 50, and two turns of PRESET land on the bank's second kit
 wait 600
 data kits.bin 770048
+turn PRESET 1                # from the init kit, the bank's first kit: one more is the second
+wait 60
 turn PRESET 1
 wait 60
 expect kit 1

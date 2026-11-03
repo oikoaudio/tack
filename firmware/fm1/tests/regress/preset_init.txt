@@ -1,0 +1,41 @@
+# PRESET turned back past the bank's first kit loads the init kit into the pattern, and forward from it is the bank's first
+wait 600
+data kits.bin 770048
+turn PRESET 1
+wait 60
+expect kitnow 1
+expect kitv8 40
+turn PRESET -1
+wait 60
+expect kitnow 0
+expect kitname0 0
+expect kitv8 31
+# already there: another turn back keeps its edits
+turn K1 5
+wait 60
+expect kitv8 36
+turn PRESET -1
+wait 60
+expect kitnow 0
+expect kitv8 36
+# the pattern keeps the init kit: away to pattern 2 and back
+press SEQ
+wait 30
+tapkey 2
+wait 30
+release SEQ
+wait 600
+press SEQ
+wait 30
+tapkey 0
+wait 30
+release SEQ
+wait 600
+expect pattern 0
+expect kitnow 0
+expect kitname0 0
+# forward from it is the bank's first kit again
+turn PRESET 1
+wait 60
+expect kitnow 1
+expect kitv8 40

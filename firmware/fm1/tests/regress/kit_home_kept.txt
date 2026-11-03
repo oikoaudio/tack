@@ -1,5 +1,7 @@
 wait 600
 data kits.bin 770048
+turn PRESET 1                # from the init kit, the bank's first kit: one more is the second
+wait 60
 turn PRESET 1
 wait 60
 expect kit 1

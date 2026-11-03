@@ -67,10 +67,20 @@ static int32_t kit_at_or_below(int32_t i)
     return i;
 }
 
+/* PRESET: the bank's kits, and below the first the init kit, a clean start for a pattern. From the init kit, or a kit in no
+ * slot, forward is the bank's first */
 static void kit_step(int32_t e)
 {
-    const int32_t i = e > 0 ? ui.kit + 1 : kit_at_or_below(ui.kit - 1);
-    if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i)) {
+    const int32_t i = e > 0 ? (tack_kit_now() ? ui.kit + 1 : 0) : kit_at_or_below(ui.kit - 1);
+    if (e < 0 && i < 0) {
+        if (!tack_kit_now() && !ui.kit_name[0])  /* already there: turning on would only throw its edits away */
+            app_say("KITS", "START");
+        else if (!tack_kit_busy() && tack_post_init_kit()) {
+            mark('K');
+            if (!on_home())
+                app_say("KIT", "INIT KIT");
+        }
+    } else if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i)) {
         kit_load(i);
         if (!on_home()) {                        /* HOME has the name */
             char t[9];

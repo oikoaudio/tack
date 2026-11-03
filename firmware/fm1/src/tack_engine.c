@@ -683,6 +683,14 @@ int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot)
     }
     return 1;
 }
+int tack_post_init_kit(void)
+{
+    static uint8_t init[LXR_HOST_NUM_PARAMS];
+    if (kit_pending)                             /* the last one is still being read */
+        return 0;
+    lxr_host_initKit(init);
+    return tack_post_kit(init, 0, TACK_KIT_INIT);
+}
 void tack_view_sync(void)
 {
     if (kit_seen != kit_applied) {             /* the kit is in: the main loop's view follows */
@@ -1695,10 +1703,13 @@ static void kit_load_now(uint8_t slot)
     morph_capture();
     kit_applied++;
     if (slot != TACK_KIT_NO_SLOT) {
-        if (kit_pending_name)
+        const int init = slot == TACK_KIT_INIT;      /* no name and no slot, as on a first start */
+        if (init)
+            memset(kit_name_now, 0, sizeof kit_name_now);
+        else if (kit_pending_name)
             memcpy(kit_name_now, kit_pending_name, sizeof kit_name_now);
-        kit_now = slot + 1;
-        seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(slot + 1u);
+        kit_now = init ? 0 : slot + 1;
+        seq_patternSet.kitNr[seq_activePattern] = (uint8_t)(init ? 0u : slot + 1u);
         kit_keep(seq_activePattern);
         commit_active();
     }

@@ -163,6 +163,8 @@ tap HOME
 wait 40
 
 # a kit loaded under the morph is the new kit on the dials, not the blend
+turn PRESET 1                # from the init kit, the bank's first kit: one more is the second
+wait 60
 turn PRESET 1
 wait 60
 expect kit 1

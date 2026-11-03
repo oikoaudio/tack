@@ -4,6 +4,8 @@ wait 600
 data kits.bin 770048
 
 # a kit picked, an edit to it, and a step: the pattern's
+turn PRESET 1                # from the init kit, the bank's first kit: one more is the second
+wait 60
 turn PRESET 1
 wait 60
 expect kit 1
