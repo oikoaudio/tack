@@ -29,6 +29,7 @@ static void check(bool ok, const char* what, const char* detail = "")
 }
 
 static float textWidth(const char* s) { return ImGui::CalcTextSize(s).x; }
+static float rangeWidth(const char* begin, const char* end) { return ImGui::CalcTextSize(begin, end).x; }
 
 // a overlaps b: they share more than an edge
 static bool overlaps(const Rect& a, const Rect& b)
@@ -70,9 +71,9 @@ static void checkCell(const Box& b, const Cell& c)
 	check(c.kind == kind, "the kind of control", detail);
 
 	// the three bands, in order, inside the cell and the box's padding
-	// BOX_PAD between the rule and the labels, and between the cells and the bottom border
+	// BOX_PAD between the rule and the labels, and between the cells and the bottom edge
 	check(same(c.cell.y - (BOX_PAD + RULE_Y), BOX_PAD) && same(c.cell.h, CELL_H), "the cell BOX_PAD under the rule", detail);
-	check(same(b.rect.h - c.cell.bottom(), BOX_PAD), "the cell BOX_PAD above the bottom border", detail);
+	check(same(b.rect.h - c.cell.bottom(), BOX_PAD), "the cell BOX_PAD above the bottom edge", detail);
 	check(inside(c.cell, BOX_PAD, BOX_PAD, b.rect.w - BOX_PAD, b.rect.h - BOX_PAD), "the cell inside the padding", detail);
 	check(same(c.labelBand.y, c.cell.y) && same(c.labelBand.h, LABEL_H) && same(c.labelBand.w, c.cell.w),
 		"the label band on top", detail);
@@ -94,7 +95,11 @@ static void checkCell(const Box& b, const Cell& c)
 
 	// the text fits
 	const char* label = shortLabel(c.label);
-	check(textWidth(label) <= c.labelBand.w - 2 * TEXT_INSET, "the label fits", detail);
+	check(labelWidth(label, rangeWidth) <= c.labelBand.w - 2 * TEXT_INSET, "the label fits", detail);
+	// a label's words are closer to each other than to its neighbours' (a cell's width less the label's)
+	if(strchr(label, ' '))
+		check(WORD_GAP < textWidth(" ") && WORD_GAP < c.labelBand.w - labelWidth(label, rangeWidth),
+			"the label's words closer than its neighbours", detail);
 	char which[96] = "";
 	switch(c.kind) {
 	case KNOB_CELL: {
@@ -174,6 +179,41 @@ static void checkTab(int pluginVoice, int t, uint8_t fxType)
 	}
 }
 
+// the header: its row clear of the colour band, the tabs under it from margin to margin, and the boxes under those
+static void checkHeader()
+{
+	where = "header";
+	check(HEADER_ROW_Y >= TOP_BAND + GAP - 0.01f, "the header row clear of the colour band");
+	check(same(headerHeight(0), HEADER_ROW_Y + HEADER_ITEM_H + MARGIN), "a voice plugin's boxes MARGIN under the header row");
+	check(same(TABS_Y, HEADER_ROW_Y + HEADER_ITEM_H + GAP), "the tabs GAP under the header row");
+	check(same(headerHeight(-1), TABS_Y + HEADER_ITEM_H + MARGIN), "the boxes MARGIN under the tabs");
+	// the buttons' text is centred by a whole number of units of padding
+	const float pad = (HEADER_ITEM_H - FONT_SIZE) / 2;
+	check(pad >= FRAME_PAD_Y && same(pad, (float)(int)pad), "the header buttons' padding");
+	check(LOGO_ROWS * LOGO_CELL <= HEADER_ITEM_H, "the logo inside the header row");
+	// the whole kit's name goes over the Drum 2 tab, and the logo before it
+	check(textWidth("(no name) *") <= tabRect(1).w - 2 * FRAME_PAD_X, "the kit's name fits over a tab");
+	check(MARGIN + LOGO_W + HEADER_GROUP_GAP <= tabRect(1).x, "the logo before the kit's name");
+	check(textWidth("(no name) *") <= KIT_BUTTON_W - 2 * FRAME_PAD_X, "the kit's name fits its button");
+	check(textWidth("Save") <= HEADER_BUTTON_W - 2 * FRAME_PAD_X, "a voice plugin's Save fits");
+	// over Drum 3 the kit's arrows and Save, over Mix & FX Mutate's two dice, its count and its arrow
+	check(textWidth("Save") <= tabRect(2).w - 2 * (HEADER_ITEM_H + HEADER_ITEM_GAP) - 2 * FRAME_PAD_X, "Save fits over Drum 3");
+	check(2 * DIE + 2 * HEADER_ITEM_GAP + textWidth("99") + 2 * FRAME_PAD_X <=
+		tabRect(LXR_PARAMS_FX_VOICE).w - HEADER_ITEM_GAP - HEADER_ITEM_H, "Mutate fits over Mix & FX");
+	check(DIE <= HEADER_ITEM_H - 2 * FRAME_PAD_Y, "the die inside its button");
+	for(int t = 0; t <= LXR_PARAMS_FX_VOICE; t++) {
+		const Rect r = tabRect(t);
+		check(same(r.y, TABS_Y) && same(r.h, HEADER_ITEM_H), "a tab in the tab row, as high as the header's buttons", tabNames[t]);
+		if(t) check(same(r.x, tabRect(t - 1).right() + GAP) && same(r.w, tabRect(0).w), "tabs of one width GAP apart",
+			tabNames[t]);
+		check(textWidth(tabNames[t]) <= r.w - 2 * TEXT_INSET, "a tab's name fits", tabNames[t]);
+		// room for its name between its top and the line
+		check(HEADER_ITEM_H - TAB_LINE - FONT_SIZE >= 4, "room above and under a tab's name", tabNames[t]);
+	}
+	check(same(tabRect(0).x, MARGIN) && same(tabRect(LXR_PARAMS_FX_VOICE).right(), windowWidth() - MARGIN),
+		"the tabs from margin to margin");
+}
+
 int main()
 {
 	ImGui::CreateContext();
@@ -185,6 +225,7 @@ int main()
 	ImGui::NewFrame();
 	ImGui::PushFont(nullptr, FONT_SIZE);
 
+	checkHeader();
 	int tabs = 0;
 	for(int t = 0; t < LXR_PARAMS_FX_VOICE; t++, tabs++) checkTab(-1, t, 0);
 	for(uint8_t fx = 0; fx <= 5; fx++, tabs++) checkTab(-1, LXR_PARAMS_FX_VOICE, fx);
