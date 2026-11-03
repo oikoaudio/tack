@@ -4,8 +4,14 @@ Tack replaces the firmware of an M-VAVE FM-1 with a seven-voice drum synth and a
 the FM-1's own synth is gone while Tack is on it. The voices, the FX and the sequencer come from the LXR firmware by Sonic
 Potions and Erica Synths, compiled for the FM-1's chip. The panel and the screens are new.
 
-This is a developer preview. [NOTES.md](NOTES.md) says what has run on a real unit and what has only run in the simulator. The
-plugins are in [host/](../../host), and share the engine with this firmware.
+<p>
+<img src="../../docs/images/fm1-overview.png" width="240" alt="Tack on the FM-1, HOME: seven lanes of steps, the selected voice's four main dials, the pattern map and the envelope.">
+<img src="../../docs/images/fm1-note.png" width="240" alt="Tack on the FM-1, NOTE: each step's note as a mark, with its velocity as a grey bar behind it.">
+<img src="../../docs/images/fm1-edit.png" width="240" alt="Tack on the FM-1, EDIT: three rows of dials and pictures for one voice, with the knobs on the middle row.">
+</p>
+
+Tack 0.9 is the first release. It has run on an FM-1 throughout its development. The plugins are in [host/](../../host)
+and share the engine with this firmware.
 
 | | |
 |---|---|
@@ -59,7 +65,7 @@ the computer, as a hub can stop it reconnecting during an install.
 | `fm1 restore NAME` | Puts both back, after the FM-1 asks |
 | `fm1 log` | Reads the crash log |
 
-Saved patterns only load on a build with the same pattern format, until the first release fixes one.
+Saved patterns load only on a build with the same pattern format.
 
 ## Test
 

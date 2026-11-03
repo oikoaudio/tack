@@ -4,7 +4,8 @@
 
 - **Compiled:** the JieLi toolchain built it and fm1-base's image checks passed.
 - **Simulator-tested:** it ran on this computer, in fm1-base's host simulator or a test program.
-- **Hardware-tested:** installing, booting, sound, kit upload and kit switching, on one FM-1 on 2026-11-01.
+- **Hardware-tested:** it ran on one FM-1. The first check, on 2026-11-01, covered installing, booting, sound and the kit
+  bank. Every page has been in use on the unit since.
 
 ## Architecture
 
@@ -117,7 +118,7 @@ Compiled, not tested on their own:
 - TRS MIDI, which comes from the platform.
 - MIDI out from the sequencer, and recording from the keys through the event queue.
 
-Simulator-tested in this round, not yet on a device:
+Simulator-tested in this round, and in use on the unit since:
 
 - The screen shows all seven lanes at once, with their lengths, playheads, mutes and lock marks.
 - Lane length per voice, for polyrhythms.
@@ -127,7 +128,7 @@ Simulator-tested in this round, not yet on a device:
   test fails, so it catches that mistake. A lock in place when the sequencer stops stays in the engine until the lane's
   next step, as on the LXR.
 
-Compiled and simulator-tested, not yet on a device: the FX page, the sound pages, the settings page, patterns on SEQ, and
+Compiled and simulator-tested, and in use on the unit since: the FX page, the sound pages, the settings page, patterns on SEQ, and
 the xrun tag. `lock_test.sh` drives each through the real engine: a sent voice gets a delay tail and an unsent one none, mix
 0 removes the tail, each FX setting changes the output, a lock reaches a parameter above 127, and all 256 page slots step,
 clamp and render at both ends.
@@ -162,7 +163,7 @@ USB audio's 10 channels: run on the unit. Linux took 10 channels, and 6 s of a r
 
 The silent packets from RAM, first on the unit on 2026-11-03: the loop came back. Tack in 10 CH, its PipeWire node (Pro Audio) following a Babyface at quantum 512, Bitwig on its native backend with the FM-1 as its clock. Bitwig drove the FM-1 by MIDI clock, then a stop and a SAVE, and from then PipeWire restarted the capture every cycle, 86 errors a second, each restart finding about 180 frames delivered against 512 read. The FM-1's own outputs stayed clean, the kernel kept measuring 44,100 Hz and logged no USB errors, and restarting Bitwig recovered. So during a save the stream still falls short, or a write outside the pump's reach still stops packets: `DROPS` on GLO (OCT+ held) after a save tells which. The manual says saving while streaming is experimental. Root cause: github.com/oikoaudio/tack/issues/1.
 
-Compiled and simulator-tested, not yet on a device: the three row pages and voice colours, recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
+Compiled and simulator-tested, and in use on the unit since: the three row pages and voice colours, recurrence, the list of locks, chains, the SONG page, pattern select over MIDI, the key lights, the larger pages, and NOTE mode.
 
 Known omissions:
 
