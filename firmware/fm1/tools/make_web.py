@@ -116,8 +116,9 @@ def kits(conf):
 
 
 def demo(out):
-    """the browser build, which starts with the demo pattern. It is one saved object, as what else a backup holds is not all
-    ours to publish, and a page keeps a visitor's own saves"""
+    """the browser build, which starts with the demo: site/demo_pattern.bin as pattern 1, site/demo_settings.bin (the tempo)
+    and the kits in site/demo_kits/ in their bank slots, where the pattern morphs to one. Only those, as what else a backup
+    holds is not all ours to publish, and only on a first visit, as a page keeps a visitor's own saves"""
     emu = APP / "build" / "emu"
     if not (emu / "app.wasm").exists():
         raise SystemExit("make_web: no build/emu: build.py firmware/fm1 --web first")

@@ -77,7 +77,7 @@ Before publishing:
 3. A release build from the commit that gets tagged. After a long session on it, `PEAK` and `XRUN` on GLO and a clean `fm1 log`. The firmware allocates nothing, so there is no leak for an hour's soak to find.
 4. Fill in the manual again after any panel changes.
 
-`/tack/fm1/try/` is the firmware in the browser, from `build.py firmware/fm1 --web`, which needs Emscripten. It is fm1-base's page, and `site/demo_pattern.bin` starts it on a groove: pattern 1 alone, with its own kit, written into the page's saves if the visitor has none. A change of pattern format needs that file saved again, and `make_web.py` stops until it is.
+`/tack/fm1/try/` is the firmware in the browser, from `build.py firmware/fm1 --web`, which needs Emscripten. It is fm1-base's page, and `site/demo_pattern.bin` starts it on a groove: pattern 1 alone, with its own kit, written into the page's saves if the visitor has none. `site/demo_settings.bin` brings its tempo, and `site/demo_kits/` the kits it needs from the bank, named by slot as `fm1_kits.py --save` names them: the demo, BUD, morphs to BLOOM in slot 40, and the page puts both in the browser's bank before the app boots (`web.c`). The demo's kits must be our own: both came out of `kitgen.py` and repeat at most 17% of any pack kit's choices. A change of pattern format needs the pattern saved again, and `make_web.py` stops until it is.
 
 `/tack/fm1/kits/` fills the kit bank and saves it to a `.zip`, from `site/kits_*`. Link to kits, don't host them: none of
 the three kit archives here has a licence file. It picks kits as `tools/fm1_kits.py` does, except that a `.snd` that isn't 255
