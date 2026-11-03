@@ -152,7 +152,7 @@ build/mac/clap_render build/mac/Tack.clap out.wav
 A release starts from a tag on main that matches the version in `host/CMakeLists.txt`:
 
 ```sh
-git tag v0.9.1 && git push origin v0.9.1
+git tag v0.10.0 && git push origin v0.10.0
 ```
 
 `.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release with the zips and `SHA256SUMS`. Nothing is published until the draft is, and the draft is not a pre-release, so publishing it makes it the latest release. Locally, `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DTACK_PACKAGE_PLATFORM=linux-x86_64` and the `package_tack` target build the same zip: the plugins, the READMEs, the licence and every licence of a library linked into them.
