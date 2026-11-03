@@ -1,11 +1,23 @@
 # Tack
 
-Tack is a drum synth for desktop computers, built as CLAP, VST® 3 and Audio Unit plugins by oikoaudio. It runs the
-sound engine of the LXR-02 drum machine by Sonic Potions and Erica Synths. Tack is a modified version of that
-firmware's sound engine. The engine code in `Core/Src/Soundengine` is the firmware's, changed only by a few bug fixes,
-and Tack adds the plugins, their editor and the code that runs the engine on a computer.
+Tack is a digital drum synth with seven voices, in two forms: CLAP, VST® 3 and Audio Unit plugins for your DAW, and
+firmware for the M-VAVE FM-1, with a step sequencer. Its sound engine is the LXR-02 firmware by Sonic Potions and
+Erica Synths, which Tack extends. The engine code under `Core/` is the firmware's, with the fixes and additions listed
+in [Changes to the firmware](#changes-to-the-firmware). Tack adds the plugins and their editor, the FM-1 firmware and
+the code that runs the engine on a computer. It is made by oikoaudio.
 
-Tack is not affiliated with or endorsed by Erica Synths or Sonic Potions.
+[Website](https://oikoaudio.com/tack/) · [Try the FM-1 firmware in a browser](https://oikoaudio.com/tack/fm1/try/) ·
+[Install it on an FM-1](https://oikoaudio.com/tack/fm1/install/) · [Plugin downloads](https://github.com/oikoaudio/tack/releases)
+
+<p><img src="docs/images/plugin-editor.png" width="912" alt="The Tack plugin's editor: a tab per voice, with boxes of dials for the oscillator, FM, transient, filter, envelopes, mix and LFO."></p>
+
+<p>
+<img src="docs/images/fm1-overview.png" width="240" alt="Tack on the FM-1, HOME: seven lanes of steps, the selected voice's four main dials, the pattern map and the envelope.">
+<img src="docs/images/fm1-note.png" width="240" alt="Tack on the FM-1, NOTE: each step's note as a mark, with its velocity as a grey bar behind it.">
+<img src="docs/images/fm1-edit.png" width="240" alt="Tack on the FM-1, EDIT: three rows of dials and pictures for one voice, with the knobs on the middle row.">
+</p>
+
+Tack is not affiliated with or endorsed by Erica Synths, Sonic Potions or M-VAVE.
 
 ## Plugins
 
