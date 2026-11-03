@@ -35,6 +35,9 @@ tool mutate_test >/dev/null
 tool lfo_test >/dev/null
 tool outputs_test >/dev/null
 
+step "editor layout"
+tool layout_test
+
 # what a host and a saved project see: an id or a range that moves should be a decision
 step "parameter list"
 tool list_params | tr -d '\r' | diff "$(dirname "$0")/params.snapshot" -
@@ -54,9 +57,10 @@ for id in com.oikoaudio.tack com.oikoaudio.tack.drum com.oikoaudio.tack.snare co
 done
 
 # the state should bring back everything a render depends on
+# and the outputs switch with it: Individual puts the voices on outputs of their own
 step "state round trip"
-tool clap_render "$plugin" "$out/s1.wav" 48000 -p "$out/b.snd" 37=70 1000=1 >/dev/null
-tool clap_render "$plugin" "$out/s2.wav" 48000 -p "$out/b.snd" 37=70 1000=1 -s >/dev/null
+tool clap_render "$plugin" "$out/s1.wav" 48000 -p "$out/b.snd" 37=70 -o >/dev/null
+tool clap_render "$plugin" "$out/s2.wav" 48000 -p "$out/b.snd" 37=70 -o -s | tr -d '\r' | grep -q "^sound on [2-7] outputs$"
 cmp "$out/s1.wav" "$out/s2.wav"
 
 if [ -d "$build/Tack.vst3" ]; then

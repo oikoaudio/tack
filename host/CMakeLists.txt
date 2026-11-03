@@ -231,7 +231,8 @@ if(LXR_HOST_CLAP)
     FetchContent_MakeAvailable(clap-wrapper)
 
     # Tack's own code, linked into every format
-    add_library(tack_plugin OBJECT clap/tack.c clap/presets.c clap/engine.c clap/gui.cpp clap/wrapper_info.cpp)
+    add_library(tack_plugin OBJECT clap/tack.c clap/presets.c clap/engine.c clap/gui.cpp clap/layout.cpp
+        clap/wrapper_info.cpp)
     target_compile_options(tack_plugin PRIVATE ${TACK_WARNINGS})
     target_link_libraries(tack_plugin PUBLIC lxr_engine clap tack_gui_deps clap-wrapper-extensions)
     target_compile_definitions(tack_plugin PRIVATE TACK_VERSION="${PROJECT_VERSION}")
@@ -492,6 +493,11 @@ if(LXR_HOST_CLAP)
     # test host; it links its own copy of the engine, which also checks that the plugin's copy stays separate
     add_executable(clap_render tools/clap_render.c)
     target_link_libraries(clap_render PRIVATE lxr_engine clap ${CMAKE_DL_LIBS})
+
+    # the editor's layout against its spec (clap/layout.h), measured with the editor's font
+    add_executable(layout_test tools/layout_test.cpp clap/layout.cpp)
+    target_compile_options(layout_test PRIVATE ${TACK_WARNINGS})
+    target_link_libraries(layout_test PRIVATE lxr_engine tack_gui_deps)
 
     # its window is a plain pugl view, on every platform
     add_executable(gui_test tools/gui_test.c)
