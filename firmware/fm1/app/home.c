@@ -11,7 +11,10 @@ static void outline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, uint1
 
 #define GRID_FLOOR 3                      /* the height of a step at the lowest velocity */
 #define C_HEAD RGB(96, 98, 108)           /* the playhead's cell, with a hit white on it at its velocity */
-#define C_BEAT RGB(46, 48, 58)            /* a cell on the beat: the bar reads at a glance */
+/* The panel lifts dark tones well above what a screenshot shows, so what only says "a step is here" sits near black */
+#define C_CELL RGB(16, 16, 20)            /* an empty step */
+#define C_BEAT RGB(28, 29, 36)            /* an empty step on the beat: the bar reads at a glance */
+#define C_EMPTY RGB(40, 41, 48)           /* a pattern with no steps: an outline */
 
 /* every lane on one page: a row each, marked in its voice's colour and the selected lane in full, the page's steps. A step's
  * height is its velocity. Past a lane's end there is nothing */
@@ -34,7 +37,7 @@ static void draw_grid(void)
             }
             const int on = tack_step_on((uint8_t)v, (uint8_t)s);
             const int rest = on && (muted || tack_recur_skips((uint8_t)v, (uint8_t)s));   /* grey: not this pass */
-            cv_rect(x, y, GRID_CELL - 2, GRID_ROW - 2, s == head ? C_HEAD : i % 4u ? C_LINE : C_BEAT);
+            cv_rect(x, y, GRID_CELL - 2, GRID_ROW - 2, s == head ? C_HEAD : i % 4u ? C_CELL : C_BEAT);
             if (on) {
                 const int32_t h = GRID_FLOOR + (GRID_ROW - 2 - GRID_FLOOR) * tack_step_get((uint8_t)v, (uint8_t)s, TACK_ST_VEL) / 127;
                 cv_rect(x, y + GRID_ROW - 2 - h, GRID_CELL - 2, h, s == head ? C_WHITE : rest ? C_GRAY : VOICE_COLOUR[v]);
@@ -56,7 +59,8 @@ static void draw_grid(void)
 #define KNOBS_H 36
 #define BOTTOM_Y (KNOBS_Y + KNOBS_H)
 #define BOTTOM_H (240 - BOTTOM_Y)
-#define GRAPH_X EDGE
+static int32_t graph_x = EDGE;            /* HOME puts it under its last two dials */
+#define GRAPH_X graph_x
 #define GRAPH_TOP HOME_GAP
 #define GRAPH_H 50
 #define GRAPH_W (240 - 2 * EDGE)
@@ -306,11 +310,14 @@ static const TackSlot *target_slot(void)
 #define SONG_CELLS 16
 static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS; }
 
-/* The overview's bottom right, beside the envelope: the sixteen patterns as two rows of the white keys, and what picks the next */
-#define HOME_X 122                       /* the third knob's cell: the envelope is under the first two, this under the last two */
+/* The overview's bottom left: the sixteen patterns as two rows of the white keys, and what picks the next. The envelope
+ * is to the right, under DECAY and VOLUME, the dials that shape it */
+#define HOME_X EDGE
+#define HOME_ENV_X 122                   /* the third dial's cell */
+#define HOME_MAP_W (HOME_ENV_X - 4 - EDGE)
 #define HOME_CELL 11
 #define HOME_CELL_H 20
-#define HOME_ENV_W (HOME_X - 4 - EDGE)
+#define HOME_ENV_W (240 - EDGE - HOME_ENV_X)
 #define HOME_TOP 8                        /* the map's title sits on the map, and the envelope starts level with it */
 #define HOME_ENV_H (BOTTOM_H - HOME_TOP - HOME_GAP)
 #define HOME_MAP_Y (GRAPH_TOP + 18)       /* under its title, and ending where the envelope does */
@@ -322,8 +329,11 @@ static void draw_home_info(uint32_t used)
     const int now = tack_pattern(), next = tack_pattern_next(), mode = tack_song_mode();
     char t[16];
     for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
-        const int32_t x = HOME_X + (int32_t)(p % 8u) * (240 - EDGE - HOME_X - HOME_CELL) / 7, y = HOME_MAP_Y + (int32_t)(p / 8u) * (HOME_CELL_H + 4);
-        cv_rect(x, y, HOME_CELL, HOME_CELL_H, (int)p == now ? C_HI : used >> p & 1u ? C_GRAY : C_LINE);
+        const int32_t x = HOME_X + (int32_t)(p % 8u) * (HOME_MAP_W - HOME_CELL) / 7, y = HOME_MAP_Y + (int32_t)(p / 8u) * (HOME_CELL_H + 4);
+        if ((int)p == now || used >> p & 1u)
+            cv_rect(x, y, HOME_CELL, HOME_CELL_H, (int)p == now ? C_HI : C_GRAY);
+        else
+            outline(x, y, HOME_CELL, HOME_CELL_H, 1, C_EMPTY);
         if ((int)p == next)
             outline(x, y, HOME_CELL, HOME_CELL_H, 1, C_WHITE);
     }
@@ -345,7 +355,7 @@ static void draw_home_info(uint32_t used)
             int_text(now + 1, t + 1);
         }
     }
-    cv_text(240 - EDGE - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, next >= 0 ? C_WHITE : C_GRAY);
+    cv_text(HOME_X + HOME_MAP_W - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, next >= 0 ? C_WHITE : C_GRAY);
 }
 
 /* a lane's direction, 9 wide and 7 high */
@@ -353,14 +363,6 @@ static void dir_arrow(int32_t x, int32_t y, int back, uint16_t c)
 {
     for (int32_t i = 0; i < 4; i++)
         cv_rect(back ? x + 3 - i : x + i, y + i, 1, 7 - 2 * i, c);
-}
-
-/* shuffle: three beats, the middle one late. 9 wide and 7 high */
-static void shuffle_glyph(int32_t x, int32_t y, uint16_t c)
-{
-    cv_rect(x, y, 1, 7, c);
-    cv_rect(x + 5, y, 1, 7, c);
-    cv_rect(x + 8, y, 1, 7, c);
 }
 
 /* drawn only when it would change: it is the largest strip on a screen that redraws on every step */
@@ -443,6 +445,7 @@ static void draw_bottom(void)
 
     cv_begin(240, BOTTOM_H, C_BLACK);
     graph_w = home_info() ? HOME_ENV_W : GRAPH_W;
+    graph_x = home_info() ? HOME_ENV_X : EDGE;
     graph_h = home_info() ? HOME_ENV_H : GRAPH_H;
     graph_top = home_info() ? HOME_TOP : GRAPH_TOP;
     if (0) {

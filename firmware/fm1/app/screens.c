@@ -396,7 +396,7 @@ static void pg_song_rows(uint32_t line, uint32_t *last)
 #define VV_BOX 62
 #define VV_BAR 46
 #define VV_FOOT (2 + VV_BOX)                     /* below the box */
-#define C_STEP RGB(16, 17, 21)                   /* a box: only enough to say a step is there */
+#define C_VEL_BEHIND RGB(54, 54, 61)             /* NOTE's velocity, behind the note: under VEL SHAPE's C_DIM, over the floor's C_LINE */
 
 /* NOTE's steps stand on the octave of the lowest note in the bar, three octaves to the height of a box */
 static int note_low(void)
@@ -419,9 +419,7 @@ static void vv_cell(int s, int32_t x, int len, int head, int low)
         cv_rect(x + VV_W / 2 - 1, VV_H / 2, 2, 3, C_DIM);
         return;
     }
-    if (!note_view() || tack_step_on(v, st))   /* NOTE is about the steps there are: an empty one is only a line to land on */
-        cv_rect(x, 2, VV_W, VV_BOX, C_STEP);
-    cv_rect(x, VV_FOOT - 2, VV_W, 2, C_LINE);
+    cv_rect(x, VV_FOOT - 2, VV_W, 2, C_LINE);  /* a step there is: its floor is all that marks it, as any backdrop shows grey on the unit */
     if (tack_step_on(v, st)) {
         const int vel = tack_step_get(v, st, TACK_ST_VEL), nudge = tack_step_get(v, st, TACK_ST_NUDGE);
         const int chance = tack_step_get(v, st, TACK_ST_PROB), flam = tack_step_get(v, st, TACK_ST_FLAM);
@@ -432,6 +430,7 @@ static void vv_cell(int s, int32_t x, int len, int head, int low)
         if (note_view()) {
             const int note = tack_step_get(v, st, TACK_ST_NOTE);
             const int32_t rise = clamp((note - low) * VV_BAR / 36, 0, VV_BAR - 4);
+            cv_rect(x, VV_FOOT - 4 - h, VV_W, h, C_VEL_BEHIND);   /* the accents with the line: velocity as STEP draws it */
             cv_rect(x + 1, VV_FOOT - 8 - rise, VV_W - 2, 4, tone);
             note_text(note, t);
             cv_text(x + VV_W / 2 - text_w(&FONT_XS, t) / 2, 4, &FONT_XS, t, C_WHITE);

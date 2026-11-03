@@ -53,10 +53,14 @@ static const char *const SEND_NAME[TACK_FX_SENDS] = {"D1", "D2", "D3", "SN", "CY
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 /* each kind of voice has a colour, as in the desktop editor: red drums, orange snare, yellow cymbal, cream hi-hats.
  * It always means which voice; grey is structure, and the theme's colour is for values */
-#define EDGE 4                                   /* the screen's margin, both sides */
+/* Type comes in three sizes. FONT_B is what is read at a glance or being changed: the kit, the pattern, the tempo, a page's title,
+ * the value under a dial as it turns. FONT_S is a page's dial labels and values, and HOME's title. FONT_XS is state and help: REC,
+ * SW, FX, NEXT and hints. Sizes on one line share a baseline: FONT_XS goes 1 pixel below FONT_B's y */
+#define EDGE 4                                  /* the screen's margin, both sides */
+#define TOP_LINE 4                              /* where a screen's top line of letters starts, as EDGE is the sides: FONT_B goes at 2 less,
+                                                   FONT_XS at 3 less to start there too, or at 1 less to share FONT_B's baseline */
 #define CELL_W 55                                /* the dials' four cells, EDGE to EDGE with gaps of 4 */
 #define CELL_X(i) (EDGE + (int32_t)(i) * (CELL_W + 4))
-#define C_ROW RGB(52, 54, 64)                    /* what marks the dials: row_cells */
 static const uint16_t VOICE_COLOUR[TACK_VOICES] = {RGB(224, 66, 52), RGB(224, 66, 52), RGB(224, 66, 52), RGB(240, 125, 36),
                                                      RGB(242, 194, 61), RGB(237, 230, 212), RGB(237, 230, 212)};
 enum { KEY_ROLL = TACK_VOICES, KEY_MORPH = TACK_VOICES + 2, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices */
@@ -429,31 +433,34 @@ static void draw(void)
         char to[9];
         const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
         morph_name(to);
-        cv_text(EDGE, 0, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);
-        cv_text(110 - text_w(&FONT_XS, to), 0, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
-        cv_rect(EDGE, 16, 106, 2, C_LINE);
-        cv_rect(EDGE + tack_morph() * 100 / 127, 14, 6, 6, C_HI);
+        cv_text(EDGE, TOP_LINE - 3, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);   /* their tops level with P1's */
+        cv_text(110 - text_w(&FONT_XS, to), TOP_LINE - 3, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
+        cv_rect(EDGE, TOP_LINE + 13, 106, 2, C_LINE);
+        cv_rect(EDGE + tack_morph() * 100 / 127, TOP_LINE + 11, 6, 6, C_HI);
     } else {
-        cv_text(EDGE, 4, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
+        cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
     }
     t[0] = 'P';
     int_text(tack_pattern() + 1, t + 1);
-    cv_text(150, 4, &FONT_B, t, tack_running() ? C_HI : C_GRAY);
+    cv_text(146, TOP_LINE - 2, &FONT_B, t, tack_running() ? C_HI : C_GRAY);
+    const int32_t after_p = 146 + text_w(&FONT_B, t) + 4;
     if (tack_running())
-        dir_arrow(138, 8, 0, C_HI);
+        dir_arrow(134, TOP_LINE + 2, 0, C_HI);
     else
-        cv_rect(138, 9, 6, 6, C_GRAY);
+        cv_rect(134, TOP_LINE + 3, 6, 6, C_GRAY);
     if (tack_recording())
-        cv_text(114, 7, &FONT_XS, "REC", REC_RED);
+        cv_text(112, TOP_LINE - 1, &FONT_XS, "REC", REC_RED);
     int_text(tack_bpm(), t);
-    cv_text(240 - EDGE - text_w(&FONT_B, t), 4, &FONT_B, t, C_HI);
+    const int32_t bpm_x = 240 - EDGE - text_w(&FONT_B, t);
+    cv_text(bpm_x, TOP_LINE - 2, &FONT_B, t, C_HI);
     if (tack_shuffle()) {                      /* none is nothing to say */
-        shuffle_glyph(172, 9, C_GRAY);
+        /* next to the tempo it shapes, unless that would reach P10 to P16. Small text 1 lower sits on their baseline */
         int_text(tack_shuffle(), t);
-        cv_text(184, 7, &FONT_XS, t, C_WHITE);
+        const int32_t sw_w = text_w(&FONT_XS, "SW") + 2 + text_w(&FONT_XS, t);
+        const int32_t sw_x = bpm_x - 6 - sw_w > after_p ? bpm_x - 6 - sw_w : after_p;
+        cv_text(sw_x, TOP_LINE - 1, &FONT_XS, "SW", C_GRAY);
+        cv_text(sw_x + text_w(&FONT_XS, "SW") + 2, TOP_LINE - 1, &FONT_XS, t, C_WHITE);
     }
-    if (tack_ext_sync())
-        cv_text(92, 7, &FONT_XS, "EXT", C_GRAY);
     if (ui.touched_until && ui.touched) {        /* the parameter in hand, large */
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
@@ -479,13 +486,7 @@ header_done:
     draw_grid();
     if (ui.over)
         goto strip_done;
-    cv_begin(240, KNOBS_H, C_BLACK);
-    {
-        uint32_t dials = 0;
-        for (i = 0; i < TACK_NP; i++)
-            dials |= (uint32_t)(slot(i) != 0) << i;
-        row_cells(dials, 0, KNOBS_H);
-    }
+    cv_begin(240, KNOBS_H, C_BLACK);             /* nothing marks HOME's dials: they are always K1 to K4, and the value bars line them up */
     for (i = 0; i < TACK_NP; i++) {
         const TackSlot *sl = slot(i);
         const int32_t x = CELL_X(i) + 5;

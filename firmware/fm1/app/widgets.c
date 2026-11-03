@@ -11,22 +11,8 @@
 #define PG_PH 55                         /* a picture's height, its label under it */
 #define PG_TEXT RGB(186, 186, 192)       /* a label on a row the dials are not on: as bright as still reads as quiet */
 
-/* What marks the dials, one to a dial and left to right. Bit i is dial i, and a dial with nothing to do has none. A row of words has a
- * cell around each. A row of pictures has a line under each label, as a picture may belong to more than one dial */
-static void row_cells(uint32_t dials, int32_t y, int32_t h)
-{
-    for (int32_t i = 0; i < (int32_t)TACK_NP; i++) {
-        const int32_t x = CELL_X(i), w = CELL_W;
-        if (!(dials >> i & 1u))
-            continue;
-        cv_rect(x + 2, y, w - 4, 1, C_ROW);
-        cv_rect(x + 1, y + 1, w - 2, 1, C_ROW);
-        cv_rect(x, y + 2, w, h - 4, C_ROW);
-        cv_rect(x + 1, y + h - 2, w - 2, 1, C_ROW);
-        cv_rect(x + 2, y + h - 1, w - 4, 1, C_ROW);
-    }
-}
-
+/* On a page, a line under each label marks the row the dials are on, one to a dial and left to right. Bit i is dial i, and a dial with
+ * nothing to do has none. HOME has one row, always the dials', so nothing marks it */
 static void row_lines_at(uint32_t dials, int32_t y, uint16_t c)
 {
     for (int32_t i = 0; i < (int32_t)TACK_NP; i++)
