@@ -27,7 +27,7 @@
 static const TackEngine engine =
 {
 	lxr_host_init, lxr_host_loadKit, lxr_host_setParam, lxr_host_getParam, lxr_host_setOutputRate, lxr_host_latency,
-	lxr_host_queueNoteOn, lxr_host_queueParam, lxr_host_queueSeparateOutputs, lxr_host_setSeparateOutputs,
+	lxr_host_queueNoteOn, lxr_host_queueParam, lxr_host_setSeparateOutputs,
 	lxr_host_setSoloVoice, lxr_host_setTempo, lxr_host_outChannels, lxr_host_process, lxr_host_shutdown,
 };
 

@@ -159,9 +159,10 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
 - **Outputs:** seven stereo outputs: Main, Drum 1, Drum 2, Drum 3, Snare, Cymbal and Hi-hat. Each voice's Output is
   Direct or FX: it plays as it is, or goes through the FX bus. The bus works as on the device, a group bus with an
   insert: the voices routed to it are summed and processed together, and the bus plays on Main. The "Outputs"
-  switch, on the Mix & FX page, decides where Direct voices go: with "Stereo" (the default) to Main, so everything
-  is there, with "Individual" to their own outputs, panned, leaving Main with only the voices that go through the
-  FX. Both settings sum to the same mix. The switch is saved with the project, not with kits, and isn't automatable.
+  switch, in the Master box on the Mix & FX page, decides where Direct voices go: with "Stereo" (the default) to
+  Main, so everything is there, with "Individual" to their own outputs, panned, leaving Main with only the voices
+  that go through the FX. Both settings sum to the same mix. The switch is saved with the project, not with kits.
+  It isn't a host parameter, so the host has no automation or undo for it.
   With "Stereo" only Main is resampled to the host's rate, which halves Tack's CPU use (about 1.3% of one core
   here, against 2.8% with "Individual"). Switching to "Individual" while playing starts resampling the voices'
   outputs from that moment, so they can be up to half an engine sample (11 µs) off Main until the project is
@@ -324,7 +325,7 @@ Windows build). `make_kit out.snd NAME [param=value ...]` writes the test kits i
 A release starts from a tag on main that matches the version in `host/CMakeLists.txt`:
 
 ```sh
-git tag v0.9.0 && git push origin v0.9.0
+git tag v0.9.1 && git push origin v0.9.1
 ```
 
 `.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release

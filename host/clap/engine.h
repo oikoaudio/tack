@@ -25,7 +25,6 @@ typedef struct
 	uint32_t (*latency)(void);
 	void (*queueNoteOn)(uint32_t frame, uint8_t voice, uint8_t note, uint8_t vel);
 	void (*queueParam)(uint32_t frame, uint16_t param, uint8_t value);
-	void (*queueSeparateOutputs)(uint32_t frame, bool on);
 	void (*setSeparateOutputs)(bool on);
 	void (*setSoloVoice)(int voice);
 	void (*setTempo)(double bpm);

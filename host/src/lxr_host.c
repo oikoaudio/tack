@@ -177,7 +177,7 @@ void lxr_host_renderBlockSeparate(int16_t voices[LXR_HOST_NUM_VOICE_OUTS][OUTPUT
 
 #define QUEUE_SIZE 1024
 
-enum { EVENT_NOTE_ON, EVENT_PARAM, EVENT_SEPARATE_OUTPUTS };
+enum { EVENT_NOTE_ON, EVENT_PARAM };
 
 typedef struct
 {
@@ -202,10 +202,8 @@ static void applyEvent(const Event* e)
 {
 	if(e->type == EVENT_NOTE_ON)
 		lxr_host_noteOn(e->target, e->note, e->value);
-	else if(e->type == EVENT_PARAM)
-		lxr_host_setParam(e->target, e->value);
 	else
-		separateOutputs = e->value;
+		lxr_host_setParam(e->target, e->value);
 }
 
 static void schedule(uint32_t frame, uint8_t type, uint16_t target, uint8_t value, uint8_t note)
@@ -231,11 +229,6 @@ void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t note, uint8_t v
 void lxr_host_queueParam(uint32_t frame, uint16_t param, uint8_t value)
 {
 	schedule(frame, EVENT_PARAM, param, value, 0);
-}
-
-void lxr_host_queueSeparateOutputs(uint32_t frame, bool on)
-{
-	schedule(frame, EVENT_SEPARATE_OUTPUTS, 0, on, 0);
 }
 
 void lxr_host_setSoloVoice(int voice)

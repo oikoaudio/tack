@@ -71,7 +71,7 @@ typedef struct
 /** Plugin parameter id of a voice plugin's chromatic switch, shown as a keyboard in the editor. */
 #define TACK_GUI_CHROMATIC_ID 1001
 
-/** Plugin parameter id of the outputs switch (0 stereo, 1 individual), which the editor also shows. */
+/** Id of the outputs switch (0 stereo, 1 individual), the editor's own setting: the host doesn't list it. */
 #define TACK_GUI_SEPARATE_OUTPUTS_ID 1000
 
 /**
