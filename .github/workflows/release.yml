@@ -92,8 +92,6 @@ jobs:
           cd dist
           sha256sum *.zip *.tar.gz > SHA256SUMS
           cat SHA256SUMS
-          # 0.x versions are alpha: no promise that saved projects load in later versions
-          prerelease=""
-          case "$GITHUB_REF_NAME" in v0.*) prerelease=--prerelease ;; esac
-          gh release create "$GITHUB_REF_NAME" --draft $prerelease --verify-tag \
+          # Not a pre-release, even for 0.x: the READMEs and the site link to /releases/latest, which skips them
+          gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
             --title "Tack ${GITHUB_REF_NAME#v}" --generate-notes *.zip *.tar.gz SHA256SUMS

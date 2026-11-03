@@ -1,13 +1,19 @@
 {
   "_comment": "What the GitHub repository should look like. host/tools/github-settings.py compares it with GitHub and, with --apply, makes GitHub match. Edit here, not in the web interface.",
   "repository": {
-    "description": "Drum synth plugins (CLAP) running the sound engine of the LXR-02 by Sonic Potions and Erica Synths. Not affiliated with either.",
-    "homepage": "https://www.oikoaudio.com",
+    "description": "A digital drum synth: firmware for the M-VAVE FM-1, and CLAP, VST3 and Audio Unit plugins.",
+    "homepage": "https://oikoaudio.com/tack/",
     "topics": [
-      "clap",
       "drum-synth",
-      "audio-plugin",
+      "drum-machine",
       "synthesizer",
+      "step-sequencer",
+      "audio-plugin",
+      "clap",
+      "vst3",
+      "audio-unit",
+      "firmware",
+      "m-vave-fm1",
       "lxr"
     ],
     "has_issues": true,
@@ -107,6 +113,10 @@
             "required_status_checks": [
               {
                 "context": "Linux",
+                "integration_id": 15368
+              },
+              {
+                "context": "Linux, sanitizers",
                 "integration_id": 15368
               },
               {
