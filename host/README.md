@@ -325,7 +325,7 @@ Windows build). `make_kit out.snd NAME [param=value ...]` writes the test kits i
 A release starts from a tag on main that matches the version in `host/CMakeLists.txt`:
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.9.0 && git push origin v0.9.0
 ```
 
 `.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release
