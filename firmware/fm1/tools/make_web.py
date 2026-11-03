@@ -164,8 +164,11 @@ def main(version, web):
     shutil.copy(source, firmware / package)
     shutil.copy(ROOT / "LICENSE", firmware / "LICENSE.txt")
     shutil.copy(ROOT / "NOTICE.md", firmware / "NOTICE.md")
-    for text in sorted((BASE / "LICENSES").glob("*.txt")):
-        shutil.copy(text, firmware / text.name)
+    for text in sorted((ROOT / "LICENSES").glob("*.txt")) + sorted((BASE / "LICENSES").glob("*.txt")):
+        shutil.copy(text, firmware / text.name)      # the original LXR licence wants its notice with every copy too
+    (firmware / "SOURCE.txt").write_text(            # GPL section 6 and the original LXR licence: where the source is
+        f"The complete source of {package}, including fm1-base and felucca-bsp, is the release's source archive:\n"
+        f"{conf['repo']}/releases/tag/v{version}\n", encoding="utf-8")
 
     install_body, install_js = installer(conf, version, product, package)
     backup_body, backup_js = backup(conf)

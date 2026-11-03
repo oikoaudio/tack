@@ -159,8 +159,10 @@ their complete source, and requires its notice, conditions and disclaimer to com
 firmware's release doesn't say how that license relates to the GPL, so Tack keeps to both.
 
 - Tack is free. It is never sold, bundled with anything paid, or offered behind a paywall.
-- Every release comes with its complete source, including the source of the libraries built into the plugin.
-- Every release includes the Sonic Potions license, the GPL and NOTICE.md.
+- Every release comes with its complete source: the repository with fm1-base and felucca-bsp, which the firmware is
+  built from, and the libraries built into the plugin.
+- Every release includes the Sonic Potions license, the GPL and NOTICE.md, the plugin's zips and the firmware's
+  download alike.
 
 If you redistribute Tack or build on it, keep to the same terms.
 

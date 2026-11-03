@@ -33,13 +33,16 @@ jobs:
       release: true
 
   # The GPL and the Sonic Potions licence both want the complete source with every binary: the repository at the tag
-  # plus the sources CMake fetches for the libraries built into the plugin
+  # with its submodules, fm1-base and felucca-bsp, which the FM-1 firmware is built from, plus the sources CMake fetches
+  # for the libraries built into the plugin
   source:
     name: Source archive
     needs: check
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - name: Libraries the configure step looks for
         run: |
           sudo apt-get update
@@ -50,6 +53,9 @@ jobs:
           name=tack-$version-source
           mkdir -p dist "$RUNNER_TEMP/src"
           git archive --format=tar --prefix="$name/" HEAD | tar -x -C "$RUNNER_TEMP/src"
+          export pkg=$name RUNNER_TEMP      # (foreach sets $name to the submodule's own)
+          git submodule foreach --quiet --recursive \
+            'git archive --format=tar --prefix="$pkg/$displaypath/" HEAD | tar -x -C "$RUNNER_TEMP/src"'
           # configuring fetches every dependency at its pinned version, without building anything
           cmake -S host -B "$RUNNER_TEMP/deps" -DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DLXR_HOST_CLAP=ON \
             -DFETCHCONTENT_BASE_DIR="$RUNNER_TEMP/fetched" >/dev/null
