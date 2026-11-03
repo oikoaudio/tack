@@ -58,7 +58,6 @@ int lxr_host_setOutputRate(double fs);
  */
 void lxr_host_queueNoteOn(uint32_t frame, uint8_t voice, uint8_t note, uint8_t vel);
 void lxr_host_queueParam(uint32_t frame, uint16_t param, uint8_t value);
-void lxr_host_queueSeparateOutputs(uint32_t frame, bool on);
 
 /**
  * Plays only one voice (0-5, separate output numbering), or every voice with -1, the default. The engine then

@@ -275,6 +275,28 @@ static void syncSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
 	ImGui::PopID();
 }
 
+// the outputs switch, in the Master box on Mix & FX. It isn't a kit parameter, so it has an entry of its own
+static const LxrParamInfo outputsInfo = { TACK_GUI_SEPARATE_OUTPUTS_ID, "Outputs", "Outputs", 0, 1, true,
+	LXR_PARAMS_FX_VOICE, 0, "Outputs" };
+
+// the outputs switch, drawn like Sync: the button names the setting, and a click changes it
+static void outputsSwitch(TackGui* g, const LxrParamInfo* p, const char* label)
+{
+	const ImVec2 pos = ImGui::GetCursorScreenPos();
+	const bool individual = value(g, p->param) >= 0.5;
+	ImGui::PushID(p->param);
+	ImGui::BeginGroup();
+	drawLabel(label, pos, ImGui::GetColorU32(ImGuiCol_Text));
+	ImGui::SetCursorScreenPos(ImVec2(pos.x + 2, pos.y + LABEL_H + 6));
+	if(ImGui::Button(individual ? "Individual" : "Stereo", ImVec2(cellW - 4, 0))) edit(g, p->param, individual ? 0 : 1);
+	tooltip(individual ? "Individual: each Direct voice on its own output, and Main has the voices that go through the FX"
+		: "Stereo: everything on Main", nullptr);
+	ImGui::SetCursorScreenPos(pos);
+	ImGui::Dummy(ImVec2(cellW, CELL_H));
+	ImGui::EndGroup();
+	ImGui::PopID();
+}
+
 // a drop-down list for parameters with named values
 static void selector(TackGui* g, const LxrParamInfo* p, const char* label)
 {
@@ -325,6 +347,7 @@ static void box(TackGui* g, const char* title, const LxrParamInfo* const* params
 		if(i) ImGui::SameLine(0, 0);
 		const int sync = lxr_params_lfoSyncOf(params[i]->param);
 		if(lxr_params_lfoFreqOf(params[i]->param) >= 0) syncSwitch(g, params[i], labels[i]);
+		else if(params[i] == &outputsInfo) outputsSwitch(g, params[i], labels[i]);
 		else if(params[i]->isEnum) selector(g, params[i], labels[i]);
 		else if(sync >= 0 && value(g, (uint32_t)sync) != 0) knob(g, lxr_params_info(lxr_params_indexOf((uint16_t)sync)), labels[i]);
 		else knob(g, params[i], labels[i]);
@@ -434,6 +457,7 @@ static void collectFxTab(uint8_t fxType, Group* groups)
 					add(gr, p, tabNames[voice]);
 			}
 	}
+	add(groups[FX_MASTER], &outputsInfo, outputsInfo.label);
 }
 
 // the FX type box is as wide as the widest type, so nothing moves when the type changes
@@ -478,24 +502,6 @@ static int tabRows(const TackGui* g, int tab, uint8_t fxType, Group* groups, Slo
 		}
 	}
 	return ROWS;
-}
-
-// the outputs switch, on the right of the Output box's title row
-static void outputsSwitch(TackGui* g, ImVec2 boxPos, float boxWidth)
-{
-	const bool individual = value(g, TACK_GUI_SEPARATE_OUTPUTS_ID) >= 0.5;
-	const ImGuiStyle& s = ImGui::GetStyle();
-	const float w = ImGui::CalcTextSize("Stereo").x + ImGui::CalcTextSize("Individual").x
-		+ 2 * (ImGui::GetFrameHeight() + s.ItemInnerSpacing.x) + s.ItemSpacing.x;
-	ImGui::SetCursorPos(ImVec2(boxPos.x + boxWidth - BOX_PAD - w, boxPos.y + 3));
-	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(s.FramePadding.x, 1));
-	if(ImGui::RadioButton("Stereo", !individual)) edit(g, TACK_GUI_SEPARATE_OUTPUTS_ID, 0);
-	if(ImGui::IsItemHovered()) ImGui::SetTooltip("Everything on the Main output");
-	ImGui::SameLine();
-	if(ImGui::RadioButton("Individual", individual)) edit(g, TACK_GUI_SEPARATE_OUTPUTS_ID, 1);
-	if(ImGui::IsItemHovered())
-		ImGui::SetTooltip("Each Direct voice on its own output; Main has the voices that go through the FX");
-	ImGui::PopStyleVar();
 }
 
 static float naturalWidth(const Slot* slots, int n)
@@ -547,8 +553,6 @@ static void drawTab(TackGui* g)
 			if(slot.group) {
 				ImGui::SetCursorPos(ImVec2(x, headerHeight(g->host.voice) + r * (BOX_H + GAP)));
 				box(g, slot.group->title, slot.group->params, slot.group->labels, slot.group->n, w, slot.cells);
-				if(slot.group->title == mixerTitles[MIX_OUTPUT - MIX_VOLUME])
-					outputsSwitch(g, ImVec2(x, headerHeight(g->host.voice) + r * (BOX_H + GAP)), w);
 			}
 			x += w + GAP;
 		}

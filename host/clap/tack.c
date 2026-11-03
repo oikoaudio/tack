@@ -41,9 +41,10 @@
 #define KIT_NAME_SIZE	16
 #define KIT_PATH_SIZE	1024
 
-// plugin parameters that aren't part of the kit get ids past the firmware's parameter numbers
+// ids past the firmware's parameter numbers, for settings that aren't part of the kit. The outputs switch is only the
+// editor's: the host doesn't list it, so it has no automation and no undo, and the state keeps it
 #define PARAM_SEPARATE_OUTPUTS	1000
-#define PARAM_CHROMATIC			1001	// voice plugins: notes set the pitch, or all play the tuned pitch
+#define PARAM_CHROMATIC			1001	// a voice plugin's parameter: notes set the pitch, or all play the tuned pitch
 
 // output ports and the k->engine.api->process() channels they carry. Main has everything, or with individual
 // outputs the FX bus: the voices routed through the FX, processed together
@@ -116,9 +117,9 @@ typedef struct
 	atomic_bool hasPendingKit;
 	atomic_flag pendingLock;
 
-	// everything on Main, or each direct voice on its own output and the FX bus on Main
+	// everything on Main, or each direct voice on its own output and the FX bus on Main; main thread
 	bool separateOutputs;
-	atomic_int pendingSeparateOutputs;	// from a loaded state, for the audio thread; -1 if none
+	atomic_int pendingSeparateOutputs;	// for the audio thread; -1 if none
 
 	// main thread
 	char kitName[KIT_NAME_SIZE];
@@ -325,15 +326,6 @@ static void handleParamEvent(Tack* k, const clap_event_param_value_t* ev, uint32
 		if(k->type->voice >= 0) atomic_store(&k->chromatic, ev->value >= 0.5);
 		return;
 	}
-	if(ev->param_id == PARAM_SEPARATE_OUTPUTS) {
-		if(k->type->voice >= 0) return;
-		k->separateOutputs = ev->value >= 0.5;
-		if(queued)
-			k->engine.api->queueSeparateOutputs(frame, k->separateOutputs);
-		else
-			k->engine.api->setSeparateOutputs(k->separateOutputs);
-		return;
-	}
 	if(!hasParam(k->type, ev->param_id)) return;
 	const uint16_t kitValue = toKitValue(k->type, ev->param_id, (uint16_t)lrint(fmax(ev->value, 0)));
 	k->values[ev->param_id] = lxr_params_toFirmware(ev->param_id, kitValue);
@@ -518,8 +510,8 @@ static const clap_plugin_latency_t latency = { latencyGet };
 static uint32_t paramsCount(const clap_plugin_t* plugin)
 {
 	Tack* k = plugin->plugin_data;
-	// the whole kit adds the outputs switch, a voice the chromatic switch
-	return k->type->voice < 0 ? lxr_params_count() + 1 : k->type->numParams + 1;
+	// a voice adds the chromatic switch
+	return k->type->voice < 0 ? lxr_params_count() : k->type->numParams + 1;
 }
 
 static bool paramsGetInfo(const clap_plugin_t* plugin, uint32_t index, clap_param_info_t* info)
@@ -538,15 +530,6 @@ static bool paramsGetInfo(const clap_plugin_t* plugin, uint32_t index, clap_para
 	if(t->voice >= 0) {
 		if(index >= (uint32_t)t->numParams) return false;
 		index = t->params[index];
-	} else if(index == (uint32_t)lxr_params_count()) {
-		memset(info, 0, sizeof *info);
-		info->id = PARAM_SEPARATE_OUTPUTS;
-		// switching outputs mid-song isn't something to automate
-		info->flags = CLAP_PARAM_IS_STEPPED | CLAP_PARAM_IS_ENUM;
-		snprintf(info->name, sizeof info->name, "Outputs");
-		snprintf(info->module, sizeof info->module, "Outputs");
-		info->max_value = 1;
-		return true;
 	}
 	const LxrParamInfo* p = lxr_params_info(index);
 	if(!p) return false;
@@ -570,10 +553,6 @@ static bool paramsGetInfo(const clap_plugin_t* plugin, uint32_t index, clap_para
 static bool paramsGetValue(const clap_plugin_t* plugin, clap_id id, double* value)
 {
 	Tack* k = plugin->plugin_data;
-	if(id == PARAM_SEPARATE_OUTPUTS && k->type->voice < 0) {
-		*value = k->separateOutputs;
-		return true;
-	}
 	if(id == PARAM_CHROMATIC && k->type->voice >= 0) {
 		*value = atomic_load(&k->chromatic);
 		return true;
@@ -586,10 +565,6 @@ static bool paramsGetValue(const clap_plugin_t* plugin, clap_id id, double* valu
 static bool paramsValueToText(const clap_plugin_t* plugin, clap_id id, double value, char* text, uint32_t size)
 {
 	Tack* k = plugin->plugin_data;
-	if(id == PARAM_SEPARATE_OUTPUTS && k->type->voice < 0) {
-		snprintf(text, size, "%s", value >= 0.5 ? "Individual" : "Stereo");
-		return true;
-	}
 	if(id == PARAM_CHROMATIC && k->type->voice >= 0) {
 		snprintf(text, size, "%s", value >= 0.5 ? "on" : "off");
 		return true;
@@ -605,12 +580,6 @@ static bool paramsTextToValue(const clap_plugin_t* plugin, clap_id id, const cha
 	if(id == PARAM_CHROMATIC && k->type->voice >= 0) {
 		if(!strcasecmp(text, "on") || !strcmp(text, "1")) *value = 1;
 		else if(!strcasecmp(text, "off") || !strcmp(text, "0")) *value = 0;
-		else return false;
-		return true;
-	}
-	if(id == PARAM_SEPARATE_OUTPUTS && k->type->voice < 0) {
-		if(!strcasecmp(text, "Individual") || !strcmp(text, "1")) *value = 1;
-		else if(!strcasecmp(text, "Stereo") || !strcmp(text, "0")) *value = 0;
 		else return false;
 		return true;
 	}
@@ -672,6 +641,15 @@ static void setKit(Tack* k, const uint8_t* kitIn)
 	}
 	if(k->hostParams) k->hostParams->rescan(k->host, CLAP_PARAM_RESCAN_VALUES);
 }
+// the outputs switch, from a loaded state or the editor; main thread
+static void setSeparateOutputs(Tack* k, bool on)
+{
+	k->separateOutputs = on;
+	if(!k->active)
+		k->engine.api->setSeparateOutputs(on);
+	else
+		atomic_store(&k->pendingSeparateOutputs, on);
+}
 //-----------------------------------------------------------
 static bool stateSave(const clap_plugin_t* plugin, const clap_ostream_t* stream)
 {
@@ -722,7 +700,7 @@ static bool stateLoad(const clap_plugin_t* plugin, const clap_istream_t* stream)
 	setKit(k, kit);
 
 	// a single voice always has its own output
-	k->separateOutputs = k->type->voice >= 0 || (size > 8 + (size_t)n && data[8 + n]);
+	setSeparateOutputs(k, k->type->voice >= 0 || (size > 8 + (size_t)n && data[8 + n]));
 	const uint8_t* p = data + 8 + n + 1;
 	const uint8_t* end = data + size;
 	k->kitName[0] = k->kitPath[0] = 0;
@@ -743,10 +721,6 @@ static bool stateLoad(const clap_plugin_t* plugin, const clap_istream_t* stream)
 		k->kitVoice = (int8_t)*p++;
 		atomic_store(&k->chromatic, *p++ != 0);
 	}
-	if(!k->active)
-		k->engine.api->setSeparateOutputs(k->separateOutputs);
-	else
-		atomic_store(&k->pendingSeparateOutputs, k->separateOutputs);
 	return true;
 }
 
@@ -847,7 +821,8 @@ static bool guiOffersValue(void* ctx, uint32_t id, uint16_t value)
 
 static void guiValueText(void* ctx, uint32_t id, uint16_t value, char* text, size_t size)
 {
-	valueText(((Tack*)ctx)->type, id, value, text, size);
+	if(id == PARAM_SEPARATE_OUTPUTS) snprintf(text, size, "%s", value ? "Individual" : "Stereo");
+	else valueText(((Tack*)ctx)->type, id, value, text, size);
 }
 
 static void guiPush(Tack* k, uint8_t type, uint32_t id, double value)
@@ -860,16 +835,21 @@ static void guiPush(Tack* k, uint8_t type, uint32_t id, double value)
 	if(k->hostParams) k->hostParams->request_flush(k->host);
 }
 
-static void guiBeginEdit(void* ctx, uint32_t id) { guiPush(ctx, GUI_BEGIN_EDIT, id, 0); }
-static void guiEndEdit(void* ctx, uint32_t id) { guiPush(ctx, GUI_END_EDIT, id, 0); }
+// the host hears of every change but the outputs switch's
+static void guiBeginEdit(void* ctx, uint32_t id) { if(id != PARAM_SEPARATE_OUTPUTS) guiPush(ctx, GUI_BEGIN_EDIT, id, 0); }
+static void guiEndEdit(void* ctx, uint32_t id) { if(id != PARAM_SEPARATE_OUTPUTS) guiPush(ctx, GUI_END_EDIT, id, 0); }
 
 static void guiSetValue(void* ctx, uint32_t id, double value)
 {
 	Tack* k = ctx;
+	if(id == PARAM_SEPARATE_OUTPUTS) {
+		if(k->type->voice >= 0 || (value >= 0.5) == k->separateOutputs) return;
+		setSeparateOutputs(k, value >= 0.5);
+		if(k->hostState) k->hostState->mark_dirty(k->host);
+		return;
+	}
 	// show the new value straight away; the engine gets it with the event
-	if(id == PARAM_SEPARATE_OUTPUTS)
-		k->separateOutputs = value >= 0.5;
-	else if(id == PARAM_CHROMATIC)
+	if(id == PARAM_CHROMATIC)
 		atomic_store(&k->chromatic, value >= 0.5);
 	else if(hasParam(k->type, id)) {
 		k->values[id] = lxr_params_toFirmware(id, (uint16_t)lrint(fmax(value, 0)));
