@@ -1,7 +1,8 @@
 /*
  * lfo_test.c
  *
- * That an LFO in sync follows the tempo a host gives it, and that moving between FREQ and SYNC finds the same speed both ways.
+ * That an LFO in sync follows the tempo a host gives it, that moving between FREQ and SYNC finds the same speed both ways, and that a
+ * random LFO started by a hit holds a new value until the next.
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -101,6 +102,27 @@ int main(void)
 	lfo_modRetrigger(lfo, 11 / 127.f);
 	if(lfo->retrigger != 5) {
 		printf("FAIL a modulated RETRIG of 11 is voice 5: %u\n", lfo->retrigger);
+		failed = 1;
+	}
+	// random, started by its own voice at FREQ 0: each hit takes a new value at once, and it holds until the next hit
+	lxr_host_setParam(PAR_WAVE_LFO1, LFO_NOISE);
+	lxr_host_setParam(PAR_FREQ_LFO1, 0);
+	lxr_host_setParam(PAR_RETRIGGER_LFO1, 1);
+	lxr_host_setParam(PAR_AMOUNT_LFO1, 64);
+	int differ = 0, moved = 0;
+	float before = -1;
+	for(int hit = 0; hit < 8; hit++) {
+		lfo_retrigger(0);
+		const float held = fxBus.dryWet;
+		differ += held != before;
+		before = held;
+		for(blocks = 0; blocks < 2000; blocks++) {	/* about 3 s */
+			lfo_dispatchNextValue(lfo);
+			moved += fxBus.dryWet != held;
+		}
+	}
+	if(differ < 7 || moved) {
+		printf("FAIL random per hit: %d of 8 hits took a new value, %d blocks moved between hits\n", differ, moved);
 		failed = 1;
 	}
 	// a change of mode or tempo during the delay's crossfade keeps the time still waiting for it

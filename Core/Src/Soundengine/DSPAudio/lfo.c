@@ -266,7 +266,6 @@ void lfo_recalcSync()
 	lfo->phaseInc = lfo_calcPhaseInc(lfo->freq,lfo->sync);
 }
 //-------------------------------------------------------------
-#ifdef LXR_FM1_BUILD
 // a random LFO sent by a voice's hit takes a new value with it: the value reaches its target at
 // once, as velocity's does, before the voice starts, and holds until the next hit
 static void lfo_retriggerOne(Lfo *lfo)
@@ -279,13 +278,6 @@ static void lfo_retriggerOne(Lfo *lfo)
 		modNode_updateValue(&lfo->modTarget, lfo->once ? lfo->rnd * 0.5f + 0.25f : lfo->rnd);	/* as lfo_dispatchNextValue will send it */
 	}
 }
-#else
-static void lfo_retriggerOne(Lfo *lfo)
-{
-	lfo->phase = lfo->phaseOffset;
-	lfo->ended = 0;
-}
-#endif
 void lfo_retrigger(uint8_t voice)
 {
 	if(voiceArray[0].lfo.retrigger == voice+1) lfo_retriggerOne(&voiceArray[0].lfo);

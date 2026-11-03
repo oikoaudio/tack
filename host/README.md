@@ -124,6 +124,8 @@ a new note retriggers it. Note-offs are ignored, as on the device, since every v
 - **Delay sync:** the delay's mode has two more entries. In them Time picks a fraction of the bar at the host's tempo, though the dial still reads as a number.
 - **LFO once:** Retrig's list has each voice twice, the second as once. The LFO then plays start to end when that voice fires, and finishes
   on the value the target is set to, so a rising wave ducks and recovers. FX Dry/Wet is a target, so an LFO can duck the FX.
+- **Random per hit:** a random LFO with Retrig set to a voice takes a new value each time that voice fires, and holds it until the next
+  hit, as on the FM-1. At the lowest Freq it changes only on hits, so a small Amount varies each hit a little.
 - **Mutating kits:** "Mutate kit" and "Mutate voice" make a small random change to the kit or the open tab's voice, and each click goes
   further. "Back" retraces those steps exactly, and its number says how far you are from where you began, up to 99. Volume, pan, routing,
   modulation targets, filter type and the FX stay. An edit or another kit starts again from there. A voice plugin has one "Mutate" button.
