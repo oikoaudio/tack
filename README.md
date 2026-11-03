@@ -123,6 +123,7 @@ with the LXR-02, so they may matter there too, but they have only been tested on
 | 1d33c56 | `Core/Src/Soundengine/MIDI/MidiParser.c` | Three legal kit values sent as NRPN controllers wrote up to 128 bytes past `midiParser_originalCcValues`. The handler now ignores a number past 126. |
 | 030b62d, ce78e8e, e1039ce | `Core/Src/Soundengine/Sequencer/sequencer.c` | A stored lane length of 0 means 16, and some code divided by the raw value. Every read now goes through `seq_trackLength()`. |
 | 030b62d | `Core/Src/Soundengine/Sequencer/clockSync.c` | MIDI Start and the first clock in the same audio block gave no time between pulses, and `sync_calcBpm()` divided by zero. It now returns a tempo of 1 for that case. |
+| 560b42b | `Core/Src/Soundengine/DSPAudio/transientGenerator.c` | The transient's samples are signed, and were shifted left by 8, which is undefined for a negative value. They are multiplied by 256, which gives the same result. |
 
 ### Additions
 
