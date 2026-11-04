@@ -152,7 +152,8 @@ static struct {
     uint32_t usb10_try;                  /* a host must have taken them by then */
     uint8_t voice_view;                  /* the main page shows a detail, not the overview: one voice's steps, or NOTE */
     uint8_t popup;                       /* what a held step is having changed: POP_ */
-    uint32_t tempo_until;                /* the tempo screen goes then */
+    uint32_t tempo_until;                /* the header shows the tempo or the shuffle until then, 0 not */
+    uint8_t tempo_shuffle;               /* which: the shuffle, SEL held */
     const TackSlot *touched;           /* the parameter last turned, large in the header until touched_until */
     uint32_t touched_at, touched_until;
     int8_t touched_row;                  /* the row it was on: an OCT since shows another */
@@ -432,10 +433,7 @@ static void draw(void)
     }
     if (ui.popup) {                              /* the page waits behind it */
         on_grid = 0;
-        if (ui.popup == POP_TEMPO)
-            draw_tempo();
-        else
-            draw_popup();
+        draw_popup();
         return;
     }
     if (full_page()) {
@@ -476,6 +474,18 @@ static void draw(void)
         const int32_t sw_x = bpm_x - 6 - sw_w > after_p ? bpm_x - 6 - sw_w : after_p;
         cv_text(sw_x, TOP_LINE - 1, &FONT_XS, "SW", C_GRAY);
         cv_text(sw_x + text_w(&FONT_XS, "SW") + 2, TOP_LINE - 1, &FONT_XS, t, C_WHITE);
+    }
+    if (tempo_shown()) {                         /* as a dial in hand: the tempo, or with SEL the shuffle */
+        const int sh = ui.tempo_shuffle;
+        int_text(sh ? tack_shuffle() : tack_bpm(), t);
+        cv_text(EDGE, 20, &FONT_M, sh ? "SHUFFLE" : "TEMPO", C_HI);
+        cv_text(240 - EDGE - text_w(&FONT_M, t), 20, &FONT_M, t, C_WHITE);
+        if (sh)
+            value_bar(EDGE, 44, 240 - 2 * EDGE, 4, tack_shuffle(), 127, C_HI);
+        else                                     /* where the shuffle is, which nothing else says */
+            cv_text(EDGE + text_w(&FONT_M, "TEMPO") + 8, 27, &FONT_XS, "SEL+ SHUFFLE", C_GRAY);
+        cv_blit(0, 0);
+        goto header_done;
     }
     if (ui.touched_until && ui.touched) {        /* the parameter in hand, large */
         const TackSlot *sl = ui.touched;
@@ -566,6 +576,7 @@ void app_frame(void)
         h = h * 67u + (uint32_t)tack_playhead((uint8_t)v);
     h = h * 67u + (uint32_t)(tack_song_mode() * 256 + tack_song_pos());
     h = h * 67u + (uint32_t)(tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384);
+    h = h * 67u + (uint32_t)(tack_bpm() * 128u + tack_shuffle());   /* a turn reaches the engine after the frame that drew it */
     h = h * 67u + (uint32_t)(tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64);
     h = h * 67u + (uint32_t)(tack_length((uint8_t)ui.voice) * 64) + tack_lane_dir((uint8_t)ui.voice) * 4u + tack_lane_speed((uint8_t)ui.voice);
     if (sel_length() != ui.sel_was) {
@@ -609,9 +620,8 @@ void app_frame(void)
         ui.msg_until = 0;
         ui.redraw = 1;
     }
-    if (ui.popup == POP_TEMPO && now - ui.tempo_until < 0x80000000u) {
-        ui.popup = POP_NONE;
-        bottom_key = 0;                          /* it covered the main page's bottom strip */
+    if (ui.tempo_until && now - ui.tempo_until < 0x80000000u) {
+        ui.tempo_until = 0;
         ui.redraw = 1;
     }
     if (ui.usb10_try && now - ui.usb10_try < 0x80000000u) {

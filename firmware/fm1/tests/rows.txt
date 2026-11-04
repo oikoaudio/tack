@@ -186,19 +186,20 @@ expect touched 1
 wait 1400
 expect touched 0
 
-# SELECT and ALGORITHM show tempo and shuffle for a moment, on any page, and the page comes back whole
+# SELECT shows the tempo in the header for a moment, on any page, with no popup over the page
 turn SELECT 4
 wait 40
-expect popup 4
+expect tempo 1
+expect popup 0
 expect bpm 124
 shot tempo.png
 turn SELECT 1
 wait 40
-expect popup 4
+expect tempo 1
 wait 1000
-expect popup 4
+expect tempo 1
 wait 700
-expect popup 0
+expect tempo 0
 shot tempo_gone.png
 turn SELECT -4
 wait 1800

@@ -87,6 +87,17 @@ static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.k
  * Not at once, or a tap that adds a step would flash the dials, the bottom strip and the keys. It is held from the press all
  * the same: this is only what shows */
 #define HOLD_SHOW_MS 500u
+/* A step's recurrence as the panel shows it, a lane of eight slots: every pass is all eight playing, as the engine's cycle of
+ * one is. SELECT shortens it, down to two, and the keys take slots out. Eight all playing goes back to every pass */
+static int recur_len(uint8_t v, uint8_t s) { return tack_recur_len(v, s) == 1 ? (int)TACK_RECUR_MAX : tack_recur_len(v, s); }
+static int recur_mask(uint8_t v, uint8_t s) { return tack_recur_len(v, s) == 1 ? (1 << TACK_RECUR_MAX) - 1 : tack_recur_mask(v, s); }
+static void recur_set(uint8_t v, uint8_t s, int len, int mask)
+{
+    if (len == (int)TACK_RECUR_MAX && mask == (1 << TACK_RECUR_MAX) - 1)
+        len = mask = 1;
+    tack_post_recur(v, s, (uint8_t)len, (uint8_t)mask);
+}
+static int tempo_shown(void) { return ui.tempo_until != 0; }   /* SELECT turned: the header says the tempo */
 static int held_shown(void) { return ui.held >= 0 && (ui.held_used || plat_ms() - ui.held_at >= HOLD_SHOW_MS); }
 
 /* A voice's key held a moment does as SEL does, once the lane shows on the keys: a quick voice key and a step can overlap, and that

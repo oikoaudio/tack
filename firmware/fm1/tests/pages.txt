@@ -189,7 +189,7 @@ release SEL
 wait 40
 expect len0 12
 
-# SEL and SELECT is the shuffle the tempo popup shows, where SELECT alone is the tempo
+# SEL and SELECT is the shuffle, where SELECT alone is the tempo
 expect bpm 120
 press SEL
 wait 30

@@ -8,7 +8,9 @@ key 0 down
 wait 40
 turn K1 3
 wait 40
-turn SELECT 1
+turn SELECT -6
+wait 40
+tapkey 3
 wait 40
 key 0 up
 wait 40

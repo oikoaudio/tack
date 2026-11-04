@@ -38,7 +38,7 @@ static void lights(void)
     uint32_t mid = 0;
     if (as_slots) {                              /* lit: it plays on that slot. Mid: a slot it skips */
         const uint8_t s = ui.held_step;
-        const uint32_t len = (uint32_t)tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+        const uint32_t len = (uint32_t)recur_len((uint8_t)ui.voice, s), mask = (uint32_t)recur_mask((uint8_t)ui.voice, s);
         for (k = 0; k < len; k++) {
             if (mask >> k & 1u)
                 keys |= 1u << BK[k];
