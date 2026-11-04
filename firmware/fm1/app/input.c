@@ -75,6 +75,8 @@ static void input_keys(uint32_t keys, uint32_t btn)
         ui.redraw = 1;
     if (down >> BK[KEY_COPY] & 1u)
         ui.copy_used = 0;
+    if (down >> BK[KEY_MORPH] & 1u)              /* what was said gives way to MORPH TO: it may be the hint to hold this key */
+        ui.msg_until = 0;
     for (k = 0; k < 16u; k++) {                  /* the white keys: steps, or the voices */
         if (down >> WK[k] & 1u) {
             if (btn >> B_SEQ & 1u) {             /* SEQ held: a pattern, in either mode; more of them a chain */
