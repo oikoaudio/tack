@@ -6,8 +6,17 @@ static void outline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, uint1
 
 #define GRID_X 14                         /* the last step ends where the last knob's cell does */
 #define GRID_CELL 14
-#define GRID_ROW 11
-#define GRID_H 80                         /* to the knobs: it clears what a full page left there */
+#define GRID_ROW 14
+#define GRID_INK (7 * GRID_ROW - 2)          /* the lanes' ink, top to bottom */
+#define KNOBS_INK 5                          /* a dial label's ink starts this far into the knobs' strip */
+#define KNOBS_INK_H 29                       /* the dials' ink: label, value and value bar */
+#define BOTTOM_INK_H (11 + SP_IN + GRID_CELL + GRID_CELL - 2)   /* the map's title, and its two rows of boxes */
+/* the two gaps under the lanes share what the screen has left once EDGE is kept at the bottom: at least SP_SECTION each, and
+ * the odd pixel goes above the patterns, the line between this voice and the song */
+#define HOME_FREE (240 - EDGE - HEADER_H - GRID_INK - KNOBS_INK_H - BOTTOM_INK_H)
+#define GAP_LANES (HOME_FREE / 2)
+#define GAP_BOTTOM (HOME_FREE - GAP_LANES)
+#define GRID_H (GRID_INK + GAP_LANES - KNOBS_INK)   /* down to the knobs' strip, so the gap is painted */
 
 #define GRID_FLOOR 3                      /* the height of a step at the lowest velocity */
 #define C_HEAD RGB(96, 98, 108)           /* the playhead's cell, with a hit white on it at its velocity */
@@ -27,12 +36,12 @@ static void draw_grid(void)
         const int muted = tack_muted((uint8_t)v);
         const int head = tack_running() ? tack_playhead((uint8_t)v) : -1;
         const int len = tack_length((uint8_t)v);
-        cv_rect(EDGE, y + 1, (int32_t)v == ui.voice ? 6 : 2, GRID_ROW - 3, muted ? C_GRAY : VOICE_COLOUR[v]);
+        cv_rect(EDGE, y, (int32_t)v == ui.voice ? 6 : 2, GRID_ROW - 2, muted ? C_GRAY : VOICE_COLOUR[v]);
         for (i = 0; i < 16u; i++) {
             const int s = ui.bar * 16 + (int)i;
             const int32_t x = GRID_X + (int32_t)i * GRID_CELL;
             if (s >= len) {                      /* past the lane's end: it stays a row */
-                cv_rect(x + 5, y + 3, 2, 3, C_DIM);
+                cv_rect(x + 5, y + (GRID_ROW - 2) / 2 - 1, 2, 3, C_DIM);
                 continue;
             }
             const int on = tack_step_on((uint8_t)v, (uint8_t)s);
@@ -48,23 +57,23 @@ static void draw_grid(void)
                 cv_rect(x + 1, y + 5, 3, 3, C_BLACK);
         }
     }
-    cv_blit(0, 52);
+    cv_blit(0, HEADER_H);
 }
 
 /* The screen under the grid: the knobs' strip, then the bottom. There the envelope or wave of the page, and a last row with
  * the page's name on the left and its place among the group's pages on the right. The curves are the engine's: SlopeEg2.c's
  * slope and rates */
 #define HOME_GAP 5                       /* above the knobs, below them, and under the bottom strip */
-#define KNOBS_Y (52 + 7 * 11 - 2 + HOME_GAP)
-#define KNOBS_H 36
+#define KNOBS_Y (HEADER_H + GRID_H)
+#define KNOBS_H (KNOBS_INK + KNOBS_INK_H)   /* to the value bars' last row: the bottom strip holds the gap under them */
 #define BOTTOM_Y (KNOBS_Y + KNOBS_H)
 #define BOTTOM_H (240 - BOTTOM_Y)
 static int32_t graph_x = EDGE;            /* HOME puts it under its last two dials */
 #define GRAPH_X graph_x
 #define GRAPH_TOP HOME_GAP
-#define GRAPH_H 50
+#define GRAPH_H (ROW_Y - GRAPH_TOP - 2)
 #define GRAPH_W (240 - 2 * EDGE)
-#define ROW_Y 56                         /* the name */
+#define ROW_Y (BOTTOM_H - 16)                        /* the name */
 #define BAR_W 14
 #define BAR_PITCH 18
 
@@ -193,7 +202,7 @@ static void graph_column(int32_t x, float y)    /* y 0-1 */
 {
     const int32_t h = 1 + (int32_t)(y * (float)(graph_h - 1));
     cv_rect(GRAPH_X + x, graph_top + graph_h - h, 1, h, (uint16_t)((VOICE_COLOUR[ui.voice] >> 2) & 0x39E7u));
-    cv_rect(GRAPH_X + x, graph_top + graph_h - h, 1, 2, VOICE_COLOUR[ui.voice]);
+    cv_rect(GRAPH_X + x, graph_top + graph_h - h, 1, h < 2 ? h : 2, VOICE_COLOUR[ui.voice]);   /* not below the graph */
 }
 
 static uint8_t graph_value(int graph, uint32_t slot, uint8_t none)
@@ -313,14 +322,14 @@ static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS;
 /* The overview's bottom left: the sixteen patterns as two rows of the white keys, and what picks the next. The envelope
  * is to the right, under DECAY and VOLUME, the dials that shape it */
 #define HOME_X EDGE
-#define HOME_ENV_X 122                   /* the third dial's cell */
-#define HOME_MAP_W (HOME_ENV_X - 4 - EDGE)
-#define HOME_CELL 11
-#define HOME_CELL_H 20
+#define HOME_ENV_X (CELL_X(2) + 5)    /* where DECAY's label, value and bar start: a quick attack lines up under them */
+#define HOME_MAP_W (7 * GRID_CELL + HOME_CELL)   /* eight steps wide: the same tiles as the lanes */
+#define HOME_CELL (GRID_CELL - 2)
+#define HOME_CELL_H HOME_CELL
 #define HOME_ENV_W (240 - EDGE - HOME_ENV_X)
-#define HOME_TOP 8                        /* the map's title sits on the map, and the envelope starts level with it */
-#define HOME_ENV_H (BOTTOM_H - HOME_TOP - HOME_GAP)
-#define HOME_MAP_Y (GRAPH_TOP + 18)       /* under its title, and ending where the envelope does */
+#define HOME_TOP GAP_BOTTOM                        /* the map's title sits on the map, and the envelope starts level with it */
+#define HOME_ENV_H (HOME_MAP_Y + GRID_CELL + HOME_CELL_H - HOME_TOP)   /* level with the map at both ends */
+#define HOME_MAP_Y (HOME_TOP + 11 + SP_IN)   /* under its title, whose capitals are 11 high */
 
 static int home_info(void) { return ui.group == TACK_G_MAIN && !ui.over && ui.held < 0; }
 
@@ -329,7 +338,7 @@ static void draw_home_info(uint32_t used)
     const int now = tack_pattern(), next = tack_pattern_next(), mode = tack_song_mode();
     char t[16];
     for (uint32_t p = 0; p < TACK_PATTERNS; p++) {
-        const int32_t x = HOME_X + (int32_t)(p % 8u) * (HOME_MAP_W - HOME_CELL) / 7, y = HOME_MAP_Y + (int32_t)(p / 8u) * (HOME_CELL_H + 4);
+        const int32_t x = HOME_X + (int32_t)(p % 8u) * GRID_CELL, y = HOME_MAP_Y + (int32_t)(p / 8u) * GRID_CELL;
         if ((int)p == now || used >> p & 1u)
             cv_rect(x, y, HOME_CELL, HOME_CELL_H, (int)p == now ? C_HI : C_GRAY);
         else

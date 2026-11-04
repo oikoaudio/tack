@@ -38,7 +38,7 @@ static void draw_tempo(void)
     }
     cv_rect(159, 72, 58, 4, C_WHITE);
     cv_text(180 - text_w(&FONT_B, "(SEL+)") / 2, 118, &FONT_B, "(SEL+)", C_GRAY);
-    cv_blit(0, 52);
+    cv_blit(0, HEADER_H);
 }
 
 /* What SEL does here, each line true of this page: it is the one list of what no page shows */
@@ -76,7 +76,7 @@ static void draw_sel_help(void)
     help_row(&y, "HOME, HOLD", "REVERT KIT");
     if (on_home())                               /* not SEL's, but the next thing to want on the page a new pattern starts from */
         cv_text(10, y + 2, &FONT_XS, "HOLD SEQ AND PRESS A KEY: PATTERN", C_AMB);
-    cv_blit(0, 52);
+    cv_blit(0, HEADER_H);
 }
 
 static void draw_popup(void)
