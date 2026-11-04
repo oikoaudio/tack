@@ -150,14 +150,17 @@ if(LXR_HOST_CLAP)
 
     # The editor: Dear ImGui drawing into a pugl OpenGL view. Neither has a CMake build, so compile their sources.
     # pugl (ISC) is pinned to a commit since it has no recent release tags; Dear ImGui (MIT) to a release.
-    # pugl gets two patches: keys the editor doesn't use reach the host, such as space for play and stop; and on macOS
-    # a new backing scale (another screen) reaches the editor, which otherwise only learns of it on a resize.
+    # pugl gets patches: keys the editor doesn't use reach the host, such as space for play and stop; on macOS a new
+    # backing scale (another screen) reaches the editor, which otherwise only learns of it on a resize; and on macOS the
+    # editor's cursor holds against the host's.
     FetchContent_Declare(pugl
         GIT_REPOSITORY https://github.com/lv2/pugl.git
         GIT_TAG b7637149ebe53124e5be90559e02a0185bbcbd73
         PATCH_COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/pugl-keys.patch
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/apply_patch.cmake
         COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/pugl-backing-scale.patch
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/apply_patch.cmake
+        COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/cmake/pugl-cursor.patch
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/apply_patch.cmake
         SOURCE_SUBDIR no-cmake
     )
