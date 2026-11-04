@@ -40,7 +40,7 @@ No kits come with Tack. The factory kits and third-party kits belong to their au
 
 ## Status
 
-Tack works on Linux x86-64 and on an Apple silicon Mac (M1). The CLAP and the VST3 are tested in Bitwig 6.1.6 on both, and the Audio Unit in Logic Pro. It also builds for Windows. The Windows build renders the same as Linux under Wine, but nobody has played it in a DAW yet. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux and Windows, and CI checks the Audio Unit with `auval`.
+Tack works on Linux x86-64, Windows and on an Apple silicon Mac (M1). The CLAP and the VST3 are tested in Bitwig 6.1.6, and the Audio Unit in Logic Pro. The VST3 passes Steinberg's validator and Tack's own VST3 tests on Linux and Windows, and CI checks the Audio Unit with `auval`.
 
 Download the zip for your platform from the [latest release](https://github.com/oikoaudio/tack/releases/latest): Linux x86-64, Windows x86-64, or macOS for Apple silicon and Intel. Each holds `Tack.clap` and `Tack.vst3`, and on macOS also `Tack.component`. Copy them to your plugin folders: `~/.clap` and `~/.vst3` on Linux, `C:\Program Files\Common Files\CLAP` and `VST3` on Windows, and `~/Library/Audio/Plug-Ins/CLAP`, `VST3` and `Components` on macOS. The macOS build is not signed, so macOS blocks it as downloaded: after copying, clear the download flag with `xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins`. The FM-1 firmware installs from its [install page](https://oikoaudio.com/tack/fm1/install/) in Chrome or Edge.
 
