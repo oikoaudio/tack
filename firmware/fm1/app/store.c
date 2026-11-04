@@ -81,10 +81,11 @@ static void save_frame(void)
         ui.save_gap = g > ui.save_gap ? g : ui.save_gap;
         if (ui.saved == 1u) {
             int_text((int32_t)i + 1, text_put(t, "PATTERN "));
-        } else {
-            text_put(int_put(t, ui.saved), " PATTERNS");
+            app_say("SAVED", t);
+        } else {                         /* "SAVED 16 PATTERNS" is wider than HOME has before P1 */
+            int_text((int32_t)ui.saved, t);
+            app_say(t, "SAVED");
         }
-        app_say("SAVED", t);
     }
 }
 

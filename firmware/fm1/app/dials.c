@@ -33,15 +33,15 @@ static void lock_turn(uint32_t i, int32_t e)
     if (!tack_step_on((uint8_t)ui.voice, s)) {
         app_say("NO STEP", "");
     } else if (sl == tack_send_slot((uint32_t)ui.voice)) {
-        app_say("NO LOCK", "ON THE SEND");
+        app_say("NO LOCK", "ON SEND");
     } else if (sl->target) {
-        app_say("NO LOCK", "ON TARGETS");
+        app_say("NO LOCK", "ON TARGET");
     } else if (tack_slot_no_lock(sl)) {
         app_say("NO LOCK", tack_slot_no_lock(sl));
     } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_STEP_FULL) {
         app_say("STEP FULL", "8 LOCKS");
     } else if (tack_lock_room((uint8_t)ui.voice, s, sl->par) == TACK_LOCK_PATTERN_FULL) {
-        app_say("PATTERN", "LOCKS FULL");
+        app_say("PATTERN", "FULL");   /* as STEP FULL: no room for another lock */
     } else {
         ui.held_val[i] = tack_slot_step(sl, ui.held_val[i], e);
         tack_post_lock((uint8_t)ui.voice, s, sl->par, ui.held_val[i]);
@@ -160,7 +160,7 @@ static void morph_turn(int32_t e)
     char t[4];
     const int32_t v = clamp(tack_morph() + e * MORPH_STEP, 0, 127);
     if (!tack_morph_kit()) {
-        app_say(kit_slot(0) ? "HOLD POLY" : "KITS", kit_slot(0) ? "TURN PRESET" : "NONE LOADED");
+        app_say(kit_slot(0) ? "HOLD" : "KITS", kit_slot(0) ? "POLY+PRESET" : "NONE LOADED");
         return;
     }
     tack_post_morph((uint8_t)v);
@@ -639,7 +639,7 @@ static void recur_turn(int32_t e)
     if (!tack_step_on(v, s)) {
         app_say("NO STEP", "");
     } else if (!tack_recur_room(v, s)) {
-        app_say("PATTERN", "LOCKS FULL");
+        app_say("PATTERN", "FULL");   /* as STEP FULL: no room for another lock */
     } else {
         tack_post_recur(v, s, (uint8_t)n, mask ? mask : 1u);
         ui.popup = POP_RECUR;
