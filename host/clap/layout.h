@@ -36,6 +36,8 @@ constexpr float LOGO_W = LOGO_LETTERS * (LOGO_COLS + 1) * LOGO_CELL - LOGO_CELL;
 // the menu's icon before the logo: three bars of LOGO_CELL, LOGO_COLS cells long, on the logo's odd rows
 constexpr float MENU_ICON_W = LOGO_COLS * LOGO_CELL, MENU_ICON_GAP = 2 * LOGO_CELL;
 constexpr float LOGO_X = MARGIN + MENU_ICON_W + MENU_ICON_GAP;
+// the grip in the bottom right corner that zooms the editor, GRIP units square
+constexpr float GRIP = 16;
 constexpr int ROWS = 3;
 
 /** Plugin parameter id of the outputs switch, which isn't a kit parameter; the editor's own setting. */

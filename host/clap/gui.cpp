@@ -80,6 +80,12 @@ struct TackGui
 
 	bool menuOpen = false;	// Tack's menu, last frame
 
+	// a drag of the corner's grip: where it started, in units, the zoom it would take and whether Esc cancelled it
+	ImVec2 gripOrigin;
+	int gripTarget = 0;
+	bool gripCancelled = false;
+	PuglCursor cursor = PUGL_CURSOR_ARROW;	// the editor's, from the last frame
+
 	// what the last Mutate step changed: the whole kit (-1) or a voice, so that its button shows whose walk it is
 	int mutateScope = -1;
 };
@@ -879,6 +885,80 @@ static void drawSaveDialog(TackGui* g)
 	ImGui::EndPopup();
 }
 
+// the offered zoom nearest to percent
+static int nearestZoom(double percent)
+{
+	const int step = TACK_GUI_ZOOM_STEP;
+	return clampTo((int)std::lround(percent / step) * step, TACK_GUI_ZOOM_MIN, TACK_GUI_ZOOM_MAX);
+}
+
+// The corner's grip zooms the editor: a drag picks one of the zooms, shown in the middle, and releasing takes it. Nothing
+// changes while dragging, so the pointer's position means the same all along, and the host is asked for the new size
+// once, as from the menu. Esc cancels.
+static void drawGrip(TackGui* g)
+{
+	const ImGuiIO& io = ImGui::GetIO();
+	const ImVec2 size = io.DisplaySize;
+	// a window of its own, over the boxes
+	ImGui::SetNextWindowPos(ImVec2(size.x - GRIP, size.y - GRIP));
+	ImGui::SetNextWindowSize(ImVec2(GRIP, GRIP));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+	ImGui::Begin("grip", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav);
+	ImGui::PopStyleVar();
+	ImGui::InvisibleButton("grip", ImVec2(GRIP, GRIP));
+	const bool active = ImGui::IsItemActive(), hovered = ImGui::IsItemHovered();
+	if(ImGui::IsItemActivated()) {
+		g->gripOrigin = io.MousePos;
+		g->gripTarget = g->zoom;
+		g->gripCancelled = false;
+	}
+	if(active && !g->gripCancelled) {
+		if(ImGui::IsKeyPressed(ImGuiKey_Escape)) g->gripCancelled = true;
+		// the corner follows the pointer: the editor grows by the drag along its diagonal
+		const float w = windowWidth(), h = windowHeight(g->host.voice);
+		const float along = ((io.MousePos.x - g->gripOrigin.x) * w + (io.MousePos.y - g->gripOrigin.y) * h) / (w * w + h * h);
+		const double percent = g->zoom * (1 + along);
+		// a dead band keeps the zoom from flickering between two steps at their boundary
+		if(std::fabs(percent - g->gripTarget) > TACK_GUI_ZOOM_STEP * 0.58) g->gripTarget = nearestZoom(percent);
+	}
+	if(ImGui::IsItemDeactivated() && !g->gripCancelled && g->gripTarget != g->zoom)
+		g->host.zoomChosen(g->host.ctx, g->gripTarget);
+	if(!active) hint("Drag to zoom");
+
+	// three diagonal strokes in the corner
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	const ImU32 colour = ImGui::GetColorU32(hovered || active ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+	const ImVec2 corner(size.x - 3, size.y - 3);
+	for(float l : { 4.f, 8.f, 12.f })
+		dl->AddLine(ImVec2(corner.x - l, corner.y), ImVec2(corner.x, corner.y - l), colour, 1.5f);
+	ImGui::End();
+
+	// the zoom it would take, in the middle of the editor
+	if(active && !g->gripCancelled) {
+		ImDrawList* fg = ImGui::GetForegroundDrawList();
+		const ImVec2 c(size.x * 0.5f, size.y * 0.5f), half(120, 52);
+		fg->AddRectFilled(ImVec2(c.x - half.x, c.y - half.y), ImVec2(c.x + half.x, c.y + half.y),
+			ImGui::GetColorU32(ImGuiCol_PopupBg), 8);
+		fg->AddRect(ImVec2(c.x - half.x, c.y - half.y), ImVec2(c.x + half.x, c.y + half.y),
+			ImGui::GetColorU32(ImGuiCol_Border), 8);
+		char text[8];
+		snprintf(text, sizeof text, "%d%%", g->gripTarget);
+		const float big = FONT_SIZE * 3;
+		const ImVec2 tw = ImGui::GetFont()->CalcTextSizeA(big, FLT_MAX, 0, text);
+		fg->AddText(nullptr, big, ImVec2(c.x - tw.x * 0.5f, c.y - 12 - tw.y * 0.5f), ImGui::GetColorU32(ImGuiCol_SliderGrab), text);
+		const char* help = "Release to zoom, Esc to cancel";
+		const float hw = ImGui::CalcTextSize(help).x;
+		fg->AddText(ImVec2(c.x - hw * 0.5f, c.y + 26), ImGui::GetColorU32(ImGuiCol_TextDisabled), help);
+	}
+
+	// the diagonal resize cursor over the grip and while dragging it; the pointer's moves set it again (onEvent), as a
+	// host may set its own in between
+	const PuglCursor cursor = hovered || active ? PUGL_CURSOR_UP_LEFT_DOWN_RIGHT : PUGL_CURSOR_ARROW;
+	if(cursor != g->cursor) puglSetCursor(g->view, cursor);
+	g->cursor = cursor;
+}
+
 static void drawFrame(TackGui* g)
 {
 	ImGui::SetNextWindowPos(ImVec2(0, 0));
@@ -892,6 +972,7 @@ static void drawFrame(TackGui* g)
 	drawAbout(g);
 	drawBrowser(g);
 	ImGui::End();
+	drawGrip(g);
 }
 
 //-----------------------------------------------------------
@@ -972,6 +1053,7 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		break;
 	}
 	case PUGL_MOTION:
+		if(g->cursor != PUGL_CURSOR_ARROW) puglSetCursor(view, g->cursor);
 		setMods(io, event->motion.state);
 		io.AddMousePosEvent((float)(event->motion.x / pixelsPerUnit(g)), (float)(event->motion.y / pixelsPerUnit(g)));
 		break;
@@ -988,7 +1070,8 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		io.AddMouseWheelEvent((float)event->scroll.dx, (float)event->scroll.dy);
 		break;
 	case PUGL_POINTER_OUT:
-		io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
+		// a drag goes on outside the window, as when the grip makes it bigger: the platform still sends its moves
+		if(!ImGui::IsAnyMouseDown()) io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
 		break;
 	case PUGL_KEY_PRESS:
 	case PUGL_KEY_RELEASE: {
@@ -1128,8 +1211,7 @@ bool tack_guiSetScale(TackGui* g, double scale)
 
 void tack_guiSetZoom(TackGui* g, int percent)
 {
-	const int step = TACK_GUI_ZOOM_STEP;
-	g->zoom = clampTo((percent + step / 2) / step * step, TACK_GUI_ZOOM_MIN, TACK_GUI_ZOOM_MAX);
+	g->zoom = nearestZoom(percent);
 	applyDefaultSize(g);
 }
 

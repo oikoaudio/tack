@@ -1,0 +1,27 @@
+--- a/src/mac.m
++++ b/src/mac.m
+@@ -568,8 +568,9 @@
+     [trackingArea release];
+   }
+ 
++  // CursorUpdate: AppKit asks the view for its cursor (cursorUpdate:) instead of leaving the host's in place
+   const int opts = (NSTrackingMouseEnteredAndExited | NSTrackingMouseMoved |
+-                    NSTrackingActiveAlways);
++                    NSTrackingCursorUpdate | NSTrackingActiveAlways);
+   trackingArea   = [[NSTrackingArea alloc] initWithRect:[self bounds]
+                                               options:opts
+                                                 owner:self
+@@ -628,6 +629,13 @@
+ 
+ - (void)mouseMoved:(NSEvent*)event
+ {
++  // the pointer may have been over the view before it had a tracking area, so that it never entered; and a drag that
++  // goes outside keeps its cursor
++  puglview->impl->mouseTracked =
++    [NSEvent pressedMouseButtons] != 0 ||
++    NSPointInRect([self convertPoint:[event locationInWindow] fromView:nil],
++                  [self bounds]);
++
+   const NSPoint         wloc = [self eventLocation:event];
+   const NSPoint         rloc = [NSEvent mouseLocation];
+   const PuglMotionEvent ev   = {
