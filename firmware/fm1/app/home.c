@@ -208,7 +208,13 @@ static void graph_column(int32_t x, float y)    /* y 0-1 */
 static uint8_t graph_value(int graph, uint32_t slot, uint8_t none)
 {
     const TackSlot *s = tack_graph_slot((uint32_t)ui.voice, graph, slot);
-    return s ? tack_get_param(s->par) : none;
+    uint8_t v;
+    if (!s)
+        return none;
+    v = tack_get_param(s->par);
+    if (held_shown())                            /* the step's picture: its lock where it has one */
+        tack_lock_get((uint8_t)ui.voice, ui.held_step, s->par, &v);
+    return v;
 }
 
 static void draw_env(int graph)
@@ -299,7 +305,7 @@ static void draw_osc(int graph)
 
 static const char *page_name(void)
 {
-    if (ui.held >= 0)
+    if (held_shown())
         return "STEP LOCKS";
     return tack_page_title((uint32_t)ui.voice, ui.group, (uint32_t)row_now());
 }
@@ -331,7 +337,32 @@ static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS;
 #define HOME_ENV_H (HOME_MAP_Y + GRID_CELL + HOME_CELL_H - HOME_TOP)   /* level with the map at both ends */
 #define HOME_MAP_Y (HOME_TOP + 11 + SP_IN)   /* under its title, whose capitals are 11 high */
 
-static int home_info(void) { return ui.group == TACK_G_MAIN && !ui.over && ui.held < 0; }
+static int home_strip(void) { return ui.group == TACK_G_MAIN && !ui.over; }   /* HOME's bottom: the envelope beside the map */
+static int home_info(void) { return home_strip() && !held_shown(); }
+
+/* a step held on HOME: in the map's place, which step, how many locks it has (those on the dials above are lit, the rest are on
+ * the EDIT pages) and the slots of its recurrence as the black keys show them, in the map's boxes. The envelope stays */
+static void draw_home_step(void)
+{
+    const uint8_t s = ui.held_step;
+    const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+    const int locks = tack_step_locks((uint8_t)ui.voice, s);
+    char t[16];
+    int_text(s + 1, text_put(t, "STEP "));
+    cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_WHITE);
+    if (locks)
+        text_put(int_put(t, locks), locks == 1 ? " LOCK" : " LOCKS");
+    else
+        text_put(t, "NO LOCKS");
+    cv_text(HOME_X + HOME_MAP_W - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, locks ? C_HI : C_GRAY);
+    for (int i = 0; i < 8; i++) {
+        const int32_t x = HOME_X + i * GRID_CELL;
+        if (i < len)
+            cv_rect(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, mask >> i & 1 ? C_HI : C_LINE);
+        else
+            outline(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, 1, C_EMPTY);
+    }
+}
 
 static void draw_home_info(uint32_t used)
 {
@@ -395,11 +426,13 @@ static void draw_bottom(void)
     KEY(ui.over);
     KEY(ui.note_oct);
     KEY(tack_recording());
-    KEY(ui.held >= 0);
-    if (ui.held >= 0) {
+    KEY(held_shown());
+    if (held_shown()) {
         const uint8_t s = ui.held_step;
         KEY(tack_recur_len((uint8_t)ui.voice, s));
         KEY(tack_recur_mask((uint8_t)ui.voice, s));
+        KEY(tack_step_locks((uint8_t)ui.voice, s));
+        KEY(s);
     }
     KEY(graph);
     KEY(pages);
@@ -453,10 +486,10 @@ static void draw_bottom(void)
     bottom_key = key;
 
     cv_begin(240, BOTTOM_H, C_BLACK);
-    graph_w = home_info() ? HOME_ENV_W : GRAPH_W;
-    graph_x = home_info() ? HOME_ENV_X : EDGE;
-    graph_h = home_info() ? HOME_ENV_H : GRAPH_H;
-    graph_top = home_info() ? HOME_TOP : GRAPH_TOP;
+    graph_w = home_strip() ? HOME_ENV_W : GRAPH_W;
+    graph_x = home_strip() ? HOME_ENV_X : EDGE;
+    graph_h = home_strip() ? HOME_ENV_H : GRAPH_H;
+    graph_top = home_strip() ? HOME_TOP : GRAPH_TOP;
     if (0) {
     } else if (graph == TACK_GRAPH_LFO) {
         draw_lfo();
@@ -467,15 +500,19 @@ static void draw_bottom(void)
     }
     if (home_info())
         draw_home_info(used);
-    cv_text(EDGE, ROW_Y, &FONT_XS, page_name(), C_GRAY);
-    if (ui.held >= 0) {          /* the step's recurrence, where the keys show it */
-        const uint8_t s = ui.held_step;
-        const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
-        for (i = 0; i < len; i++)
-            cv_rect(240 - EDGE - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
+    if (home_strip() && held_shown()) {
+        draw_home_step();
     } else {
-        for (i = 0; i < pages; i++)
-            cv_rect(240 - EDGE - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
+        cv_text(EDGE, ROW_Y, &FONT_XS, page_name(), C_GRAY);
+        if (held_shown()) {          /* the step's recurrence, where the keys show it */
+            const uint8_t s = ui.held_step;
+            const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+            for (i = 0; i < len; i++)
+                cv_rect(240 - EDGE - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
+        } else {
+            for (i = 0; i < pages; i++)
+                cv_rect(240 - EDGE - (pages - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 5, BAR_W, 5, i == bar ? C_HI : C_LINE);
+        }
     }
     if (xruns && ui.over != PAGE_SET) {                 /* never hidden: a soak test reads this from any page */
         char t[8];

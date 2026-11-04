@@ -16,6 +16,7 @@ static void hold_step(uint32_t k)
 {
     ui.held = (int32_t)k;
     ui.held_used = 0;
+    ui.held_at = plat_ms();
     ui.held_step = (uint8_t)step_of(k);
     ui.held_pattern = (uint8_t)tack_pattern();
     if (voice_page())

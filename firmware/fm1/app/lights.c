@@ -34,7 +34,7 @@ static void lights(void)
     const int head = tack_running() ? tack_playhead((uint8_t)ui.voice) : -1;
     const uint32_t now = plat_ms();
     const int as_notes = keys_notes(ui.btn);
-    const int as_slots = ui.held >= 0;
+    const int as_slots = held_shown();
     uint32_t mid = 0;
     if (as_slots) {                              /* lit: it plays on that slot. Mid: a slot it skips */
         const uint8_t s = ui.held_step;
