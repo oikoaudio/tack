@@ -16,13 +16,6 @@ static uint8_t pg_value(const TackSlot *sl, int on, uint32_t i, int *lit)
 /* how many of a page's first slots its picture takes in: the parameters that shape it */
 enum { PIC_NONE, PIC_ENV, PIC_OSC, PIC_LFO, PIC_FILTER };
 
-static int same(const char *a, const char *b)
-{
-    while (*a && *a == *b)
-        a++, b++;
-    return *a == *b;
-}
-
 /* a page's shared picture, and which of its slots it takes in */
 static int pg_picture(int page, uint32_t *first, uint32_t *n)
 {
