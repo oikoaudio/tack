@@ -833,6 +833,18 @@ int tack_step_locks(uint8_t voice, uint8_t step)
     const uint32_t key = step_key(voice, step);
     return (int)step_locks(p, lock_lower(p, key), key);
 }
+int tack_step_lock(uint8_t voice, uint8_t step, uint32_t i, uint16_t *param, uint8_t *value)
+{
+    const LockList *p = &lock_list[seq_activePattern];
+    const uint32_t key = step_key(voice, step), first = lock_lower(p, key);
+    const Lock *l;
+    if (i >= step_locks(p, first, key))
+        return 0;
+    l = &p->l[first + i];
+    *param = l->dest <= 127u ? (uint16_t)(l->dest - 1u) : l->dest;   /* lock_dest's way back: 127, a reserved parameter, never locks */
+    *value = l->b & 0x7Fu;
+    return 1;
+}
 
 /* Recurrence goes where the sequencer's first lock slot was, which is copied and cleared with the step: param1Nr the length,
  * or NO_AUTOMATION for none, and param1Val the mask. Each lane counts its own passes of each pattern, so polymetric lanes

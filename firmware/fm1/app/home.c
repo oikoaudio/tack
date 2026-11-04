@@ -340,28 +340,142 @@ static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS;
 static int home_strip(void) { return ui.group == TACK_G_MAIN && !ui.over; }   /* HOME's bottom: the envelope beside the map */
 static int home_info(void) { return home_strip() && !held_shown(); }
 
-/* a step held on HOME: in the map's place, which step, how many locks it has (those on the dials above are lit, the rest are on
- * the EDIT pages) and the slots of its recurrence as the black keys show them, in the map's boxes. The envelope stays */
+/* what a step's recurrence plays: EVERY PASS, or the passes it plays of how many, as 1 3 OF 4. t holds 24 */
+static void recur_text(uint8_t v, uint8_t s, char *t)
+{
+    const int len = tack_recur_len(v, s), mask = tack_recur_mask(v, s);
+    int n = 0;
+    if (len == 1) {
+        text_put(t, "EVERY PASS");
+        return;
+    }
+    for (int k = 0; k < len; k++)
+        if (mask >> k & 1) {
+            t[n++] = (char)('1' + k);
+            t[n++] = ' ';
+        }
+    text_put(t + n, "OF ");
+    t[n + 3] = (char)('0' + len);
+    t[n + 4] = 0;
+}
+
+/* A lock's name: its dial's label, from the first page of the voice that has it. Where another of the voice's dials has the
+ * same label, its page's first word goes before it, short: MOD DECAY, TRN VOLUME. The slot, or 0 for none */
+static const TackSlot *lock_slot(uint16_t par, char *name)
+{
+    const uint32_t v = (uint32_t)ui.voice;
+    const TackSlot *found = 0;
+    uint32_t fg = 0, fsub = 0;
+    int clash = 0;
+    for (uint32_t g = TACK_G_MAIN; g <= TACK_G_LFO; g++)
+        for (uint32_t sub = 0; sub < (uint32_t)tack_pages(v, g); sub++)
+            for (uint32_t i = 0; i < TACK_NP; i++) {
+                const TackSlot *sl = tack_slot(v, g, sub, i);
+                if (!sl || sl->target)
+                    continue;
+                if (!found && sl->par == par) {
+                    found = sl;
+                    fg = g;
+                    fsub = sub;
+                }
+            }
+    if (!found)
+        return 0;
+    for (uint32_t g = TACK_G_MAIN; g <= TACK_G_LFO; g++)
+        for (uint32_t sub = 0; sub < (uint32_t)tack_pages(v, g); sub++)
+            for (uint32_t i = 0; i < TACK_NP; i++) {
+                const TackSlot *sl = tack_slot(v, g, sub, i);
+                if (sl && !sl->target && sl->par != par && !strcmp(sl->label, found->label))
+                    clash = 1;
+            }
+    name[0] = 0;
+    if (clash) {
+        const char *title = tack_page_title(v, fg, fsub);
+        char word[8];
+        uint32_t n = 0;
+        while (title[n] && title[n] != ' ' && n < 7u) {
+            word[n] = title[n];
+            n++;
+        }
+        word[n] = 0;
+        if (!strcmp(word, "TRANSIE"))
+            text_put(word, "TRN");
+        else if (!strcmp(word, "VELOCIT"))
+            text_put(word, "VEL");
+        else if (n > 4u)
+            word[4] = 0;
+        if (word[0])
+            text_put(text_put(name, word), " ");
+    }
+    text_put(name + strlen(name), found->label);
+    return found;
+}
+
+static int on_dials(uint16_t par)               /* HOME's four dials, which light their own locks */
+{
+    for (uint32_t i = 0; i < TACK_NP; i++)
+        if (slot(i) && slot(i)->par == par)
+            return 1;
+    return 0;
+}
+
+/* A step held on HOME. In the map's place: which step, and its recurrence, in the map's boxes and in words. In the envelope's:
+ * its locks, a name and a value a row, those the dials above don't show first. Three rows: past three, the last says how many
+ * more */
+#define LOCK_ROWS 3
 static void draw_home_step(void)
 {
-    const uint8_t s = ui.held_step;
-    const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
-    const int locks = tack_step_locks((uint8_t)ui.voice, s);
-    char t[16];
+    const uint8_t v = (uint8_t)ui.voice, s = ui.held_step;
+    const int len = tack_recur_len(v, s), mask = tack_recur_mask(v, s), locks = tack_step_locks(v, s);
+    const int32_t row_y[LOCK_ROWS] = {HOME_TOP, HOME_MAP_Y, HOME_MAP_Y + GRID_CELL};   /* ink tops, level with the left */
+    const int32_t right = 240 - EDGE;
+    char t[24];
     int_text(s + 1, text_put(t, "STEP "));
     cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_WHITE);
-    if (locks)
-        text_put(int_put(t, locks), locks == 1 ? " LOCK" : " LOCKS");
-    else
-        text_put(t, "NO LOCKS");
-    cv_text(HOME_X + HOME_MAP_W - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, locks ? C_HI : C_GRAY);
-    for (int i = 0; i < 8; i++) {
-        const int32_t x = HOME_X + i * GRID_CELL;
-        if (i < len)
-            cv_rect(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, mask >> i & 1 ? C_HI : C_LINE);
-        else
-            outline(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, 1, C_EMPTY);
+    recur_text(v, s, t);
+    if (len == 1) {
+        cv_text(HOME_X, HOME_MAP_Y - 3, &FONT_XS, t, C_GRAY);
+    } else {
+        for (int i = 0; i < len; i++)
+            cv_rect(HOME_X + i * GRID_CELL, HOME_MAP_Y, HOME_CELL, HOME_CELL, mask >> i & 1 ? C_HI : C_LINE);
+        cv_text(HOME_X, HOME_MAP_Y + GRID_CELL - 3, &FONT_XS, t, C_GRAY);
     }
+    if (!locks) {
+        cv_text(HOME_ENV_X, row_y[0] - 3, &FONT_XS, "NO LOCKS", C_GRAY);
+        cv_text(HOME_ENV_X, row_y[1] - 3, &FONT_XS, "TURN A DIAL", C_DIM);
+        return;
+    }
+    int row = 0;
+    for (int pass = 0; pass < 2; pass++)          /* those off the dials, then those on them */
+        for (uint32_t i = 0; row < LOCK_ROWS; i++) {
+            uint16_t par;
+            uint8_t val;
+            char name[24];
+            const TackSlot *sl;
+            const char *word;
+            if (!tack_step_lock(v, s, i, &par, &val))
+                break;
+            if (on_dials(par) != pass)
+                continue;
+            if (row == LOCK_ROWS - 1 && locks > LOCK_ROWS) {
+                int_text(locks - row, t);
+                text_put(t + strlen(t), " MORE");
+                cv_text(HOME_ENV_X, row_y[row] - 3, &FONT_XS, t, C_GRAY);
+                row = LOCK_ROWS;
+                break;
+            }
+            sl = lock_slot(par, name);
+            if (!sl)
+                text_put(name, "?");
+            word = sl ? tack_slot_text(sl, val) : 0;
+            if (!word && sl)
+                value_text(sl, val, t);
+            else if (!word)
+                int_text(val, t);
+            cv_text(HOME_ENV_X, row_y[row] - 3, &FONT_XS, name, C_GRAY);
+            cv_text(right - text_w(&FONT_XS, word ? word : t), row_y[row] - 3, &FONT_XS, word ? word : t, C_HI);
+            row++;
+        }
 }
 
 static void draw_home_info(uint32_t used)
@@ -433,6 +547,14 @@ static void draw_bottom(void)
         KEY(tack_recur_mask((uint8_t)ui.voice, s));
         KEY(tack_step_locks((uint8_t)ui.voice, s));
         KEY(s);
+        for (uint32_t li = 0; li < TACK_STEP_LOCKS; li++) {   /* the list shows their values */
+            uint16_t par;
+            uint8_t val;
+            if (!tack_step_lock((uint8_t)ui.voice, s, li, &par, &val))
+                break;
+            KEY(par);
+            KEY(val);
+        }
     }
     KEY(graph);
     KEY(pages);
@@ -490,7 +612,7 @@ static void draw_bottom(void)
     graph_x = home_strip() ? HOME_ENV_X : EDGE;
     graph_h = home_strip() ? HOME_ENV_H : GRAPH_H;
     graph_top = home_strip() ? HOME_TOP : GRAPH_TOP;
-    if (0) {
+    if (home_strip() && held_shown()) {         /* the step's locks are listed where the envelope was */
     } else if (graph == TACK_GRAPH_LFO) {
         draw_lfo();
     } else if (graph >= TACK_GRAPH_OSC) {

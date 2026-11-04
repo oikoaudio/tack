@@ -84,7 +84,6 @@ static void draw_popup(void)
     const uint8_t v = (uint8_t)ui.voice, st = ui.held_step;
     const uint16_t c = VOICE_COLOUR[ui.voice];
     char t[28];
-    uint32_t n = 0;
     cv_begin(212, POP_H, C_BLACK);
     outline(0, 0, 212, POP_H, 2, C_WHITE);
     if (ui.popup == POP_NUDGE) {
@@ -121,22 +120,8 @@ static void draw_popup(void)
                 cv_text(x + 10 - text_w(&FONT_B, t) / 2, 37, &FONT_B, t, C_GRAY);
             }
         }
-        if (len == 1) {
-            pop_centre(72, &FONT_B, "EVERY PASS", C_WHITE);
-        } else {
-            n = 0;
-            for (int k = 0; k < len; k++)
-                if (mask >> k & 1) {
-                    t[n++] = (char)('1' + k);
-                    t[n++] = ' ';
-                }
-            t[n++] = 'O';
-            t[n++] = 'F';
-            t[n++] = ' ';
-            t[n++] = (char)('0' + len);
-            t[n] = 0;
-            pop_centre(72, &FONT_B, t, C_WHITE);
-        }
+        recur_text(v, st, t);
+        pop_centre(72, &FONT_B, t, C_WHITE);
     } else {
         const int chance = tack_step_get(v, st, TACK_ST_PROB);
         pop_centre(8, &FONT_B, "CHANCE", C_WHITE);
