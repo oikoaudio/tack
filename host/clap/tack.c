@@ -137,6 +137,8 @@ typedef struct
 	// the editor; its changes reach the engine and the host through guiEvents
 	TackGui* gui;
 	bool guiParented;	// the editor is in the host's window
+	int zoom;	// the editor's, in percent; kept while it is closed, and in the state
+	int pendingZoom;	// chosen in the editor, for on_main_thread to ask the host for its size; 0 if none
 	const clap_host_gui_t* hostGui;
 	const clap_host_timer_support_t* hostTimer;
 	clap_id guiTimer;
@@ -650,7 +652,7 @@ static void setSeparateOutputs(Tack* k, bool on)
 static bool stateSave(const clap_plugin_t* plugin, const clap_ostream_t* stream)
 {
 	Tack* k = plugin->plugin_data;
-	uint8_t data[8 + LXR_HOST_NUM_PARAMS + 1 + KIT_NAME_SIZE + 1 + KIT_PATH_SIZE + 2];
+	uint8_t data[8 + LXR_HOST_NUM_PARAMS + 1 + KIT_NAME_SIZE + 1 + KIT_PATH_SIZE + 2 + 1];
 	const uint32_t n = LXR_HOST_NUM_PARAMS;
 	memcpy(data, STATE_MAGIC, 4);
 	memcpy(data + 4, &n, 4);
@@ -664,6 +666,7 @@ static bool stateSave(const clap_plugin_t* plugin, const clap_ostream_t* stream)
 	p += KIT_PATH_SIZE;
 	*p++ = (uint8_t)(int8_t)k->kitVoice;
 	*p++ = atomic_load(&k->chromatic);
+	*p++ = (uint8_t)k->zoom;
 
 	for(size_t done = 0; done < sizeof data; ) {
 		const int64_t w = stream->write(stream, data + done, sizeof data - done);
@@ -717,6 +720,9 @@ static bool stateLoad(const clap_plugin_t* plugin, const clap_istream_t* stream)
 		k->kitVoice = (int8_t)*p++;
 		atomic_store(&k->chromatic, *p++ != 0);
 	}
+	// the editor's zoom, for when it opens: one that is open keeps its own, as a VST3 or AU preset is a state too
+	const int zoom = end >= p + 1 ? *p : 100;
+	if(!k->gui) k->zoom = zoom >= TACK_GUI_ZOOM_MIN && zoom <= TACK_GUI_ZOOM_MAX ? zoom : 100;
 	return true;
 }
 
@@ -908,6 +914,14 @@ static int guiMutate(void* ctx, int voice, int steps)
 	return step;
 }
 
+// the editor's event handling is still going on: the host is asked for the new size from on_main_thread
+static void guiZoomChosen(void* ctx, int percent)
+{
+	Tack* k = ctx;
+	k->pendingZoom = percent;
+	k->host->request_callback(k->host);
+}
+
 static float guiTempo(void* ctx)
 {
 	const float t = atomic_load(&((Tack*)ctx)->tempo);
@@ -967,6 +981,7 @@ static void guiDestroy(const clap_plugin_t* plugin)
 	tack_guiDestroy(k->gui);
 	k->gui = NULL;
 	k->guiParented = false;
+	k->pendingZoom = 0;
 }
 
 static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloating)
@@ -976,9 +991,10 @@ static bool guiCreate(const clap_plugin_t* plugin, const char* api, bool isFloat
 	if(!guiIsApiSupported(plugin, api, isFloating) || k->gui || (!TACK_GUI_OWN_TIMER && !k->hostTimer)) return false;
 	const TackGuiHost host = { k, guiGetValue, guiBeginEdit, guiSetValue, guiEndEdit, guiKitName, guiSaveKit,
 		guiKitPath, guiKitEdited, guiLoadKit, k->type->voice, guiHasParam, guiOffersValue, guiValueText, guiKitVoice,
-		guiModulation, guiLoadVoice, guiMutate, guiMutateStep, guiTempo };
+		guiModulation, guiLoadVoice, guiMutate, guiMutateStep, guiTempo, guiZoomChosen };
 	k->gui = tack_guiCreate(&host);
 	if(!k->gui) return false;
+	tack_guiSetZoom(k->gui, k->zoom);
 	if(!TACK_GUI_OWN_TIMER && !k->hostTimer->register_timer(k->host, GUI_TIMER_MS, &k->guiTimer)) {
 		tack_guiDestroy(k->gui);
 		k->gui = NULL;
@@ -995,24 +1011,60 @@ static bool guiGetSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* h
 	return true;
 }
 
+// Asks the host to resize the editor's frame to the editor's size. The host may resize from inside the request, through
+// set_size (the Audio Unit does), so the editor has its new size before this is called; or later, or without calling
+// set_size at all (VST3 hosts, as Tack's editor can't be resized by dragging), so the editor resizes itself once the host
+// has agreed. Main thread, outside the editor's event handling.
+static bool requestGuiSize(Tack* k)
+{
+	uint32_t w, h;
+	tack_guiGetSize(k->gui, &w, &h);
+	if(!k->guiParented || !k->hostGui || !k->hostGui->request_resize(k->host, w, h)) return false;
+	tack_guiSetSize(k->gui, w, h);
+	return true;
+}
+
 static bool guiSetScale(const clap_plugin_t* plugin, double scale)
 {
 	Tack* k = plugin->plugin_data;
 	if(!k->gui || !tack_guiSetScale(k->gui, scale)) return false;
-	// a new scale for an editor that is already showing, e.g. on a screen with another DPI: ask for its new size
-	uint32_t w, h;
-	if(k->guiParented && k->hostGui && guiGetSize(plugin, &w, &h)) k->hostGui->request_resize(k->host, w, h);
+	// a new scale for an editor that is already showing, e.g. on a screen with another DPI: ask for its new size.
+	// The scale is the host's, so the editor takes it even if the frame stays as it is
+	if(k->guiParented && !requestGuiSize(k)) {
+		uint32_t w, h;
+		tack_guiGetSize(k->gui, &w, &h);
+		tack_guiSetSize(k->gui, w, h);
+	}
 	return true;
+}
+
+// a zoom chosen in the editor: if the host won't resize the frame, the editor stays as it was
+static void applyPendingZoom(Tack* k)
+{
+	const int zoom = k->pendingZoom;
+	k->pendingZoom = 0;
+	if(!zoom || !k->gui) return;
+	const int old = tack_guiZoom(k->gui);
+	tack_guiSetZoom(k->gui, zoom);
+	if(k->guiParented && !requestGuiSize(k)) {
+		tack_guiSetZoom(k->gui, old);
+		// back to its old size, in case the host resized it anyway
+		uint32_t w, h;
+		tack_guiGetSize(k->gui, &w, &h);
+		tack_guiSetSize(k->gui, w, h);
+	}
+	k->zoom = tack_guiZoom(k->gui);
 }
 
 static bool guiCanResize(const clap_plugin_t* plugin) { return false; }
 static bool guiGetResizeHints(const clap_plugin_t* plugin, clap_gui_resize_hints_t* hints) { return false; }
 static bool guiAdjustSize(const clap_plugin_t* plugin, uint32_t* width, uint32_t* height) { return guiGetSize(plugin, width, height); }
 
+// only the editor's own size: the host can't resize it, only take a size it asked for
 static bool guiSetSize(const clap_plugin_t* plugin, uint32_t width, uint32_t height)
 {
-	uint32_t w, h;
-	return guiGetSize(plugin, &w, &h) && width == w && height == h;
+	Tack* k = plugin->plugin_data;
+	return k->gui && tack_guiSetSize(k->gui, width, height);
 }
 
 static bool guiSetParent(const clap_plugin_t* plugin, const clap_window_t* window)
@@ -1056,6 +1108,7 @@ static bool tackInit(const clap_plugin_t* plugin)
 	if(!k->hostPresetLoad) k->hostPresetLoad = k->host->get_extension(k->host, CLAP_EXT_PRESET_LOAD_COMPAT);
 	k->engine.api->init();
 	k->separateOutputs = k->type->voice >= 0;
+	k->zoom = 100;
 	k->engine.api->setSeparateOutputs(k->separateOutputs);
 	// a single voice: the engine computes only that voice and resamples only its output
 	k->engine.api->setSoloVoice(k->type->voice);
@@ -1096,7 +1149,7 @@ static void tackDeactivate(const clap_plugin_t* plugin)
 static bool tackStartProcessing(const clap_plugin_t* plugin) { return true; }
 static void tackStopProcessing(const clap_plugin_t* plugin) {}
 static void tackReset(const clap_plugin_t* plugin) {}
-static void tackOnMainThread(const clap_plugin_t* plugin) {}
+static void tackOnMainThread(const clap_plugin_t* plugin) { applyPendingZoom(plugin->plugin_data); }
 
 static const void* tackGetExtension(const clap_plugin_t* plugin, const char* id)
 {

@@ -62,7 +62,17 @@ typedef struct
 	int (*mutateStep)(void* ctx);
 	/** the host's tempo, or 120 until it has said */
 	float (*tempo)(void* ctx);
+	/**
+	 * the zoom chosen in the editor, in percent. The editor keeps its size until the plugin has asked the host for the
+	 * new one (tack_guiSetZoom), after the editor's event handling: hosts resize from inside that request
+	 */
+	void (*zoomChosen)(void* ctx, int percent);
 } TackGuiHost;
+
+/** The zooms the editor offers, in percent. */
+#define TACK_GUI_ZOOM_MIN 50
+#define TACK_GUI_ZOOM_MAX 200
+#define TACK_GUI_ZOOM_STEP 25
 
 #define TACK_MUTATE_AGAIN (-2)
 
@@ -87,15 +97,23 @@ typedef struct TackGui TackGui;
 TackGui* tack_guiCreate(const TackGuiHost* host);
 void tack_guiDestroy(TackGui* gui);
 /**
- * The editor's size, as the plugin API counts it: pixels on X11 and Windows, points on macOS. A voice plugin's is
- * shorter than the whole kit's.
+ * The editor's size, as the plugin API counts it: pixels on X11 and Windows, points on macOS. It is the layout's size
+ * times the zoom, and on X11 and Windows times the host's scale too. A voice plugin's is shorter than the whole kit's.
  */
 void tack_guiGetSize(const TackGui* gui, uint32_t* width, uint32_t* height);
 /**
  * Scales the editor by the host's factor (X11 and Windows), also once it is showing; the host then needs the new
- * size. False on macOS, where the screen decides the scale, and for a factor out of range.
+ * size (tack_guiSetSize). False on macOS, where the screen decides the scale, and for a factor out of range.
  */
 bool tack_guiSetScale(TackGui* gui, double scale);
+/**
+ * Zooms the editor, in percent, rounded to the zooms it offers. Only its size changes (tack_guiGetSize): the window
+ * follows on tack_guiSetSize, once the host has agreed to the size.
+ */
+void tack_guiSetZoom(TackGui* gui, int percent);
+int tack_guiZoom(const TackGui* gui);
+/** Resizes the editor's window to its size; false, and no change, for any other size. */
+bool tack_guiSetSize(TackGui* gui, uint32_t width, uint32_t height);
 /** Embeds the editor in a host window (an X11 window id, an HWND or an NSView) and creates it. */
 bool tack_guiSetParent(TackGui* gui, uintptr_t parent);
 bool tack_guiShow(TackGui* gui);

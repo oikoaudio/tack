@@ -10,6 +10,7 @@
  * $TACK_MOD="id~amount ..." modulates parameters as a host's modulators would (plugin values), to show it.
  * $TACK_SCALE="factor" scales the editor as a host does for a high-DPI screen (set_scale; X11 and Windows), and
  * $TACK_RESCALE="factor@seconds" changes the scale while it shows, as when the window moves to another screen.
+ * $TACK_ZOOM="percent" opens the editor at a zoom, as a project saved with it would (the plugin's state).
  *
  * SPDX-License-Identifier: GPL-3.0-only
  */
@@ -68,9 +69,30 @@ static const void* hostGetExtension(const clap_host_t* h, const char* id)
 	return NULL;
 }
 static void hostRequest(const clap_host_t* h) {}
+// the plugin's on_main_thread, from the event loop
+static bool callbackRequested;
+static void requestCallback(const clap_host_t* h) { callbackRequested = true; }
 static const clap_host_t host = {
-	CLAP_VERSION_INIT, NULL, "gui_test", "", "", "0.1", hostGetExtension, hostRequest, hostRequest, hostRequest
+	CLAP_VERSION_INIT, NULL, "gui_test", "", "", "0.1", hostGetExtension, hostRequest, hostRequest, requestCallback
 };
+
+// a state in memory, to change the zoom in it
+static uint8_t stateData[8192];
+static size_t stateSize, stateRead;
+static int64_t stateWrite(const clap_ostream_t* s, const void* buf, uint64_t size)
+{
+	if(stateSize + size > sizeof stateData) return -1;
+	memcpy(stateData + stateSize, buf, size);
+	stateSize += size;
+	return (int64_t)size;
+}
+static int64_t stateReadFn(const clap_istream_t* s, void* buf, uint64_t size)
+{
+	const size_t n = size < stateSize - stateRead ? size : stateSize - stateRead;
+	memcpy(buf, stateData + stateRead, n);
+	stateRead += n;
+	return (int64_t)n;
+}
 
 // the modulation from $TACK_MOD, sent with the first flush
 #define MAX_MODS 32
@@ -108,6 +130,17 @@ int main(int argc, char** argv)
 	if(argc > 3) {
 		const clap_plugin_preset_load_t* pl = plugin->get_extension(plugin, CLAP_EXT_PRESET_LOAD);
 		pl->from_location(plugin, CLAP_PRESET_DISCOVERY_LOCATION_FILE, argv[3], NULL);
+	}
+
+	const char* zoom = getenv("TACK_ZOOM");
+	if(zoom) {
+		// the zoom is the state's last byte
+		const clap_plugin_state_t* st = plugin->get_extension(plugin, CLAP_EXT_STATE);
+		const clap_ostream_t os = { NULL, stateWrite };
+		const clap_istream_t is = { NULL, stateReadFn };
+		if(!st->save(plugin, &os) || !stateSize) { fprintf(stderr, "could not save the state\n"); return 1; }
+		stateData[stateSize - 1] = (uint8_t)atoi(zoom);
+		if(!st->load(plugin, &is)) { fprintf(stderr, "could not load the state\n"); return 1; }
 	}
 
 	const clap_plugin_gui_t* gui = plugin->get_extension(plugin, CLAP_EXT_GUI);
@@ -169,6 +202,7 @@ int main(int argc, char** argv)
 		}
 		puglUpdate(world, 0.02);
 		if(timerOn) pluginTimer->on_timer(plugin, timerId);
+		if(callbackRequested) { callbackRequested = false; plugin->on_main_thread(plugin); }
 		// not processing audio, so do what a host does when asked to flush
 		if(flushRequested) { flushRequested = false; params->flush(plugin, &in, &out); fflush(stdout); }
 	}

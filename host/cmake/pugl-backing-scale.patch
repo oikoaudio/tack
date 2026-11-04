@@ -1,0 +1,24 @@
+diff --git a/src/mac_gl.m b/src/mac_gl.m
+index 57dfc41..08217a4 100644
+--- a/src/mac_gl.m
++++ b/src/mac_gl.m
+@@ -95,6 +95,19 @@ ensureHint(PuglView* const view, const PuglViewHint hint, const int value)
+   [wrapper setReshaped];
+ }
+ 
++- (void)viewDidChangeBackingProperties
++{
++  // A new backing scale, as on another screen: the view has as many points but more or fewer pixels. AppKit doesn't
++  // reshape the view for it, so mark it reshaped, which sends a configure with its new size in pixels before the
++  // next expose
++  PuglWrapperView* wrapper = (PuglWrapperView*)[self superview];
++
++  [super viewDidChangeBackingProperties];
++  [[self openGLContext] update];
++  [wrapper setReshaped];
++  [self setNeedsDisplay:YES];
++}
++
+ - (void)drawRect:(NSRect)rect
+ {
+   PuglWrapperView* wrapper = (PuglWrapperView*)[self superview];
