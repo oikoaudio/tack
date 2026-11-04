@@ -40,6 +40,7 @@ build_firmware() { python3 third_party/fm1-base/tools/build.py firmware/fm1 2>&1
 run "firmware build" build_firmware
 build_sim() { CC=clang python3 third_party/fm1-base/tools/build.py firmware/fm1 --host 2>&1 | quiet_grep ' error|undefined|did not|^host'; }
 run "simulator build" build_sim
+run "the app on the FM-1's libc alone" bash firmware/fm1/tests/libc_check.sh
 stop_if_failed "a build failed"
 python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'KITTWO  ' + bytes([50, 5]) + bytes([50]) * 246)" > "$out/sim/kits.bin"
 python3 -c "import sys; sys.stdout.buffer.write(b''.join(b'KIT%d    ' % i + bytes([40 + i]) * 248 for i in range(4)))" > "$out/sim/kits4.bin"
