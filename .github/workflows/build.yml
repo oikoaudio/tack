@@ -37,7 +37,7 @@ jobs:
     # the oldest supported runner, so the plugin runs on distributions with glibc 2.35 or newer
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tools and libraries
         run: |
           sudo apt-get update
@@ -66,7 +66,7 @@ jobs:
           set -o pipefail
           cmake --build build --target vst3_validator
           build/validator-build/bin/Debug/validator build/Tack.vst3 2>&1 | grep -v "AUDIO in"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tack-linux-x86_64
           path: build/package/*.zip
@@ -112,7 +112,7 @@ jobs:
     if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tools and libraries
         run: |
           sudo apt-get update
@@ -132,7 +132,7 @@ jobs:
     # cross-compiled with mingw-w64 (host/cmake/mingw-w64.cmake) and tested through Wine
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tools
         run: |
           sudo apt-get update
@@ -148,7 +148,7 @@ jobs:
           cmake --build build --target package_tack
       - name: Smoke test, through Wine
         run: host/tools/smoke_test.sh build wine
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tack-windows-x86_64
           path: build/package/*.zip
@@ -159,7 +159,7 @@ jobs:
     if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Tools
         run: brew install ninja
       - name: Build
@@ -189,7 +189,7 @@ jobs:
             auval -v aumu $subtype Oiko 2>&1 | tee "$RUNNER_TEMP/auval.txt" | grep -v "AUDIO in" | tail -5
             grep -q "AU VALIDATION SUCCEEDED" "$RUNNER_TEMP/auval.txt"
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tack-macos-universal
           path: build/package/*.zip
