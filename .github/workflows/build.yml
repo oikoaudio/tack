@@ -90,13 +90,21 @@ jobs:
           sh third_party/fm1-base/tools/get_toolchain.sh
           SDK_URL=https://github.com/amitv87/fw-AC79_AIoT_SDK sh third_party/fm1-base/bsp/tools/get_sdk.sh
       - name: Build
+        env:
+          RELEASE: ${{ inputs.release && '1' || '' }}
         run: |
           export JIELI_TOOLCHAIN=$HOME/.jieli/toolchain AC79_SDK=$HOME/.jieli/ac79-sdk
-          python3 third_party/fm1-base/tools/build.py firmware/fm1
+          if [ -n "$RELEASE" ]; then
+            # a release: its version and identity, as tack-X.Y.Z.fwsc, from the version the tag matches
+            version=$(sed -n 's/^project(LXR_Host VERSION \([0-9.]*\).*/\1/p' host/CMakeLists.txt)
+            python3 third_party/fm1-base/tools/build.py firmware/fm1 --release "$version"
+          else
+            python3 third_party/fm1-base/tools/build.py firmware/fm1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: tack-fm1
-          path: firmware/fm1/build/tack.fwsc
+          path: firmware/fm1/build/tack*.fwsc
           if-no-files-found: error
 
   sanitizers:

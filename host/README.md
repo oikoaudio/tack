@@ -152,10 +152,10 @@ build/mac/clap_render build/mac/Tack.clap out.wav
 A release starts from a tag on main that matches the version in `host/CMakeLists.txt`:
 
 ```sh
-git tag v0.11.0 && git push origin v0.11.0
+git tag v0.12.0 && git push origin v0.12.0
 ```
 
-`.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release with the zips and `SHA256SUMS`. Nothing is published until the draft is, and the draft is not a pre-release, so publishing it makes it the latest release. Locally, `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DTACK_PACKAGE_PLATFORM=linux-x86_64` and the `package_tack` target build the same zip: the plugins, the READMEs, the licence and every licence of a library linked into them.
+`.github/workflows/release.yml` checks the tag, builds and tests every platform from it and leaves a draft release with the zips, the FM-1 firmware as `tack-X.Y.Z.fwsc` and `SHA256SUMS`. Nothing is published until the draft is, and the draft is not a pre-release, so publishing it makes it the latest release. Locally, `-DFETCHCONTENT_TRY_FIND_PACKAGE_MODE=NEVER -DTACK_PACKAGE_PLATFORM=linux-x86_64` and the `package_tack` target build the same zip: the plugins, the READMEs, the licence and every licence of a library linked into them.
 
 `.github/repository.json` describes the GitHub repository's settings and rulesets, as for plugg: no pushes to main except through reviewed pull requests whose three builds pass, linear history, and release tags only from maintainers. `python3 host/tools/github-settings.py` reports differences and `--apply` makes GitHub match. Rulesets need a public repository, so apply them once it goes public.
 

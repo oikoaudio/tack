@@ -1,8 +1,8 @@
 name: Release
 
 # A release is a pushed v<version> tag on main, matching the version in host/CMakeLists.txt. This builds and tests
-# every platform from that tag and leaves a draft release with the zips, the complete source and SHA256SUMS for the
-# maintainer to read and publish; nothing is published automatically.
+# every platform from that tag and leaves a draft release with the zips, the FM-1 firmware, the complete source and
+# SHA256SUMS for the maintainer to read and publish; nothing is published automatically.
 on:
   push:
     tags: ['v[0-9]*']
@@ -90,8 +90,8 @@ jobs:
       - name: Create the draft
         run: |
           cd dist
-          sha256sum *.zip *.tar.gz > SHA256SUMS
+          sha256sum *.zip *.tar.gz *.fwsc > SHA256SUMS
           cat SHA256SUMS
           # Not a pre-release, even for 0.x: the READMEs and the site link to /releases/latest, which skips them
           gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
-            --title "Tack ${GITHUB_REF_NAME#v}" --generate-notes *.zip *.tar.gz SHA256SUMS
+            --title "Tack ${GITHUB_REF_NAME#v}" --generate-notes *.zip *.tar.gz *.fwsc SHA256SUMS
