@@ -9,38 +9,6 @@ static void pop_centre(int32_t y, const felucca_font_t *f, const char *t, uint16
     cv_text(106 - text_w(f, t) / 2, y, f, t, c);
 }
 
-/* Tempo and shuffle: two values, each with a picture and the control that sets it. The second of three notes moves as
- * the shuffle does, as a step between beats does */
-static void draw_tempo(void)
-{
-    char t[8];
-    const int32_t swing = (int32_t)tack_shuffle() * 18 / 127;
-    cv_begin(240, 140, C_BLACK);
-    cv_rect(0, 0, 240, 1, C_DIM);
-    cv_rect(0, 139, 240, 1, C_DIM);
-    for (int32_t y = 8; y < 132; y += 10)
-        cv_rect(120, y, 1, 5, C_DIM);
-    cv_text(60 - text_w(&FONT_B, "TEMPO") / 2, 6, &FONT_B, "TEMPO", C_AMB);
-    cv_text(180 - text_w(&FONT_B, "SHUFFLE") / 2, 6, &FONT_B, "SHUFFLE", C_AMB);
-    int_text(tack_bpm(), t);
-    cv_text(60 - text_w(&FONT_L, t) / 2, 26, &FONT_L, t, C_WHITE);
-    int_text(tack_shuffle(), t);
-    cv_text(180 - text_w(&FONT_L, t) / 2, 26, &FONT_L, t, C_WHITE);
-    aa_line(46.0f, 110.0f, 74.0f, 110.0f, C_GRAY);
-    aa_line(46.0f, 110.0f, 55.0f, 68.0f, C_GRAY);
-    aa_line(74.0f, 110.0f, 65.0f, 68.0f, C_GRAY);
-    aa_line(55.0f, 68.0f, 65.0f, 68.0f, C_GRAY);
-    aa_line(60.0f, 104.0f, 71.0f, 76.0f, C_HI);
-    for (int32_t k = 0; k < 3; k++) {
-        const int32_t x = 150 + k * 28 + (k == 1 ? swing : 0);
-        cv_rect(x, 102, 11, 8, C_WHITE);
-        cv_rect(x + 9, 74, 2, 30, C_WHITE);
-    }
-    cv_rect(159, 72, 58, 4, C_WHITE);
-    cv_text(180 - text_w(&FONT_B, "(SEL+)") / 2, 118, &FONT_B, "(SEL+)", C_GRAY);
-    cv_blit(0, HEADER_H);
-}
-
 /* What SEL does here, each line true of this page: it is the one list of what no page shows */
 static void help_row(int32_t *y, const char *with, const char *does)
 {
@@ -103,25 +71,6 @@ static void draw_popup(void)
             text_put(int_put(t, nudge < 0 ? -nudge : nudge), nudge < 0 ? "/24 STEP EARLY" : "/24 STEP LATE");
             pop_centre(74, &FONT_B, t, C_WHITE);
         }
-    } else if (ui.popup == POP_RECUR) {
-        const int len = tack_recur_len(v, st), mask = tack_recur_mask(v, st);
-        pop_centre(8, &FONT_B, "RECURRENCE", C_WHITE);
-        for (int k = 0; k < 8; k++) {
-            const int32_t x = 14 + k * 24;
-            t[0] = (char)('1' + k);
-            t[1] = 0;
-            if (k >= len) {
-                outline(x, 32, 20, 26, 1, C_LINE);
-            } else if (mask >> k & 1) {
-                cv_rect(x, 32, 20, 26, c);
-                cv_text(x + 10 - text_w(&FONT_B, t) / 2, 37, &FONT_B, t, C_BLACK);
-            } else {
-                cv_rect(x, 32, 20, 26, C_LINE);
-                cv_text(x + 10 - text_w(&FONT_B, t) / 2, 37, &FONT_B, t, C_GRAY);
-            }
-        }
-        recur_text(v, st, t);
-        pop_centre(72, &FONT_B, t, C_WHITE);
     } else {
         const int chance = tack_step_get(v, st, TACK_ST_PROB);
         pop_centre(8, &FONT_B, "CHANCE", C_WHITE);

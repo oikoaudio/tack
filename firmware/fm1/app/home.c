@@ -340,25 +340,6 @@ static uint32_t song_first(void) { return ui.song_row / SONG_CELLS * SONG_CELLS;
 static int home_strip(void) { return ui.group == TACK_G_MAIN && !ui.over; }   /* HOME's bottom: the envelope beside the map */
 static int home_info(void) { return home_strip() && !held_shown(); }
 
-/* what a step's recurrence plays: EVERY PASS, or the passes it plays of how many, as 1 3 OF 4. t holds 24 */
-static void recur_text(uint8_t v, uint8_t s, char *t)
-{
-    const int len = tack_recur_len(v, s), mask = tack_recur_mask(v, s);
-    int n = 0;
-    if (len == 1) {
-        text_put(t, "EVERY PASS");
-        return;
-    }
-    for (int k = 0; k < len; k++)
-        if (mask >> k & 1) {
-            t[n++] = (char)('1' + k);
-            t[n++] = ' ';
-        }
-    text_put(t + n, "OF ");
-    t[n + 3] = (char)('0' + len);
-    t[n + 4] = 0;
-}
-
 /* A lock's name: its dial's label, from the first page of the voice that has it. Where another of the voice's dials has the
  * same label, its page's first word goes before it, short: MOD DECAY, TRN VOLUME. The slot, or 0 for none */
 static const TackSlot *lock_slot(uint16_t par, char *name)
@@ -420,26 +401,31 @@ static int on_dials(uint16_t par)               /* HOME's four dials, which ligh
     return 0;
 }
 
-/* A step held on HOME. In the map's place: which step, and its recurrence, in the map's boxes and in words. In the envelope's:
+/* A step held on HOME. In the map's place: its recurrence, PLAY ON PASS, its eight slots numbered in the map's boxes as a lane's
+ * steps. In the envelope's:
  * its locks, a name and a value a row, those the dials above don't show first. Three rows: past three, the last says how many
  * more */
 #define LOCK_ROWS 3
 static void draw_home_step(void)
 {
     const uint8_t v = (uint8_t)ui.voice, s = ui.held_step;
-    const int len = tack_recur_len(v, s), mask = tack_recur_mask(v, s), locks = tack_step_locks(v, s);
+    const int len = recur_len(v, s), mask = recur_mask(v, s), locks = tack_step_locks(v, s);
     const int32_t row_y[LOCK_ROWS] = {HOME_TOP, HOME_MAP_Y, HOME_MAP_Y + GRID_CELL};   /* ink tops, level with the left */
     const int32_t right = 240 - EDGE;
     char t[24];
-    int_text(s + 1, text_put(t, "STEP "));
-    cv_text(HOME_X, HOME_TOP - 2, &FONT_S, t, C_WHITE);
-    recur_text(v, s, t);
-    if (len == 1) {
-        cv_text(HOME_X, HOME_MAP_Y - 3, &FONT_XS, t, C_GRAY);
-    } else {
-        for (int i = 0; i < len; i++)
-            cv_rect(HOME_X + i * GRID_CELL, HOME_MAP_Y, HOME_CELL, HOME_CELL, mask >> i & 1 ? C_HI : C_LINE);
-        cv_text(HOME_X, HOME_MAP_Y + GRID_CELL - 3, &FONT_XS, t, C_GRAY);
+    cv_text(HOME_X, HOME_TOP - 2, &FONT_S, "PLAY ON PASS", C_WHITE);
+    t[0] = 'S';                                  /* which step, as a full page's header has it */
+    int_text(s + 1, t + 1);
+    cv_text(HOME_X + HOME_MAP_W - text_w(&FONT_XS, t), HOME_TOP - 1, &FONT_XS, t, C_GRAY);
+    for (int i = 0; i < 8; i++) {                /* as a lane's steps: what it plays and skips, and past its end nothing */
+        const int32_t x = HOME_X + i * GRID_CELL;
+        const char n[2] = {(char)('1' + i), 0};      /* numbered, as the patterns are not: these are passes */
+        const int on = i < len && (mask >> i & 1);
+        if (i < len)
+            cv_rect(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, on ? C_HI : C_LINE);
+        else
+            outline(x, HOME_MAP_Y, HOME_CELL, HOME_CELL, 1, C_EMPTY);
+        cv_text(x + (HOME_CELL - text_w(&FONT_T, n)) / 2 + 1, HOME_MAP_Y, &FONT_T, n, on ? C_BLACK : i < len ? C_GRAY : C_EMPTY);
     }
     if (!locks) {
         cv_text(HOME_ENV_X, row_y[0] - 3, &FONT_XS, "NO LOCKS", C_GRAY);
@@ -628,7 +614,7 @@ static void draw_bottom(void)
         cv_text(EDGE, ROW_Y, &FONT_XS, page_name(), C_GRAY);
         if (held_shown()) {          /* the step's recurrence, where the keys show it */
             const uint8_t s = ui.held_step;
-            const int len = tack_recur_len((uint8_t)ui.voice, s), mask = tack_recur_mask((uint8_t)ui.voice, s);
+            const int len = recur_len((uint8_t)ui.voice, s), mask = recur_mask((uint8_t)ui.voice, s);
             for (i = 0; i < len; i++)
                 cv_rect(240 - EDGE - (8 - i) * BAR_PITCH + (BAR_PITCH - BAR_W), ROW_Y + 3, BAR_W, 9, mask >> i & 1 ? C_HI : C_LINE);
         } else {

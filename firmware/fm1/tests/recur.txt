@@ -7,26 +7,30 @@ expect step0 1
 expect recurlen0 1
 expect recurmask0 1
 
-# held: SELECT sets the slots, and it starts on the first
+# held: a new step plays on every pass, its eight slots all playing as a new lane's steps would be. SELECT shortens the
+# cycle, keeping the slots that still fit
 key 0 down
 wait 40
-turn SELECT 3
+turn SELECT -4
 wait 40
 expect recurlen0 4
-expect recurmask0 1
+expect recurmask0 15
 expect bpm 120
 shot recur.png
-# the keys pick the slots, and a key past the last does nothing, and nor does the last one going
+# the keys take slots out and put them back, a key past the end does nothing, and nor does the last one going
 tapkey 3
 wait 40
-expect recurmask0 3
-tapkey 3
+expect recurmask0 13
+tapkey 8
 wait 40
-expect recurmask0 1
+expect recurmask0 5
 tapkey 1
 wait 40
-expect recurmask0 1
+expect recurmask0 4
 tapkey 5
+wait 40
+expect recurmask0 4
+tapkey 1
 wait 40
 expect recurmask0 5
 tapkey 17
@@ -61,7 +65,7 @@ expect fires0 4
 tap PLAY
 wait 60
 
-# fewer slots keep what still fits, and one is every pass again
+# fewer slots keep what still fits, and more come in playing. All eight playing is every pass again
 key 0 down
 wait 40
 turn SELECT -2
@@ -71,12 +75,15 @@ expect recurmask0 1
 turn SELECT 1
 wait 40
 expect recurlen0 3
-tapkey 5
-wait 40
 expect recurmask0 5
-turn SELECT -9
+turn SELECT 9
+wait 40
+expect recurlen0 8
+expect recurmask0 253
+tapkey 3
 wait 40
 expect recurlen0 1
+expect recurmask0 1
 key 0 up
 wait 40
 tap PLAY
@@ -105,9 +112,13 @@ wait 40
 expect len0 8
 key 0 down
 wait 40
-turn SELECT 1
+turn SELECT -9
 wait 40
 expect recurlen0 2
+expect recurmask0 3
+tapkey 3
+wait 40
+expect recurmask0 1
 key 0 up
 wait 40
 expect fires0 6
@@ -174,7 +185,8 @@ expect fires0 11
 tap PLAY
 wait 60
 
-# a held step's popups: ALGORITHM nudges, PRESET sets the chance, and each goes when the step is let go
+# a held step's popups: ALGORITHM nudges, PRESET sets the chance, and each goes when the step is let go. SELECT and the
+# slot keys set its recurrence with none: the step's view says it, and the popup there was goes
 tapkey 4
 wait 60
 expect step2 1
@@ -186,17 +198,17 @@ wait 40
 expect popup 1
 expect bpm 120
 shot pop_nudge.png
-turn SELECT 3
+turn SELECT -4
 wait 40
-expect popup 2
+expect popup 0
 expect recurlen2 4
 shot pop_recur.png
 tapkey 5
 wait 40
-expect popup 2
+expect popup 0
 turn PRESET -25
 wait 40
-expect popup 3
+expect popup 2
 shot pop_chance.png
 key 4 up
 wait 60

@@ -598,7 +598,7 @@ static void song_turn(uint32_t slot, int32_t e)
 
 /* A held step's popups: one job over the page, gone when the step is let go. ALGORITHM nudges it, SELECT and the black keys set
  * its recurrence, PRESET its chance */
-enum { POP_NONE, POP_NUDGE, POP_RECUR, POP_CHANCE, POP_TEMPO };
+enum { POP_NONE, POP_NUDGE, POP_CHANCE };   /* recurrence and tempo are said where they are, with no popup */
 
 static void step_turn(uint32_t slot, int popup, int32_t e)
 {
@@ -612,38 +612,43 @@ static void step_turn(uint32_t slot, int popup, int32_t e)
     }
 }
 
-/* a step held: the first eight black keys are the slots of its recurrence, and SELECT how many there are */
+/* a step held: the first eight black keys are the slots of its recurrence, which they take out and put back, and SELECT how many
+ * there are, as a lane's end */
 static void recur_key(uint32_t k)
 {
     const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
-    const int len = tack_recur_len(v, s);
-    uint8_t mask = tack_recur_mask(v, s);
+    const int len = recur_len(v, s);
+    int mask = recur_mask(v, s);
     ui.held_used = 1;
     if (!tack_step_on(v, s)) {
         app_say("NO STEP", "");
     } else if ((int)k >= len) {
         app_say("SELECT", "ADDS SLOTS");
-    } else if ((mask ^= (uint8_t)(1u << k)) == 0) {
+    } else if ((mask ^= 1 << k) == 0) {
         app_say("ONE SLOT", "AT LEAST");
     } else {
-        tack_post_recur(v, s, (uint8_t)len, mask);
-        ui.popup = POP_RECUR;
+        recur_set(v, s, len, mask);
+        ui.popup = POP_NONE;                     /* the step's view says it, or on a full page the header */
+        ui.redraw = 1;
     }
 }
 
+/* fewer slots keep what still fits, and more come in playing, as a new step plays every pass */
 static void recur_turn(int32_t e)
 {
     const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
-    const int32_t n = clamp(tack_recur_len(v, s) + e, 1, TACK_RECUR_MAX);
-    uint8_t mask = (uint8_t)(tack_recur_mask(v, s) & ((1u << n) - 1u));
+    const int len = recur_len(v, s), n = (int)clamp(len + e, 2, TACK_RECUR_MAX);
+    const int grown = ((1 << n) - 1) & ~((1 << len) - 1);    /* the slots it gains, playing */
+    const int mask = (recur_mask(v, s) | grown) & ((1 << n) - 1);
     ui.held_used = 1;
     if (!tack_step_on(v, s)) {
         app_say("NO STEP", "");
     } else if (!tack_recur_room(v, s)) {
         app_say("PATTERN", "FULL");   /* as STEP FULL: no room for another lock */
     } else {
-        tack_post_recur(v, s, (uint8_t)n, mask ? mask : 1u);
-        ui.popup = POP_RECUR;
+        recur_set(v, s, n, mask ? mask : 1);
+        ui.popup = POP_NONE;                     /* the step's view says it, or on a full page the header */
+        ui.redraw = 1;
     }
 }
 
@@ -761,10 +766,12 @@ static void lane_bar(int32_t bars)
     app_say("LENGTH", t);
 }
 
-static void tempo_show(void)
+static void tempo_show(int shuffle)
 {
-    ui.popup = POP_TEMPO;
-    ui.tempo_until = plat_ms() + 1500u;
+    ui.tempo_until = (plat_ms() + 1500u) | 1u;   /* never 0, which is none */
+    ui.tempo_shuffle = (uint8_t)shuffle;
+    ui.touched_until = 0;
+    ui.redraw = 1;
 }
 
 static void touch(uint32_t k)
@@ -773,6 +780,7 @@ static void touch(uint32_t k)
     ui.touched_at = k;
     ui.touched_row = (int8_t)row_now();
     ui.touched_until = plat_ms() + 1200u;
+    ui.tempo_until = 0;
 }
 
 static int seq_in_view(void)                    /* the main page, showing a sequencer view */

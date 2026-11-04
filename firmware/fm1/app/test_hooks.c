@@ -63,6 +63,8 @@ int app_expect(const char *what, int *got)
         *got = ui.touched_until != 0;
     else if (!strcmp(what, "popup"))
         *got = ui.popup;
+    else if (!strcmp(what, "tempo"))          /* the header's tempo: 1, its shuffle: 2 */
+        *got = tempo_shown() ? 1 + ui.tempo_shuffle : 0;
     else if (!strcmp(what, "voiceview"))
         *got = voice_page();
     else if (!strcmp(what, "selstep"))       /* the bars view's selected step */

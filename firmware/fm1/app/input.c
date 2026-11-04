@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The panel, read once a frame. app.c includes this: it is one file to the compiler, and shares app.c's state */
 
-static uint32_t bottom_key;              /* (home.c's) */
 
 /* the keys: notes, voices, steps, whichever the page and the buttons held make them */
 static void input_keys(uint32_t keys, uint32_t btn)
@@ -330,13 +329,12 @@ static void input_dials(uint32_t btn)
                 tack_post_shuffle((uint8_t)clamp((int32_t)tack_shuffle() + e, 0, 127));
             else
                 tack_post_bpm((uint16_t)clamp((int32_t)tack_bpm() + e, 30, 300));
-            tempo_show();
+            tempo_show((int)(btn >> B_SEL & 1u));
         }
         ui.redraw = 1;
     }
-    if (ui.popup && ui.popup != POP_TEMPO && ui.held < 0) {   /* the step let go: the page again */
+    if (ui.popup && ui.held < 0) {               /* the step let go: the page again */
         ui.popup = POP_NONE;
-        bottom_key = 0;                          /* it may have taken over from the tempo, which covered the bottom strip */
         ui.redraw = 1;
     }
     if (ui.held >= 0 && (e = plat_enc(EN_ALGO)) != 0) {

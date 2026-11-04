@@ -86,6 +86,8 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     RKEY(on);
     RKEY(voice);
     RKEY(held_shown());
+    RKEY(ui.tempo_until != 0);
+    RKEY(ui.tempo_shuffle);
     RKEY(tack_lfo_sync(voice));                /* the picture on the row above it */
     RKEY(tack_lfo_once(voice));
     for (uint32_t i = 0; page != NO_PAGE && i < TACK_NP; i++) {
@@ -156,6 +158,14 @@ static void pg_top(void)
         cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.msg, C_WHITE);
     } else if (key_word()) {
         cv_text(EDGE, TOP_LINE - 2, &FONT_B, key_word(), C_HI);
+    } else if (tempo_shown()) {                      /* SELECT turned: the tempo, or with SEL the shuffle */
+        int_text(ui.tempo_shuffle ? tack_shuffle() : tack_bpm(), t);
+        cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.tempo_shuffle ? "SHUFFLE" : "TEMPO", C_HI);
+        cv_text(240 - EDGE - text_w(&FONT_B, t), TOP_LINE - 2, &FONT_B, t, C_WHITE);
+        if (ui.tempo_shuffle)
+            cv_rect(0, 18, 240 * (int32_t)tack_shuffle() / 127, 2, C_HI);
+        else
+            cv_text(EDGE + text_w(&FONT_B, "TEMPO") + 8, TOP_LINE - 1, &FONT_XS, "SEL+ SHUFFLE", C_GRAY);
     } else if (ui.touched_until && ui.touched) {     /* the exact value, while it turns */
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
@@ -172,7 +182,7 @@ static void pg_top(void)
             cv_rect(0, 18, 240 * (int32_t)v / sl->max, 2, VOICE_COLOUR[ui.voice]);
     } else if (held_shown()) {                       /* the step's recurrence, where the keys show it */
         const uint8_t st = ui.held_step;
-        const int len = tack_recur_len((uint8_t)ui.voice, st), mask = tack_recur_mask((uint8_t)ui.voice, st);
+        const int len = recur_len((uint8_t)ui.voice, st), mask = recur_mask((uint8_t)ui.voice, st);
         t[0] = 'S';
         int_text(st + 1, t + 1);
         cv_text(EDGE, TOP_LINE - 2, &FONT_B, t, C_WHITE);
@@ -205,7 +215,7 @@ static void pg_top(void)
     {                                                /* a page with more than one mode: the line under the bar in as many parts */
         const int n = arp_page() ? 3 : seq_detail() || (sound_page() && screens() > 1) ? 2 : 0;
         const int at = arp_page() ? (int)ui.over - PAGE_LANE : seq_detail() ? ui.note_mode != 0 : screen_now();
-        if (n && !(ui.touched_until && ui.touched)) {
+        if (n && !(ui.touched_until && ui.touched) && !(tempo_shown() && ui.tempo_shuffle)) {
             const int32_t w = (240 - (n - 1) * PG_TAB_GAP) / n;
             for (int i = 0; i < n; i++)
                 cv_rect(i * (w + PG_TAB_GAP), 18, w, 2, i == at ? C_HI : C_GRAY);
