@@ -59,6 +59,12 @@ static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 #define EDGE 4                                  /* the screen's margin, both sides */
 #define TOP_LINE 4                              /* where a screen's top line of letters starts, as EDGE is the sides: FONT_B goes at 2 less,
                                                    FONT_XS at 3 less to start there too, or at 1 less to share FONT_B's baseline */
+/* HOME's vertical rhythm, measured to the ink and not to a font's box: EDGE above the first line, SP_IN between the parts of
+ * one section (the lanes and their bar markers, a label and its value), SP_SECTION between sections. Each strip's y comes
+ * from these, so the gaps stay even when one strip changes */
+#define SP_IN 4
+#define SP_SECTION 8
+#define HEADER_H 51                             /* the status line, SP_SECTION, the voice, SP_IN, the bar markers, SP_IN */
 #define CELL_W 55                                /* the dials' four cells, EDGE to EDGE with gaps of 4 */
 #define CELL_X(i) (EDGE + (int32_t)(i) * (CELL_W + 4))
 static const uint16_t VOICE_COLOUR[TACK_VOICES] = {RGB(224, 66, 52), RGB(224, 66, 52), RGB(224, 66, 52), RGB(240, 125, 36),
@@ -428,7 +434,7 @@ static void draw(void)
         return;
     }
     on_grid = 0;
-    cv_begin(240, 52, C_BLACK);
+    cv_begin(240, HEADER_H, C_BLACK);
     if (tack_morph_kit() && !ui.msg_until && !key_word()) {   /* a crossfader between the two kits */
         char to[9];
         const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
@@ -465,22 +471,22 @@ static void draw(void)
         const TackSlot *sl = ui.touched;
         const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
-        cv_text(EDGE, 22, &FONT_M, sl->label, VOICE_COLOUR[ui.voice]);
+        cv_text(EDGE, 20, &FONT_M, sl->label, VOICE_COLOUR[ui.voice]);
         if (name) {
-            cv_text(112, 27, &FONT_S, name, C_WHITE);
+            cv_text(112, 25, &FONT_S, name, C_WHITE);
         } else {
             value_text(sl, v, t);
-            cv_text(240 - EDGE - text_w(&FONT_M, t), 22, &FONT_M, t, C_WHITE);
+            cv_text(240 - EDGE - text_w(&FONT_M, t), 20, &FONT_M, t, C_WHITE);
             slot_bar(EDGE, 44, 240 - 2 * EDGE, 4, sl, v, VOICE_COLOUR[ui.voice]);
         }
         cv_blit(0, 0);
         goto header_done;
     }
-    cv_text(EDGE, 22, &FONT_M, VOICE_NAME[ui.voice], tack_muted((uint8_t)ui.voice) ? C_GRAY : VOICE_COLOUR[ui.voice]);
+    cv_text(EDGE, 20, &FONT_M, VOICE_NAME[ui.voice], tack_muted((uint8_t)ui.voice) ? C_GRAY : VOICE_COLOUR[ui.voice]);
     if (tack_fx_send((uint32_t)ui.voice))
-        cv_text(240 - EDGE - text_w(&FONT_XS, "FX"), 30, &FONT_XS, "FX", C_HI);
+        cv_text(240 - EDGE - text_w(&FONT_XS, "FX"), 28, &FONT_XS, "FX", C_HI);
     for (int b = 0; b < (int)TACK_BARS; b++)   /* just over the grid, all of them: the one it shows, those in use, and the room for more */
-        cv_rect(240 - EDGE - ((int)TACK_BARS - b) * 14 + 2, 46, 12, 3, b == ui.bar ? C_WHITE : b < bars_used() ? C_GRAY : C_LINE);
+        cv_rect(240 - EDGE - ((int)TACK_BARS - b) * 14 + 2, 44, 12, 3, b == ui.bar ? C_WHITE : b < bars_used() ? C_GRAY : C_LINE);
     cv_blit(0, 0);
 header_done:
     draw_grid();
