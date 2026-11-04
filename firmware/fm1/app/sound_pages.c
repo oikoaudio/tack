@@ -5,7 +5,7 @@ static uint8_t pg_value(const TackSlot *sl, int on, uint32_t i, int *lit)
 {
     uint8_t value = tack_get_param(sl->par);
     *lit = 0;
-    if (ui.held >= 0) {
+    if (held_shown()) {
         *lit = tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &value);
         if (on)
             value = ui.held_val[i];
@@ -92,7 +92,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     RKEY(page);
     RKEY(on);
     RKEY(voice);
-    RKEY(ui.held >= 0);
+    RKEY(held_shown());
     RKEY(tack_lfo_sync(voice));                /* the picture on the row above it */
     RKEY(tack_lfo_once(voice));
     for (uint32_t i = 0; page != NO_PAGE && i < TACK_NP; i++) {
@@ -177,7 +177,7 @@ static void pg_top(void)
             slot_bar(0, 18, 240, 2, sl, v, VOICE_COLOUR[ui.voice]);
         else if (!name && sl->max)
             cv_rect(0, 18, 240 * (int32_t)v / sl->max, 2, VOICE_COLOUR[ui.voice]);
-    } else if (ui.held >= 0) {                       /* the step's recurrence, where the keys show it */
+    } else if (held_shown()) {                       /* the step's recurrence, where the keys show it */
         const uint8_t st = ui.held_step;
         const int len = tack_recur_len((uint8_t)ui.voice, st), mask = tack_recur_mask((uint8_t)ui.voice, st);
         t[0] = 'S';

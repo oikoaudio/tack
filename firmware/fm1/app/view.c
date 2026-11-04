@@ -83,6 +83,12 @@ static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.k
 #define SEL_SHOW_MS 250u
 #define SEL_HELP_MS 1000u
 
+/* A step key held: its locks and recurrence show once a dial turns, or once it has been held this long to see what it has.
+ * Not at once, or a tap that adds a step would flash the dials, the bottom strip and the keys. It is held from the press all
+ * the same: this is only what shows */
+#define HOLD_SHOW_MS 500u
+static int held_shown(void) { return ui.held >= 0 && (ui.held_used || plat_ms() - ui.held_at >= HOLD_SHOW_MS); }
+
 /* A voice's key held a moment does as SEL does, once the lane shows on the keys: a quick voice key and a step can overlap, and that
  * must stay a step. Recording, the key is writing the part */
 static int lane_key_held(void)

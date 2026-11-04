@@ -166,6 +166,8 @@ static struct {
     uint8_t help_on;                     /* the list of what SEL does is on screen */
     int32_t held;                        /* the white key held (0-15), -1 none */
     uint8_t held_used;                   /* it did something else: no toggle on release */
+    uint32_t held_at;                    /* when it went down */
+    uint8_t held_was;                    /* held_shown() at the last frame */
     uint8_t held_step;                   /* the step it holds, which stays it when the bar moves */
     uint8_t held_pattern;                /* and in which pattern: another one ends the hold */
     uint8_t held_val[TACK_NP];
@@ -411,7 +413,7 @@ static void draw(void)
 {
     char t[16];
     uint32_t i;
-    const int locking = ui.held >= 0;
+    const int locking = held_shown();
     static int on_grid;
     if (on_grid && (ui.popup || ui.help_on || !full_page()))   /* a grid page covered the bottom strip, unchanged as its values may be */
         bottom_key = 0;
@@ -560,6 +562,10 @@ void app_frame(void)
     h = h * 67u + (uint32_t)(tack_length((uint8_t)ui.voice) * 64) + tack_lane_dir((uint8_t)ui.voice) * 4u + tack_lane_speed((uint8_t)ui.voice);
     if (sel_length() != ui.sel_was) {
         ui.sel_was = (uint8_t)sel_length();
+        ui.redraw = 1;
+    }
+    if (held_shown() != ui.held_was) {          /* the hold has lasted long enough to show the step */
+        ui.held_was = (uint8_t)held_shown();
         ui.redraw = 1;
     }
     if (ui.note_mode || ui.held >= 0) {          /* a step's edit too */
