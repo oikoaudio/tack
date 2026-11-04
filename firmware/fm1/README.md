@@ -73,6 +73,8 @@ This builds everything and runs the panel scripts in the simulator, the engine t
 
 One script can run alone, with `firmware/fm1/build/host/tack_host firmware/fm1/tests/lanes.txt OUTDIR`.
 
+The simulator has the host's whole C library, and the FM-1 has only `memset`, `memcpy` and `memcmp`. `firmware/fm1/tests/libc_check.sh` compiles the app as the FM-1 does, without the JieLi toolchain, so a call like `strlen` fails there and not at the device build. It needs the simulator built first.
+
 ## Layout
 
 | Path | Contents |
