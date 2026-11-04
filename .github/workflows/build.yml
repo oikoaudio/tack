@@ -1,7 +1,8 @@
 name: Build
 
 # Builds Tack for Linux, Windows and macOS, runs host/tools/smoke_test.sh, also under the sanitizers, clap-validator, the VST3 SDK's validator
-# (Linux) and auval (macOS), and keeps each platform's release zip as an artifact. Runs for pull requests that are
+# (Linux) and auval (macOS), and keeps each platform's release zip as an artifact. Builds the FM-1 firmware too, kept as
+# tack-fm1 for `fm1 install`. Runs for pull requests that are
 # ready for review (not drafts), for every push to main, by hand, and from the release workflow.
 on:
   push:
@@ -69,6 +70,29 @@ jobs:
         with:
           name: tack-linux-x86_64
           path: build/package/*.zip
+          if-no-files-found: error
+
+  fm1:
+    name: FM-1 firmware
+    if: ${{ (inputs.release || github.event_name == 'workflow_dispatch' || !github.event.repository.private) && !github.event.pull_request.draft }}
+    # JieLi's toolchain is Linux x86-64 only: here it runs as it is, where a Mac needs a container
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: JieLi toolchain and SDK
+        run: |
+          sh third_party/fm1-base/tools/get_toolchain.sh
+          SDK_URL=https://github.com/amitv87/fw-AC79_AIoT_SDK sh third_party/fm1-base/bsp/tools/get_sdk.sh
+      - name: Build
+        run: |
+          export JIELI_TOOLCHAIN=$HOME/.jieli/toolchain AC79_SDK=$HOME/.jieli/ac79-sdk
+          python3 third_party/fm1-base/tools/build.py firmware/fm1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tack-fm1
+          path: firmware/fm1/build/tack.fwsc
           if-no-files-found: error
 
   sanitizers:
