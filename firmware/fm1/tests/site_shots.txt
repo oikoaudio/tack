@@ -101,9 +101,9 @@ turn K4 -40
 wait 30
 key 21 down
 wait 40
-turn SELECT 2
+turn SELECT -5
 wait 40
-tapkey 5
+tapkey 3
 wait 40
 key 21 up
 wait 60
