@@ -191,11 +191,25 @@ static void checkHeader()
 	const float pad = (HEADER_ITEM_H - FONT_SIZE) / 2;
 	check(pad >= FRAME_PAD_Y && same(pad, (float)(int)pad), "the header buttons' padding");
 	check(LOGO_ROWS * LOGO_CELL <= HEADER_ITEM_H, "the logo inside the header row");
-	// the whole kit's name goes over the Drum 2 tab, and the logo before it
+	// every plugin's kit name goes over the Drum 2 tab, and the logo before it
 	check(textWidth("(no name) *") <= tabRect(1).w - 2 * FRAME_PAD_X, "the kit's name fits over a tab");
-	check(MARGIN + LOGO_W + HEADER_GROUP_GAP <= tabRect(1).x, "the logo before the kit's name");
-	check(textWidth("(no name) *") <= KIT_BUTTON_W - 2 * FRAME_PAD_X, "the kit's name fits its button");
-	check(textWidth("Save") <= HEADER_BUTTON_W - 2 * FRAME_PAD_X, "a voice plugin's Save fits");
+	check(LOGO_X + LOGO_W + HEADER_GROUP_GAP <= tabRect(1).x, "the menu icon and the logo before the kit's name");
+	// a voice plugin's kit arrows centred over the gap between its first two boxes, its name clear of the logo, and the
+	// title; the title over the Snare tab, and its chromatic switch at the end of Hi-hat's
+	for(int v = 0; v < LXR_PARAMS_FX_VOICE; v++) {
+		const float arrows = kitArrowsX(v);
+		const Tab t = tab(v, v, 0, nullptr, nullptr);
+		bool overGap = false;
+		for(const Box& b : t.boxes)
+			if(b.row == 0 && same(b.rect.right() + GAP / 2, arrows + HEADER_ITEM_H + HEADER_ITEM_GAP / 2)) overGap = true;
+		check(overGap, "a voice plugin's kit arrows centred over the gap between its boxes", voiceTitles[v]);
+		check(LOGO_X + LOGO_W + HEADER_GROUP_GAP <= arrows - GAP - tabRect(1).w, "the logo before a voice plugin's kit name", voiceTitles[v]);
+		check(textWidth(voiceTitles[v]) <= tabRect(3).w, "a voice's title over a tab", voiceTitles[v]);
+		check(arrows + tabRect(2).w + HEADER_GROUP_GAP <= tabRect(3).x + (tabRect(3).w - textWidth(voiceTitles[v])) / 2,
+			"a voice's title clear of Save", voiceTitles[v]);
+	}
+	check(same(kitArrowsX(-1), tabRect(1).right() + GAP), "Tack's kit arrows over the gap between Drum 2 and Drum 3");
+	check(CHROMATIC_W <= tabRect(5).w, "the chromatic switch over a tab");
 	// over Drum 3 the kit's arrows and Save, over Mix & FX Mutate's two dice, its count and its arrow
 	check(textWidth("Save") <= tabRect(2).w - 2 * (HEADER_ITEM_H + HEADER_ITEM_GAP) - 2 * FRAME_PAD_X, "Save fits over Drum 3");
 	check(2 * DIE + 2 * HEADER_ITEM_GAP + textWidth("99") + 2 * FRAME_PAD_X <=
@@ -221,7 +235,7 @@ int main()
 	io.IniFilename = nullptr;
 	io.DisplaySize = ImVec2(windowWidth(), windowHeight(-1));
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
-	io.Fonts->AddFontDefaultBitmap();
+	io.Fonts->AddFontDefaultVector();
 	ImGui::NewFrame();
 	ImGui::PushFont(nullptr, FONT_SIZE);
 

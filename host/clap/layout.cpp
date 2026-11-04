@@ -14,6 +14,7 @@
 namespace layout {
 
 const char* const tabNames[LXR_PARAMS_FX_VOICE + 1] = { "Drum 1", "Drum 2", "Drum 3", "Snare", "Cymbal", "Hi-hat", "Mix & FX" };
+const char* const voiceTitles[LXR_PARAMS_FX_VOICE] = { "DRUM", "DRUM", "DRUM", "SNARE", "CYMBAL", "HI-HAT" };
 const LxrParamInfo outputsInfo = { OUTPUTS_ID, "Outputs", "Outputs", 0, 1, true, LXR_PARAMS_FX_VOICE, 0, "Outputs" };
 
 // short labels that fit a cell; anything not listed is short enough already
@@ -277,6 +278,16 @@ Tab tab(int pluginVoice, int t, uint8_t fxType, bool (*has)(void*, uint32_t), vo
 		}
 	}
 	return out;
+}
+
+
+
+float kitArrowsX(int pluginVoice)
+{
+	if(pluginVoice < 0) return tabRect(2).x;
+	for(const Box& b : tab(pluginVoice, pluginVoice, 0, nullptr, nullptr).boxes)
+		if(b.row == 0 && b.rect.x > MARGIN) return b.rect.x - GAP / 2 - HEADER_ITEM_GAP / 2 - HEADER_ITEM_H;
+	return tabRect(2).x;
 }
 
 }

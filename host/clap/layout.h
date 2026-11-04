@@ -19,20 +19,23 @@ constexpr float CELL_W = 64, KNOB = 36, BOX_PAD = 8, RULE_Y = 16, LABEL_H = 14, 
 constexpr float CONTROL_CY = LABEL_H + BAND_GAP + KNOB / 2, VALUE_Y = LABEL_H + BAND_GAP + KNOB + BAND_GAP;
 constexpr float CELL_H = VALUE_Y + LABEL_H;
 constexpr float CELLS_Y = BOX_PAD + RULE_Y + BOX_PAD;
-// ImGui's pixel font, at its own size
+// ImGui's vector font, at the size its pixel font has
 constexpr float FONT_SIZE = 13, FRAME_PAD_X = 4, FRAME_PAD_Y = 3, FRAME_H = FONT_SIZE + 2 * FRAME_PAD_Y;
 constexpr float WIDGET_INSET = 2, TEXT_INSET = 3;
 constexpr float BOX_H = CELLS_Y + CELL_H + BOX_PAD, GAP = 6, MARGIN = 10;
 // between a label's words: narrower than the font's space, so that "Vel Dest" reads as one label next to "Vel Amt"
 constexpr float WORD_GAP = 3;
 // the header's buttons and tabs are all HEADER_ITEM_H high
-constexpr float TOP_BAND = 4, HEADER_ROW_Y = TOP_BAND + GAP, HEADER_ITEM_H = 23, HEADER_BUTTON_W = 52, KIT_BUTTON_W = 120;
-constexpr float HEADER_ITEM_GAP = 4, HEADER_GROUP_GAP = 16, DIE = 13;
+constexpr float TOP_BAND = 4, HEADER_ROW_Y = TOP_BAND + GAP, HEADER_ITEM_H = 23;
+constexpr float HEADER_ITEM_GAP = 4, HEADER_GROUP_GAP = 16, DIE = 13, CHROMATIC_W = 30;
 constexpr float TABS_Y = HEADER_ROW_Y + HEADER_ITEM_H + GAP, TAB_LINE = 2;
 // the logo's letters are LOGO_COLS x LOGO_ROWS squares of LOGO_CELL, LOGO_CELL apart
 constexpr float LOGO_CELL = 3;
 constexpr int LOGO_COLS = 5, LOGO_ROWS = 7, LOGO_LETTERS = 4;
 constexpr float LOGO_W = LOGO_LETTERS * (LOGO_COLS + 1) * LOGO_CELL - LOGO_CELL;
+// the menu's icon before the logo: three bars of LOGO_CELL, LOGO_COLS cells long, on the logo's odd rows
+constexpr float MENU_ICON_W = LOGO_COLS * LOGO_CELL, MENU_ICON_GAP = 2 * LOGO_CELL;
+constexpr float LOGO_X = MARGIN + MENU_ICON_W + MENU_ICON_GAP;
 constexpr int ROWS = 3;
 
 /** Plugin parameter id of the outputs switch, which isn't a kit parameter; the editor's own setting. */
@@ -84,6 +87,12 @@ float windowHeight(int pluginVoice);
 float headerHeight(int pluginVoice);
 /** 0-5 a voice's tab, LXR_PARAMS_FX_VOICE Mix & FX's. */
 Rect tabRect(int tab);
+/**
+ * Where the kit's arrows start in the header, the name ending GAP before them. In Tack they start at the gap between
+ * the Drum 2 and Drum 3 tabs; a voice plugin has no tabs, and the gap between its two arrows is centred over the gap
+ * between the first two boxes of its first row.
+ */
+float kitArrowsX(int pluginVoice);
 
 /** textWidth measures the text from begin to end in the editor's font. */
 float labelWidth(const char* label, float (*textWidth)(const char* begin, const char* end));
@@ -94,6 +103,8 @@ const char* shortLabel(const char* label);
 void shortValue(const char* value, char* out, size_t size);
 
 extern const char* const tabNames[LXR_PARAMS_FX_VOICE + 1];
+/** A voice plugin's title, centred in its header. */
+extern const char* const voiceTitles[LXR_PARAMS_FX_VOICE];
 /** The outputs switch's entry, in the Master box on Mix & FX. */
 extern const LxrParamInfo outputsInfo;
 

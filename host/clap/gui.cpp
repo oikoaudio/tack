@@ -60,8 +60,10 @@ struct TackGui
 	bool glReady = false;
 	double lastTime = 0;
 	int tab = 0;
-	// window pixels per unit of the sizes in this file: the host's scale (set_scale), or on macOS the screen's
+	// window pixels per unit of the sizes in this file are scale times zoom. scale is the host's (set_scale), or on
+	// macOS the screen's; zoom, in percent, the one chosen in the editor
 	double scale = 1;
+	int zoom = 100;
 
 	// the save kit dialog
 	char saveName[9] = "";
@@ -76,6 +78,8 @@ struct TackGui
 	bool browserOpen = false;
 	bool keepClosed = false;	// the click that closed the browser was on the kit button, which would reopen it
 
+	bool menuOpen = false;	// Tack's menu, last frame
+
 	// what the last Mutate step changed: the whole kit (-1) or a voice, so that its button shows whose walk it is
 	int mutateScope = -1;
 };
@@ -84,6 +88,9 @@ struct TackGui
 // parameter access in plugin values
 
 static double value(TackGui* g, uint32_t id) { return g->host.getValue(g->host.ctx, id); }
+
+// window pixels per unit
+static double pixelsPerUnit(const TackGui* g) { return g->scale * g->zoom / 100.0; }
 
 static void valueText(TackGui* g, uint32_t id, uint16_t v, char* text, size_t size)
 {
@@ -544,7 +551,7 @@ static void drawBrowser(TackGui* g)
 static void chromaticSwitch(TackGui* g)
 {
 	const bool on = value(g, TACK_GUI_CHROMATIC_ID) >= 0.5;
-	const ImVec2 size(30, ImGui::GetFrameHeight());
+	const ImVec2 size(CHROMATIC_W, ImGui::GetFrameHeight());
 	const ImVec2 p = ImGui::GetCursorScreenPos();
 	if(ImGui::InvisibleButton("chromatic", size)) edit(g, TACK_GUI_CHROMATIC_ID, on ? 0 : 1);
 	const bool hovered = ImGui::IsItemHovered();
@@ -676,9 +683,18 @@ static void drawLogo(float x, ImU32 colour)
 				}
 }
 
+// the menu's icon: three bars, on the rows of the logo's letters 1, 3 and 5
+static void drawMenuIcon(float x, ImU32 colour)
+{
+	const ImVec2 o = ImGui::GetWindowPos();
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	const float y0 = HEADER_ROW_Y + (HEADER_ITEM_H - LOGO_ROWS * LOGO_CELL) * 0.5f;
+	for(int row = 1; row < LOGO_ROWS; row += 2)
+		dl->AddRectFilled(at(o, x, y0 + row * LOGO_CELL), at(o, x + MENU_ICON_W, y0 + (row + 1) * LOGO_CELL), colour);
+}
+
 static void drawHeader(TackGui* g)
 {
-	static const char* const voiceNames[] = { "DRUM", "DRUM", "DRUM", "SNARE", "CYMBAL", "HI-HAT" };
 	const ImVec4 colour = voiceColour(g->tab);
 	const ImVec2 origin = ImGui::GetWindowPos();
 	ImGui::GetWindowDrawList()->AddRectFilled(origin, ImVec2(origin.x + ImGui::GetWindowWidth(), origin.y + TOP_BAND),
@@ -689,42 +705,49 @@ static void drawHeader(TackGui* g)
 		ImGui::SetCursorPos(ImVec2(x, HEADER_ROW_Y));
 		x += w + gap;
 	};
-	// the logo, and a voice plugin's voice after it, open Tack's menu
-	const float aboutX = x;
-	drawLogo(x, ImGui::GetColorU32(ImGuiCol_SliderGrab));
-	x += LOGO_W;
-	if(g->host.voice >= 0) {
-		x += HEADER_GROUP_GAP / 2;
-		headerText(x, ImGui::GetColorU32(colour), voiceNames[g->host.voice]);
-		x += ImGui::CalcTextSize(voiceNames[g->host.voice]).x;
-	}
-	ImGui::SetCursorPos(ImVec2(aboutX, HEADER_ROW_Y));
-	if(ImGui::InvisibleButton("logo", ImVec2(x - aboutX, HEADER_ITEM_H))) ImGui::OpenPopup("tackMenu");
+	// the menu icon and the logo open Tack's menu. On the press, as menus do: a trackpad press that moves a little would
+	// make a click on release into a drag. The press that closes the menu (a press outside it) doesn't open it again
+	const float menuX = x;
+	ImGui::SetCursorPos(ImVec2(menuX, HEADER_ROW_Y));
+	ImGui::InvisibleButton("logo", ImVec2(LOGO_X + LOGO_W - menuX, HEADER_ITEM_H));
+	if(ImGui::IsItemActivated() && !g->menuOpen) ImGui::OpenPopup("tackMenu");
+	const ImU32 logoColour = ImGui::GetColorU32(ImGui::IsItemHovered() || g->menuOpen ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab);
+	drawMenuIcon(menuX, logoColour);
+	drawLogo(LOGO_X, logoColour);
+	// under the logo, so the release of the press that opened it isn't on an item
+	ImGui::SetNextWindowPos(ImVec2(ImGui::GetWindowPos().x + menuX, ImGui::GetWindowPos().y + HEADER_ROW_Y + HEADER_ITEM_H));
 	bool about = false;
-	if(ImGui::BeginPopup("tackMenu")) {
+	g->menuOpen = ImGui::BeginPopup("tackMenu");
+	if(g->menuOpen) {
 		ImGui::MenuItem("Tooltips", nullptr, &showTooltips);
+		if(ImGui::BeginMenu("Zoom")) {
+			for(int z = TACK_GUI_ZOOM_MIN; z <= TACK_GUI_ZOOM_MAX; z += TACK_GUI_ZOOM_STEP) {
+				char text[8];
+				snprintf(text, sizeof text, "%d%%", z);
+				if(ImGui::MenuItem(text, nullptr, z == g->zoom) && z != g->zoom) g->host.zoomChosen(g->host.ctx, z);
+			}
+			ImGui::EndMenu();
+		}
 		ImGui::Separator();
 		about = ImGui::MenuItem("About Tack");
 		ImGui::EndPopup();
 	}
 	if(about) ImGui::OpenPopup("###about");
-	x += HEADER_GROUP_GAP;
-	const char* kit = g->host.kitName(g->host.ctx);
-	// the whole kit's name is over the Drum 2 tab, as wide, and its arrows start over Drum 3
-	const bool overTabs = g->host.voice < 0;
-	const float kitW = overTabs ? tabRect(1).w : KIT_BUTTON_W;
-	float arrowsX = 0;
-	if(overTabs) {
-		x = tabRect(1).x;
-		arrowsX = tabRect(2).x;
-	} else {
-		place(30, HEADER_GROUP_GAP);
+	// every plugin's header is on Tack's tabs: the kit's name as wide as one, its arrows and Save as wide as another,
+	// split over the gap below them (kitArrowsX), and Mutate over Mix & FX. A voice plugin has its voice as a title over
+	// Snare, the middle, and its chromatic switch at the end of Hi-hat, by Mutate
+	const bool kitPlugin = g->host.voice < 0;
+	const float kitW = tabRect(1).w, arrowsX = kitArrowsX(g->host.voice);
+	if(!kitPlugin) {
+		const char* title = voiceTitles[g->host.voice];
+		const Rect over = tabRect(3);
+		headerText(over.x + (over.w - ImGui::CalcTextSize(title).x) * 0.5f, ImGui::GetColorU32(colour), title);
+		x = tabRect(5).right() - CHROMATIC_W;
+		place(CHROMATIC_W);
 		chromaticSwitch(g);
-		place(HEADER_ITEM_H);
-		if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
-		place(HEADER_ITEM_H);
-		if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
 	}
+	const char* kit = g->host.kitName(g->host.ctx);
+	x = arrowsX - GAP - kitW;
 	place(kitW);
 	// the kit's name opens the browser; * once it's been edited
 	char label[64];
@@ -737,17 +760,13 @@ static void drawHeader(TackGui* g)
 		}
 		g->keepClosed = false;
 	}
-	hint(g->host.voice < 0 ? "Kits" : "Voices from the kits");
-	// over Drum 3, the arrows and Save fill the tab
-	float saveW = HEADER_BUTTON_W;
-	if(overTabs) {
-		x = arrowsX;
-		place(HEADER_ITEM_H);
-		if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
-		place(HEADER_ITEM_H);
-		if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
-		saveW = tabRect(2).right() - x;
-	}
+	hint(kitPlugin ? "Kits" : "Voices from the kits");
+	x = arrowsX;
+	place(HEADER_ITEM_H);
+	if(ImGui::ArrowButton("prev", ImGuiDir_Left)) stepKit(g, -1);
+	place(HEADER_ITEM_H);
+	if(ImGui::ArrowButton("next", ImGuiDir_Right)) stepKit(g, 1);
+	const float saveW = arrowsX + tabRect(2).w - x;
 	place(saveW);
 	if(headerButton("Save", saveW)) {
 		// start from the kit's name, as far as the device allows it
@@ -929,9 +948,12 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		// pugl counts pixels; the screen's backing scale changes when the window moves to another screen
 		g->scale = puglGetScaleFactor(view);
 #endif
-		// ImGui lays out in the editor's units and draws, fonts too, at the full resolution
-		io.DisplaySize = ImVec2((float)(event->configure.width / g->scale), (float)(event->configure.height / g->scale));
-		io.DisplayFramebufferScale = ImVec2((float)g->scale, (float)g->scale);
+		{
+			// ImGui lays out in the editor's units and draws, fonts too, at the full resolution
+			const double ppu = pixelsPerUnit(g);
+			io.DisplaySize = ImVec2((float)(event->configure.width / ppu), (float)(event->configure.height / ppu));
+			io.DisplayFramebufferScale = ImVec2((float)ppu, (float)ppu);
+		}
 		break;
 	case PUGL_EXPOSE: {
 		if(!g->glReady) break;
@@ -942,7 +964,8 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 		ImGui::NewFrame();
 		drawFrame(g);
 		ImGui::Render();
-		glViewport(0, 0, (GLsizei)std::lround(io.DisplaySize.x * g->scale), (GLsizei)std::lround(io.DisplaySize.y * g->scale));
+		glViewport(0, 0, (GLsizei)std::lround(io.DisplaySize.x * pixelsPerUnit(g)),
+			(GLsizei)std::lround(io.DisplaySize.y * pixelsPerUnit(g)));
 		glClearColor(0.09f, 0.09f, 0.10f, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -950,13 +973,13 @@ static PuglStatus onEvent(PuglView* view, const PuglEvent* event)
 	}
 	case PUGL_MOTION:
 		setMods(io, event->motion.state);
-		io.AddMousePosEvent((float)(event->motion.x / g->scale), (float)(event->motion.y / g->scale));
+		io.AddMousePosEvent((float)(event->motion.x / pixelsPerUnit(g)), (float)(event->motion.y / pixelsPerUnit(g)));
 		break;
 	case PUGL_BUTTON_PRESS:
 	case PUGL_BUTTON_RELEASE: {
 		// pugl numbers buttons left, right, middle; ImGui left, right, middle too
 		setMods(io, event->button.state);
-		io.AddMousePosEvent((float)(event->button.x / g->scale), (float)(event->button.y / g->scale));
+		io.AddMousePosEvent((float)(event->button.x / pixelsPerUnit(g)), (float)(event->button.y / pixelsPerUnit(g)));
 		if(event->button.button < 3)
 			io.AddMouseButtonEvent((int)event->button.button, event->type == PUGL_BUTTON_PRESS);
 		break;
@@ -1017,19 +1040,20 @@ static void applyStyle()
 	c[ImGuiCol_TextSelectedBg] = c[ImGuiCol_Header];
 }
 
-// the window's size in pixels
+// the window's size in pixels, as pugl counts it
 static void pixelSize(const TackGui* g, uint32_t* width, uint32_t* height)
 {
-	*width = (uint32_t)std::lround(windowWidth() * g->scale);
-	*height = (uint32_t)std::lround(windowHeight(g->host.voice) * g->scale);
+	*width = (uint32_t)std::lround(windowWidth() * pixelsPerUnit(g));
+	*height = (uint32_t)std::lround(windowHeight(g->host.voice) * pixelsPerUnit(g));
 }
 
-static void applySize(TackGui* g)
+// the size the window opens at. Once it is open, only the host's say-so resizes it (tack_guiSetSize): a host may
+// resize from inside a request, and the window must not change in the middle of the editor's own event handling
+static void applyDefaultSize(TackGui* g)
 {
 	uint32_t w, h;
 	pixelSize(g, &w, &h);
 	puglSetSizeHint(g->view, PUGL_DEFAULT_SIZE, w, h);
-	if(puglGetNativeView(g->view)) puglSetSizeHint(g->view, PUGL_CURRENT_SIZE, w, h);
 }
 
 TackGui* tack_guiCreate(const TackGuiHost* host)
@@ -1042,8 +1066,9 @@ TackGui* tack_guiCreate(const TackGuiHost* host)
 	g->imgui = ImGui::CreateContext();
 	ImGui::SetCurrentContext(g->imgui);
 	ImGui::GetIO().IniFilename = nullptr;
-	// the layout's font: ImGui's pixel font at its own size
-	ImGui::GetIO().Fonts->AddFontDefaultBitmap();
+	// the layout's font: ImGui's vector font, its pixel font's shapes. It is drawn at the window's resolution, so text
+	// stays sharp at every scale and zoom
+	ImGui::GetIO().Fonts->AddFontDefaultVector();
 	applyStyle();
 	ImGui::SetCurrentContext(previous);
 
@@ -1060,7 +1085,7 @@ TackGui* tack_guiCreate(const TackGuiHost* host)
 #ifdef __APPLE__
 	g->scale = puglGetScaleFactor(g->view);
 #endif
-	applySize(g);
+	applyDefaultSize(g);
 	puglSetEventFunc(g->view, onEvent);
 	return g;
 }
@@ -1082,8 +1107,8 @@ void tack_guiGetSize(const TackGui* g, uint32_t* width, uint32_t* height)
 {
 #ifdef __APPLE__
 	// Cocoa sizes are in points
-	*width = windowWidth();
-	*height = windowHeight(g->host.voice);
+	*width = (uint32_t)std::lround(windowWidth() * g->zoom / 100.0);
+	*height = (uint32_t)std::lround(windowHeight(g->host.voice) * g->zoom / 100.0);
 #else
 	pixelSize(g, width, height);
 #endif
@@ -1096,9 +1121,29 @@ bool tack_guiSetScale(TackGui* g, double scale)
 #else
 	if(!(scale >= 0.5 && scale <= 4)) return false;
 	g->scale = scale;
-	applySize(g);
+	applyDefaultSize(g);
 	return true;
 #endif
+}
+
+void tack_guiSetZoom(TackGui* g, int percent)
+{
+	const int step = TACK_GUI_ZOOM_STEP;
+	g->zoom = clampTo((percent + step / 2) / step * step, TACK_GUI_ZOOM_MIN, TACK_GUI_ZOOM_MAX);
+	applyDefaultSize(g);
+}
+
+int tack_guiZoom(const TackGui* g) { return g->zoom; }
+
+bool tack_guiSetSize(TackGui* g, uint32_t width, uint32_t height)
+{
+	uint32_t w, h;
+	tack_guiGetSize(g, &w, &h);
+	if(width != w || height != h) return false;
+	pixelSize(g, &w, &h);
+	// pugl sends the window's new size (PUGL_CONFIGURE) from inside this on macOS and Windows
+	if(puglGetNativeView(g->view)) puglSetSizeHint(g->view, PUGL_CURRENT_SIZE, w, h);
+	return true;
 }
 
 bool tack_guiSetParent(TackGui* g, uintptr_t parent)
