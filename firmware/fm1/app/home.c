@@ -385,10 +385,11 @@ static const TackSlot *lock_slot(uint16_t par, char *name)
         for (uint32_t sub = 0; sub < (uint32_t)tack_pages(v, g); sub++)
             for (uint32_t i = 0; i < TACK_NP; i++) {
                 const TackSlot *sl = tack_slot(v, g, sub, i);
-                if (sl && !sl->target && sl->par != par && !strcmp(sl->label, found->label))
+                if (sl && !sl->target && sl->par != par && same(sl->label, found->label))
                     clash = 1;
             }
-    name[0] = 0;
+    char *e = name;
+    *e = 0;
     if (clash) {
         const char *title = tack_page_title(v, fg, fsub);
         char word[8];
@@ -398,16 +399,16 @@ static const TackSlot *lock_slot(uint16_t par, char *name)
             n++;
         }
         word[n] = 0;
-        if (!strcmp(word, "TRANSIE"))
+        if (same(word, "TRANSIE"))
             text_put(word, "TRN");
-        else if (!strcmp(word, "VELOCIT"))
+        else if (same(word, "VELOCIT"))
             text_put(word, "VEL");
         else if (n > 4u)
             word[4] = 0;
         if (word[0])
-            text_put(text_put(name, word), " ");
+            e = text_put(text_put(e, word), " ");
     }
-    text_put(name + strlen(name), found->label);
+    text_put(e, found->label);
     return found;
 }
 
@@ -458,8 +459,7 @@ static void draw_home_step(void)
             if (on_dials(par) != pass)
                 continue;
             if (row == LOCK_ROWS - 1 && locks > LOCK_ROWS) {
-                int_text(locks - row, t);
-                text_put(t + strlen(t), " MORE");
+                text_put(int_put(t, locks - row), " MORE");
                 cv_text(HOME_ENV_X, row_y[row] - 3, &FONT_XS, t, C_GRAY);
                 row = LOCK_ROWS;
                 break;

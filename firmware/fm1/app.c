@@ -214,6 +214,14 @@ static char *text_put(char *to, const char *s)
     return to;
 }
 
+/* strcmp() == 0: the firmware's libc has only the mem functions */
+static int same(const char *a, const char *b)
+{
+    while (*a && *a == *b)
+        a++, b++;
+    return *a == *b;
+}
+
 static char *int_put(char *to, int32_t v)
 {
     int_text(v, to);
