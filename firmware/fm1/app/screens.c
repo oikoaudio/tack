@@ -195,7 +195,8 @@ static void pg_song_top(uint32_t *last)
     const uint32_t len = song_len();
     const uint8_t v = tack_song_get(ui.song_row);
     const int mode = tack_song_mode();
-    uint32_t key = rk(rk(rk(rk(17u, ui.song_row), v), tack_song_get(len)), (uint32_t)mode);
+    const uint32_t times = tack_song_times(tack_song_reps(ui.song_row));
+    uint32_t key = rk(rk(rk(rk(rk(17u, ui.song_row), v), tack_song_get(len)), (uint32_t)mode), times);
     if (key == *last)
         return;
     *last = key;
@@ -208,8 +209,15 @@ static void pg_song_top(uint32_t *last)
     else
         wd_box(PG_CW + PG_CW / 2, 0, "END", C_GRAY);
     pg_column(1, "PATTERN", 1);
-    wd_box(PG_CW * 2 + PG_CW / 2, 0, tack_song_get(len) == TACK_SONG_LOOP ? "LOOP" : "STOP", C_HI);
-    pg_column(2, "AT END", 1);
+    if (v < TACK_PATTERNS) {
+        char t[5] = "x";
+        int_text((int32_t)times, t + 1);
+        cv_text(PG_CW * 2 + PG_CW / 2 - text_w(&FONT_M, t) / 2, 16, &FONT_M, t, C_WHITE);
+        pg_column(2, "REPEAT", 1);
+    } else {
+        wd_box(PG_CW * 2 + PG_CW / 2, 0, v == TACK_SONG_LOOP ? "LOOP" : "STOP", C_HI);
+        pg_column(2, "AT END", 1);
+    }
     if (mode == TACK_SONG_CHAIN)
         wd_box(PG_CW * 3 + PG_CW / 2, 0, "CHAIN", C_HI);
     else
@@ -360,9 +368,9 @@ static void pg_song_rows(uint32_t line, uint32_t *last)
 {
     const uint32_t first = song_first() + line * 8u, len = song_len();
     const int playing = tack_running() && tack_song_mode() == TACK_SONG_ON ? tack_song_pos() : -1;
-    uint32_t key = rk(rk(rk(19u, first), ui.song_row), (uint32_t)playing);
+    uint32_t key = rk(rk(rk(rk(19u, first), ui.song_row), (uint32_t)playing), (uint32_t)tack_song_pass());
     for (uint32_t i = 0; i < 8u; i++)
-        key = rk(key, tack_song_get(first + i));
+        key = rk(rk(key, tack_song_get(first + i)), tack_song_reps(first + i));
     key = rk(key, len);
     if (key == *last)
         return;
@@ -372,7 +380,7 @@ static void pg_song_rows(uint32_t line, uint32_t *last)
         const uint32_t row = first + i;
         const uint8_t v = tack_song_get(row);
         const int32_t x = 15 + (int32_t)i * 30;
-        char t[5];
+        char t[8];
         int_text(v + 1, t);
         if (v >= TACK_PATTERNS) {
             t[0] = v == TACK_SONG_LOOP ? 'L' : 'S';
@@ -382,7 +390,16 @@ static void pg_song_rows(uint32_t line, uint32_t *last)
             cv_rect(x - 14, 16, 28, 34, C_HI);
         else
             cv_rect(x - 14, 16, 28, 34, C_LINE);
-        cv_text(x - text_w(&FONT_B, t) / 2, 25, &FONT_B, t, row == ui.song_row ? C_BLACK : v < TACK_PATTERNS ? C_WHITE : C_GRAY);
+        cv_text(x - text_w(&FONT_B, t) / 2, 21, &FONT_B, t, row == ui.song_row ? C_BLACK : v < TACK_PATTERNS ? C_WHITE : C_GRAY);
+        if (v < TACK_PATTERNS && (tack_song_reps(row) || (int)row == playing)) {   /* x4, or 2/4 on the row playing */
+            const uint32_t times = tack_song_times(tack_song_reps(row));
+            const int32_t pass = tack_song_pass() < (int)times ? tack_song_pass() + 1 : (int32_t)times;
+            char *e = t;
+            if ((int)row == playing)
+                e = int_put(e, pass);
+            int_text((int32_t)times, text_put(e, (int)row == playing ? "/" : "x"));
+            cv_text(x - text_w(&FONT_XS, t) / 2, 38, &FONT_XS, t, row == ui.song_row ? C_BLACK : C_GRAY);
+        }
         if ((int)row == playing)
             cv_rect(x - 14, 54, 28, 3, C_WHITE);
     }

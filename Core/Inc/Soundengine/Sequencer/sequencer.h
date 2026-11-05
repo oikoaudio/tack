@@ -182,6 +182,10 @@ enum { LANE_FORWARD, LANE_REVERSE, LANE_PINGPONG, LANE_BOUNCE, LANE_RANDOM, LANE
 #define LANE_MODE(dir, speed) ((uint8_t)((dir) | (speed) << 3))
 extern uint8_t seq_laneMode[NUM_PATTERN][NUM_TRACKS];
 extern uint8_t seq_laneStart[NUM_PATTERN][NUM_TRACKS];
+#define SEQ_SONG_REPS 8
+extern const uint8_t seq_songRowTimes[SEQ_SONG_REPS];
+extern uint8_t seq_songRowReps[MAX_SONG_LENGTH];
+extern uint8_t seq_songRowPass;
 uint8_t seq_laneAtEdge(uint8_t track, int8_t position);
 int8_t seq_shiftPulses(uint8_t shift);
 void seq_finishStep(void);

@@ -386,7 +386,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND, EV_SONG_REPS, EV_SONG_EDIT };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -500,6 +500,9 @@ int tack_post_pattern(uint8_t pattern) { return post(EV_PATTERN, pattern, 0, 0);
 int tack_post_chain(uint8_t index, uint8_t pattern) { return post(EV_CHAIN, index, pattern, 0); }
 int tack_post_song_row(uint8_t row, uint8_t value) { return post(EV_SONG_ROW, row, value, 0); }
 int tack_post_song_on(uint8_t on) { return post(EV_SONG_ON, on, 0, 0); }
+int tack_post_song_reps(uint8_t row, uint8_t reps) { return post(EV_SONG_REPS, row, reps, 0); }
+int tack_post_song_insert(uint8_t row) { return post(EV_SONG_EDIT, row, 1, 0); }
+int tack_post_song_delete(uint8_t row) { return post(EV_SONG_EDIT, row, 0, 0); }
 int tack_post_bits(uint8_t value) { return post(EV_BITS, value, 0, 0); }
 int tack_post_kit_home(uint8_t slot) { return post(EV_KIT_HOME, slot, 0, 0); }
 int tack_post_chain_to_song(uint8_t row) { return post(EV_CHAIN_SONG, row, 0, 0); }
@@ -1138,7 +1141,22 @@ int tack_song_mode(void) { return song_mode; }
 int tack_pattern_next(void) { return seq_pendingPattern != seq_activePattern ? seq_pendingPattern : -1; }
 int tack_song_pos(void) { return seq_songPositionPointer == 0xFFu ? -1 : seq_songPositionPointer; }
 uint8_t tack_song_get(uint32_t row) { return row < TACK_SONG_ROWS ? SONG_ROWS[row] : TACK_SONG_STOP; }
-const uint8_t *tack_song(void) { return SONG_ROWS; }
+
+/* How many times each row plays: the sequencer's, as it counts them */
+_Static_assert(TACK_SONG_REPS == SEQ_SONG_REPS, "the song's repeats");
+#define song_reps seq_songRowReps
+#define song_pass seq_songRowPass
+uint8_t tack_song_reps(uint32_t row) { return row < TACK_SONG_ROWS ? song_reps[row] : 0; }
+uint32_t tack_song_times(uint8_t reps) { return seq_songRowTimes[reps < TACK_SONG_REPS ? reps : 0]; }
+int tack_song_pass(void) { return song_pass; }
+
+/* Saved, a row's count goes in bits 4, 5 and 7 of its pattern, which an older save leaves at 0: once each */
+void tack_song_save(uint8_t *rows)
+{
+    for (uint32_t i = 0; i < TACK_SONG_ROWS; i++)
+        rows[i] = SONG_ROWS[i] < TACK_PATTERNS ? (uint8_t)(SONG_ROWS[i] | (song_reps[i] & 3u) << 4 | (song_reps[i] & 4u) << 5)
+                                               : SONG_ROWS[i];
+}
 
 static void song_off(void)
 {
@@ -1153,6 +1171,7 @@ static void song_on(void)
     if (SONG_ROWS[0] >= NUM_PATTERN)
         return;
     seq_activeSong = SONG_ROWS;
+    song_pass = 0;
     seq_setSongModeEnabled(1);
     song_mode = TACK_SONG_ON;
 }
@@ -1163,7 +1182,47 @@ static void song_row(uint8_t row, uint8_t value)
     if (row >= TACK_SONG_ROWS || (value >= NUM_PATTERN && !end) || (row == TACK_SONG_ROWS - 1u && !end))
         return;
     SONG_ROWS[row] = value;
+    if (end)
+        song_reps[row] = 0;
     if (!row && end && song_mode == TACK_SONG_ON)
+        song_off();
+}
+
+static uint32_t song_len(void)
+{
+    uint32_t n = 0;
+    while (n < TACK_SONG_ROWS - 1u && SONG_ROWS[n] < NUM_PATTERN)
+        n++;
+    return n;
+}
+
+/* The row doubled, or taken out, the rows after it moving along. The row playing plays on */
+static void song_edit(uint8_t row, int insert)
+{
+    const uint32_t len = song_len();
+    uint8_t *pos = &seq_songPositionPointer;
+    if (row >= len || (insert && len >= TACK_SONG_ROWS - 1u))
+        return;
+    if (insert) {
+        for (uint32_t i = len + 1u; i > row; i--) {
+            SONG_ROWS[i] = SONG_ROWS[i - 1u];
+            song_reps[i] = song_reps[i - 1u];
+        }
+    } else {
+        for (uint32_t i = row; i < len; i++) {
+            SONG_ROWS[i] = SONG_ROWS[i + 1u];
+            song_reps[i] = song_reps[i + 1u];
+        }
+        SONG_ROWS[len] = TACK_SONG_STOP;
+        song_reps[len] = 0;
+    }
+    if (seq_activeSong == SONG_ROWS && *pos < TACK_SONG_ROWS && *pos > row) {
+        *pos = (uint8_t)(insert ? *pos + 1u : *pos - 1u);
+    } else if (seq_activeSong == SONG_ROWS && *pos == row && !insert) {
+        *pos = (uint8_t)(row - 1u);   /* 0xFF for row 0, as before the first: the row moved up plays next */
+        song_pass = TACK_SONG_ROWS;   /* and the one playing finishes without playing again */
+    }
+    if (SONG_ROWS[0] >= NUM_PATTERN && song_mode == TACK_SONG_ON)
         song_off();
 }
 
@@ -1204,6 +1263,7 @@ static void chain_to_song(uint8_t row)
     if (row + n > TACK_SONG_ROWS - 1u)
         n = TACK_SONG_ROWS - 1u - row;
     memcpy(&SONG_ROWS[row], CHAIN_ROWS, n);
+    memset(&song_reps[row], 0, n);
     if (row + n > len)
         SONG_ROWS[row + n] = end;
 }
@@ -1439,15 +1499,17 @@ static void song_rewind(void)
         return;
     }
     seq_songPositionPointer = 0xFFu;
+    song_pass = 0;
     seq_setNextPattern(seq_activeSong[0]);
 }
 
 void tack_song_load(const uint8_t *rows, int on)
 {
     for (uint32_t i = 0; i < TACK_SONG_ROWS; i++) {
-        const uint8_t v = rows ? rows[i] : TACK_SONG_STOP;
+        const uint8_t v = rows ? rows[i] : TACK_SONG_STOP, p = v & 0x4Fu;
         const int end = v == TACK_SONG_STOP || v == TACK_SONG_LOOP;
-        SONG_ROWS[i] = (v < NUM_PATTERN && i < TACK_SONG_ROWS - 1u) || end ? v : TACK_SONG_STOP;
+        SONG_ROWS[i] = (p < TACK_PATTERNS && i < TACK_SONG_ROWS - 1u) || end ? (end ? v : p) : TACK_SONG_STOP;
+        song_reps[i] = SONG_ROWS[i] < TACK_PATTERNS ? (uint8_t)((v >> 4 & 3u) | (v >> 5 & 4u)) : 0;
     }
     song_off();
     if (on)
@@ -1815,6 +1877,13 @@ static void drain(void)
             break;
         case EV_CHAIN_SONG:
             chain_to_song(e.a);
+            break;
+        case EV_SONG_REPS:
+            if (e.a < TACK_SONG_ROWS && SONG_ROWS[e.a] < NUM_PATTERN && e.b < TACK_SONG_REPS)
+                song_reps[e.a] = e.b;
+            break;
+        case EV_SONG_EDIT:
+            song_edit(e.a, e.b);
             break;
         case EV_LANE_MODE:
             if (e.a < NUM_TRACKS) {

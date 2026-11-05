@@ -576,17 +576,38 @@ static void vel_turn(uint32_t slot, int32_t e)
         tack_post_shape(v, ui.vs_shape, ui.vs_shift, ui.vs_centre, ui.vs_amount);
 }
 
-static void song_turn(uint32_t slot, int32_t e)
+/* SEL and K1: a turn right doubles the row, left takes it out */
+static void song_edit(int32_t e)
+{
+    const uint32_t len = song_len();
+    if (ui.song_row >= len) {
+        app_say("END", "STAYS");
+    } else if (e > 0 && len >= TACK_SONG_ROWS - 1u) {
+        app_say("SONG", "FULL");
+    } else if (e > 0) {
+        tack_post_song_insert(ui.song_row);
+        app_say("ROW", "COPIED");
+    } else {
+        tack_post_song_delete(ui.song_row);
+        app_say("ROW", "REMOVED");
+    }
+}
+
+static void song_turn(uint32_t slot, int32_t e, int sel)
 {
     const uint32_t len = song_len();
     if (ui.held >= 0) {
         ui.held_used = 1;
+    } else if (slot == 0u && sel) {
+        song_edit(e);
     } else if (slot == 0u) {
         ui.song_row = (uint8_t)clamp((int32_t)ui.song_row + e, 0, (int32_t)(len < TACK_SONG_ROWS - 2u ? len : TACK_SONG_ROWS - 2u));
     } else if (slot == 1u) {
         const uint8_t now = tack_song_get(ui.song_row);
         const int32_t v = clamp((now < TACK_PATTERNS ? (int32_t)now : (int32_t)TACK_PATTERNS) + e, 0, TACK_PATTERNS);
         song_write(ui.song_row, v == TACK_PATTERNS ? tack_song_get(len) : (uint8_t)v);
+    } else if (slot == 2u && ui.song_row < len) {
+        tack_post_song_reps(ui.song_row, (uint8_t)clamp((int32_t)tack_song_reps(ui.song_row) + e, 0, TACK_SONG_REPS - 1));
     } else if (slot == 2u) {
         tack_post_song_row((uint8_t)len, e > 0 ? TACK_SONG_LOOP : TACK_SONG_STOP);
     } else if (e > 0 && !len) {

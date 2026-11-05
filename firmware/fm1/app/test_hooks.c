@@ -93,6 +93,10 @@ int app_expect(const char *what, int *got)
         *got = (int)song_len();
     else if (numbered(what, "songrow"))   /* songrowN: what the row holds */
         *got = tack_song_get((uint32_t)atoi(what + 7));
+    else if (numbered(what, "songtimes")) /* songtimesN: how many times the row plays */
+        *got = (int)tack_song_times(tack_song_reps((uint32_t)atoi(what + 9)));
+    else if (!strcmp(what, "songpass"))
+        *got = tack_song_pass();
     else if (!strcmp(what, "fxsends")) {
         *got = 0;
         for (int v = 0; v < TACK_FX_SENDS; v++)
