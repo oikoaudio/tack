@@ -1,0 +1,93 @@
+# The screens for the mode maps: a short beat on the demo kits, and a screenshot of each mode. tools/docs/make_docs.py runs it,
+# with the demo kits in kits.bin beside it. Each shot's name is its mode's key in tools/docs/doc_maps.py
+wait 600
+data kits.bin 770048
+turn PRESET 1
+wait 80
+tapkey b0
+wait 40
+tapkey w0
+tapkey w3
+tapkey w8
+tapkey w11
+tapkey w14
+wait 40
+tapkey b3
+wait 40
+tapkey w4
+tapkey w12
+wait 40
+tapkey b5
+wait 40
+tapkey w0
+tapkey w2
+tapkey w4
+tapkey w6
+tapkey w8
+tapkey w10
+tapkey w12
+tapkey w14
+wait 40
+tapkey b6
+wait 40
+tapkey w7
+tapkey w15
+wait 40
+tapkey b4
+wait 40
+tapkey w9
+wait 40
+tapkey b0
+wait 60
+tap PLAY
+wait 900
+tap HOME
+wait 60
+shot home.png
+tap SEQ
+wait 80
+shot seq.png
+tap ARP
+wait 80
+shot arp.png
+tap GLO
+wait 600
+expect mixpage 1
+shot glo.png
+tap EDIT
+wait 80
+shot sound.png
+tap PLAY
+wait 60
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 60
+tapkey w0
+wait 30
+tapkey w0
+wait 30
+tapkey w1
+wait 30
+turn K1 -1
+wait 30
+turn K3 2
+wait 40
+turn K1 -2
+wait 60
+expect songpage 1
+expect songtimes2 3
+shot song.png
+tap HOME
+wait 60
+tapkey b8
+wait 60
+turn K2 3
+wait 60
+turn PRESET 2
+wait 120
+expect frankenpage 1
+expect fkroll 2
+shot kits.png

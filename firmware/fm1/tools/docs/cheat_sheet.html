@@ -1,0 +1,245 @@
+<title>Tack FM-1 Cheat Sheet</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: the panel drawn to scale up top, then a dense grid of reference panels, one per job; prints on one landscape sheet */
+:root {
+  --paper: #f7f6f3; --ink: #1d1e21; --muted: #5d6067; --rule: #d9d7d1; --card: #ffffff;
+  --accent: #c95a12; --accent-ink: #ffffff;
+  --dev-body: #e3e2de; --dev-tray: #cfcdc8; --dev-knob: #2a2c30; --dev-btn: #f2f1ee; --dev-line: #9a988f;
+  --dev-text: #1d1e21; --dev-key: #ffffff; --dev-key-b: #3a3c41; --dev-screen: #141518; --dev-scr-text: #f07d24;
+  --v-drum: #e04234; --v-snare: #f07d24; --v-cym: #f2c23d; --v-hat: #e9e1cc;
+  --kbd-bg: #ecebe7; --kbd-line: #c8c6bf;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121315; --ink: #ecebe7; --muted: #9a9ca3; --rule: #2c2e33; --card: #1a1b1f;
+  --accent: #f07d24; --accent-ink: #121315;
+  --dev-body: #3a3d42; --dev-tray: #26282c; --dev-knob: #1b1c1f; --dev-btn: #2e3135; --dev-line: #4a4d52;
+  --dev-text: #e8e8ea; --dev-key: #d9dadc; --dev-key-b: #c9cacd; --dev-screen: #0b0c0d;
+  --kbd-bg: #24262a; --kbd-line: #3a3d42; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #121315; --ink: #ecebe7; --muted: #9a9ca3; --rule: #2c2e33; --card: #1a1b1f;
+  --accent: #f07d24; --accent-ink: #121315;
+  --dev-body: #3a3d42; --dev-tray: #26282c; --dev-knob: #1b1c1f; --dev-btn: #2e3135; --dev-line: #4a4d52;
+  --dev-text: #e8e8ea; --dev-key: #d9dadc; --dev-key-b: #c9cacd; --dev-screen: #0b0c0d;
+  --kbd-bg: #24262a; --kbd-line: #3a3d42; color-scheme: dark }
+
+body { background: var(--paper); color: var(--ink); font: 400 15px/1.45 var(--f-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 40px; }
+.sheet { max-width: 1240px; margin: 0 auto; display: grid; gap: 22px; }
+
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 24px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; }
+h1 { font: 700 2.1rem/1 var(--f-display); letter-spacing: .01em; margin: 0; text-wrap: balance; }
+h1 span { color: var(--accent); }
+.meta { font: 500 .8rem/1.3 var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+
+.figure { background: var(--card); border: 1px solid var(--rule); border-radius: 14px; padding: 14px; overflow-x: auto; }
+.panel { display: block; width: 100%; min-width: 560px; height: auto; }
+.d-body { fill: var(--dev-body); }
+.d-tray { fill: var(--dev-tray); }
+.d-knob { fill: var(--dev-knob); stroke: var(--dev-line); stroke-width: 2; }
+.d-ind { stroke: #e8e8ea; stroke-width: 3; stroke-linecap: round; }
+.d-btn { fill: var(--dev-btn); stroke: var(--dev-line); stroke-width: 1.5; }
+.d-screen { fill: var(--dev-screen); }
+.d-lab { font: 600 15px var(--f-display); letter-spacing: .05em; fill: var(--dev-text); text-anchor: middle; }
+.d-lab.s { font-size: 12px; }
+.d-fn { font: 600 14px var(--f-display); letter-spacing: .04em; fill: var(--accent); text-anchor: middle; }
+.d-scr { font: 600 13px var(--f-display); letter-spacing: .06em; fill: #9a9ca3; text-anchor: middle; }
+.d-scr.big { font: 700 34px var(--f-display); letter-spacing: .12em; fill: var(--dev-scr-text); }
+.d-bkey { fill: var(--dev-key-b); }
+.d-bkey.v-drum { fill: var(--v-drum); } .d-bkey.v-snare { fill: var(--v-snare); } .d-bkey.v-cym { fill: var(--v-cym); }
+.d-bkey.v-hat { fill: var(--v-hat); } .d-bkey.k-fn { fill: var(--dev-knob); } .d-bkey.k-off { fill: var(--dev-key-b); opacity: .45; }
+.d-klab { font: 700 14px var(--f-display); letter-spacing: .04em; text-anchor: middle; fill: #1d1e21; }
+.d-klab.k-fn { fill: #f07d24; font-size: 12px; }
+.d-wkey { fill: var(--dev-key); stroke: var(--dev-line); stroke-width: 1; }
+.d-wkey.beat { stroke: var(--accent); stroke-width: 2; }
+.d-wlab { font: 600 15px var(--f-display); text-anchor: middle; fill: #6b6d73; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 4px 0; font-size: .85rem; color: var(--muted); }
+.legend b { color: var(--ink); font-weight: 600; }
+.sw { display: inline-block; width: .8em; height: .8em; border-radius: 50%; vertical-align: -.05em; margin-right: .35em; border: 1px solid var(--rule); }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 18px 22px; align-items: start; }
+section { min-width: 0; }
+h2 { font: 700 1.05rem/1.1 var(--f-display); letter-spacing: .1em; text-transform: uppercase; margin: 0 0 8px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule); display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+h2 small { font: 500 .72rem var(--f-display); letter-spacing: .08em; color: var(--muted); }
+dl { margin: 0; display: grid; grid-template-columns: minmax(0, 11.5em) minmax(0, 1fr); gap: 5px 12px; }
+dt { font: 500 .82rem/1.5 var(--f-mono); color: var(--ink); }
+dd { margin: 0; min-width: 0; }
+dd em { font-style: normal; color: var(--muted); }
+kbd { font: 500 .78rem/1 var(--f-mono); background: var(--kbd-bg); border: 1px solid var(--kbd-line); border-bottom-width: 2px; border-radius: 4px;
+  padding: 2px 5px; white-space: nowrap; }
+kbd.k { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.plus { color: var(--muted); margin: 0 1px; }
+.new { font: 700 .62rem var(--f-display); letter-spacing: .1em; color: var(--accent-ink); background: var(--accent); border-radius: 3px; padding: 1px 4px; margin-left: 6px; vertical-align: .15em; }
+.rule { margin: 0 0 8px; font-size: .88rem; color: var(--muted); }
+
+footer { border-top: 1px solid var(--rule); padding-top: 10px; font-size: .8rem; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; }
+
+@media (max-width: 520px) { dl { grid-template-columns: 1fr; gap: 0 0; } dd { margin-bottom: 7px; } h1 { font-size: 1.7rem; } }
+@media print {
+  @page { size: A4 landscape; margin: 9mm; }
+  :root { --paper: #fff; --card: #fff; --ink: #000; --muted: #444; --rule: #bbb; --accent: #c95a12; --accent-ink: #fff;
+    --dev-body: #ecebe8; --dev-tray: #dddbd6; --dev-btn: #fff; --dev-text: #111; --dev-key: #fff; --dev-key-b: #3a3c41; --kbd-bg: #f0efec; --kbd-line: #bbb; }
+  body { padding: 0; font-size: 9.2pt; line-height: 1.32; }
+  .sheet { max-width: none; gap: 8px; }
+  .figure { padding: 4px; border: 0; }
+  .panel { min-width: 0; max-height: 62mm; }
+  .grid { grid-template-columns: repeat(4, 1fr); gap: 8px 14px; }
+  dl { grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr); gap: 2px 8px; }
+  h1 { font-size: 18pt; } h2 { font-size: 9.5pt; margin-bottom: 4px; }
+  section { break-inside: avoid; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="sheet">
+<header>
+  <h1>Tack <span>on the FM-1</span></h1>
+  <div class="meta">Cheat sheet · build after 0.12: mixer, song repeats, morph target, Frankenkit, reload</div>
+</header>
+
+<div class="figure">
+@@PANEL@@
+  <div class="legend">
+    <span><i class="sw" style="background:var(--v-drum)"></i><b>D1–D3</b> drums</span>
+    <span><i class="sw" style="background:var(--v-snare)"></i><b>SN</b> snare</span>
+    <span><i class="sw" style="background:var(--v-cym)"></i><b>CY</b> cymbal</span>
+    <span><i class="sw" style="background:var(--v-hat)"></i><b>CH OH</b> closed and open hat</span>
+    <span><b>ROLL</b> held: roll the voice</span>
+    <span><b>MONO</b> Frankensound</span>
+    <span><b>POLY</b> held: morph target</span>
+    <span><b>COPY</b> held: copy a pattern</span>
+  </div>
+</div>
+
+<div class="grid">
+
+<section>
+  <h2>Pages <small>press again: next screen</small></h2>
+  <dl>
+    <dt><kbd>HOME</kbd></dt><dd>Overview: all seven lanes and the patterns. K1–K4 are the voice's pitch, filter, decay, volume.</dd>
+    <dt><kbd>SEQ</kbd></dt><dd>One voice in detail: the bars view, again for the note view.</dd>
+    <dt><kbd>EDIT</kbd> <kbd>ENV</kbd> <kbd>LFO</kbd></dt><dd>The voice's sound, three rows of four. The dials work the middle row. EDIT has two screens.</dd>
+    <dt><kbd>OCT+</kbd> / <kbd>OCT-</kbd> held</dt><dd>On a sound page: the dials reach the top or bottom row.</dd>
+    <dt><kbd>FX</kbd></dt><dd>Black keys send voices to the FX. Type, mix, two settings; <kbd>OCT-</kbd> held for the rest.</dd>
+    <dt><kbd>GLO</kbd></dt><dd>Mixer, then settings, then mixer again.<span class="new">NEW</span></dd>
+    <dt><kbd>ARP</kbd></dt><dd>The selected lane: its Lane, Euclid and Vel shape screens in turn.</dd>
+    <dt><kbd>SEL</kbd> held 1 s</dt><dd>What SEL does on this page.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Steps and locks</h2>
+  <dl>
+    <dt>white key</dt><dd>Set or clear a step, on release.</dd>
+    <dt><kbd>OCT-</kbd> / <kbd>OCT+</kbd></dt><dd>Show the bar before or after.</dd>
+    <dt>step held <span class="plus">+</span> K1–K4</dt><dd>Lock those values on the step, up to eight.</dd>
+    <dt>step held <span class="plus">+</span> <kbd>ALGORITHM</kbd></dt><dd>Nudge, in 24ths of a step.</dd>
+    <dt>step held <span class="plus">+</span> <kbd>PRESETS</kbd></dt><dd>Chance.</dd>
+    <dt>step held <span class="plus">+</span> <kbd>SELECT</kbd></dt><dd>Recurrence, a cycle of 1–8 passes; black keys 1–8 pick the passes it plays.</dd>
+    <dt>step held <span class="plus">+</span> <kbd>EDIT</kbd></dt><dd>Clear the step's locks.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Lanes</h2>
+  <dl>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> white key</dt><dd>That step is the lane's last. A voice key held does the same.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>OCT+</kbd> / <kbd>OCT-</kbd></dt><dd>A bar more or less. A new bar copies the one before.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>EDIT</kbd> 1 s</dt><dd>Clear the lane.</dd>
+    <dt><kbd>ARP</kbd> Lane</dt><dd>K1 length · K2 direction · K3 speed · K4 start. <kbd>ALGORITHM</kbd> nudges the lane.</dd>
+    <dt><kbd>ARP</kbd> Euclid</dt><dd>K1 length · K2 hits · K3 rotation · K4 puts the lane back.</dd>
+    <dt><kbd>ARP</kbd> Vel shape</dt><dd>K1 rhythm · K2 centre · K3 amount · K4 shifts it later. Off restores.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Voices and mixer</h2>
+  <dl>
+    <dt>voice key</dt><dd>Select the voice and play it.</dd>
+    <dt><kbd>ARP</kbd> <span class="plus">+</span> voice key</dt><dd>Mute or unmute.</dd>
+    <dt><kbd>SEQ</kbd> <span class="plus">+</span> voice key</dt><dd>Select without playing.</dd>
+    <dt><kbd class="k">ROLL</kbd> held</dt><dd>Roll the selected voice. Rate on GLO's settings.</dd>
+    <dt><kbd>GLO</kbd> mixer</dt><dd>Strips with level, meter and pan. K1 level · K2 pan · K3 FX send · K4 drive.<span class="new">NEW</span></dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> voice key</dt><dd>On the mixer: solo, and again to lift it. Not saved.<span class="new">NEW</span></dd>
+    <dt><kbd>GLO</kbd> settings</dt><dd>K1 tempo · K2 shuffle · K3 MIDI clock · K4 roll rate. <kbd>OCT-</kbd> held: USB audio, rate, bits, preview.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Patterns and song</h2>
+  <dl>
+    <dt><kbd>SEQ</kbd> <span class="plus">+</span> white key</dt><dd>Pattern 1–16. Running, it changes at the end of the longest lane.</dd>
+    <dt><kbd>SEQ</kbd> <span class="plus">+</span> several</dt><dd>A chain, which loops until you pick one pattern.</dd>
+    <dt><kbd class="k">COPY</kbd> <span class="plus">+</span> white key</dt><dd>Copy this pattern onto that one.</dd>
+    <dt><kbd>SEQ</kbd> <span class="plus">+</span> <kbd>ARP</kbd></dt><dd>The song: white keys fill the rows. K1 row · K2 pattern or end · K3 repeat ×1–16, or stop / loop on the end row · K4 song on.<span class="new">NEW</span></dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> K1</dt><dd>On the song page: right copies the row, left removes it.<span class="new">NEW</span></dd>
+    <dt><kbd class="k">COPY</kbd> tapped</dt><dd>On the song page: the playing chain into the rows.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Kits</h2>
+  <dl>
+    <dt><kbd>PRESETS</kbd></dt><dd>Step through the bank. Back past the first: the init kit.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>PRESETS</kbd></dt><dd>Mutate the kit. Turning back retraces the walk.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>ALGORITHM</kbd></dt><dd>Mutate the selected voice.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>HOME</kbd> 1 s</dt><dd>Reload the kit as the pattern was last saved.<span class="new">NEW</span></dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Frankensound <small>MONO</small></h2>
+  <p class="rule">A new kit from up to four, a section of each voice from each. It is your kit: edit and save it as any other.</p>
+  <dl>
+    <dt>K1–K4</dt><dd>The parent kits: none, this kit, the bank's. K1 starts on this kit.<span class="new">NEW</span></dd>
+    <dt><kbd>PRESETS</kbd> right</dt><dd>Roll a new kit, heard at once.</dd>
+    <dt><kbd>PRESETS</kbd> left</dt><dd>Back through the rolls. At 0, the kit from before.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Morph</h2>
+  <p class="rule">Each pattern has a target of its own, and morph blends the kit towards it.</p>
+  <dl>
+    <dt><kbd>ALGORITHM</kbd></dt><dd>How far: kit at 0, target at 127. Also CC 1 on channel 1.</dd>
+    <dt><kbd class="k">POLY</kbd> <span class="plus">+</span> K1–K4</dt><dd>Set the target's value. The dials show the target while held.<span class="new">NEW</span></dd>
+    <dt><kbd class="k">POLY</kbd> <span class="plus">+</span> <kbd>PRESETS</kbd></dt><dd>Copy a bank kit in as the target. NONE drops it.</dd>
+    <dt><kbd>SAVE</kbd>, K4 blend</dt><dd>Keep what you hear as a kit in the bank.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Detail views <small>SEQ</small></h2>
+  <dl>
+    <dt>bars view</dt><dd>A key, <kbd>SEL</kbd> or <kbd>SELECT</kbd> picks a step. K1 velocity · K2 nudge · K3 flam · K4 chance.</dd>
+    <dt>note view</dt><dd>All 27 keys play the voice, F3 to G5; <kbd>OCT</kbd> moves them. K1 note · K2 velocity · K3 how hard keys write · K4 step on.</dd>
+    <dt><kbd>REC</kbd>, note view</dt><dd>Keys write: stopped step by step, running live.</dd>
+  </dl>
+</section>
+
+<section>
+  <h2>Play and save</h2>
+  <dl>
+    <dt><kbd>PLAY</kbd> · <kbd>REC</kbd></dt><dd>Start and stop · live recording.</dd>
+    <dt><kbd>SELECT</kbd></dt><dd>Tempo. With <kbd>SEL</kbd> held: shuffle.</dd>
+    <dt><kbd>SAVE</kbd></dt><dd>Shows what it will save; again to write. K4 pattern, blend or kit · K1 or <kbd>SELECT</kbd> the slot.</dd>
+    <dt><kbd>SEL</kbd> <span class="plus">+</span> <kbd>SAVE</kbd></dt><dd>Write the changes at once.</dd>
+    <dt>MIDI in, ch 1</dt><dd>Notes 60–66 play the voices. Notes 0–15 or Program Change pick a pattern. MIDI clock: K3 on GLO's settings.</dd>
+  </dl>
+</section>
+
+</div>
+
+<footer>
+  <span>Tack · firmware for the M-VAVE FM-1 by oikoaudio. Not affiliated with M-VAVE.</span>
+  <span>Full manual: oikoaudio.com/manuals/tack-fm1</span>
+</footer>
+</div>
