@@ -35,6 +35,8 @@ static void draw_sel_help(void)
         help_row(&y, "KEY", "ONLY LISTEN");
     if (!full_page() || seq_detail() || arp_page())
         help_row(&y, "OCT+ OCT-", "ADD, REMOVE BAR");
+    if (ui.over == PAGE_SONG)
+        help_row(&y, "K1", "COPY, REMOVE ROW");
     if (!saving) {
         help_row(&y, "PRESET", "MUTATE KIT");
         help_row(&y, "ALGORITHM", "MUTATE VOICE");

@@ -292,7 +292,7 @@ static void input_dials(uint32_t btn)
             } else if (ui.over == PAGE_LANE) {
                 lane_turn(k, e);
             } else if (song_pages()) {
-                song_turn(k, e);
+                song_turn(k, e, btn >> B_SEL & 1u);
             } else if (note_view()) {
                 note_turn(k, e);
             } else if (ui.over == PAGE_FX) {

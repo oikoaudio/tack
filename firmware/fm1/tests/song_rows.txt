@@ -1,0 +1,146 @@
+# A song row's repeats, and SEL with K1 to copy or remove a row: firmware/fm1/build/host/tack_host firmware/fm1/tests/song_rows.txt OUTDIR
+# A bar of 16 steps is 2000 ms at the default 120 BPM
+wait 600
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 40
+expect songpage 1
+tapkey 0
+wait 40
+tapkey 2
+wait 40
+expect songlen 2
+expect songtimes0 1
+
+# K3 is the row's repeats, and on the end row what the song does there
+turn K1 -2
+wait 40
+expect songedit 0
+turn K3 1
+wait 40
+expect songtimes0 2
+turn K3 20
+wait 40
+expect songtimes0 16
+turn K3 -6
+wait 40
+expect songtimes0 2
+expect songrow2 64
+turn K1 2
+wait 40
+expect songedit 2
+turn K3 1
+wait 40
+expect songrow2 65
+turn K3 -1
+wait 40
+expect songrow2 64
+
+# a row set to two plays twice, the next once, and the song stops at its end
+turn K4 1
+wait 40
+expect songmode 2
+tap PLAY
+wait 1000
+expect pattern 0
+expect songpos 0
+expect songpass 0
+wait 2000
+expect pattern 0
+expect songpos 0
+expect songpass 1
+shot song_repeat.png
+wait 2000
+expect pattern 1
+expect songpos 1
+expect songpass 0
+wait 2000
+expect running 0
+
+# SEL and K1: right copies the row, its repeats too, left takes it out
+turn K1 -2
+wait 40
+expect songedit 0
+press SEL
+wait 20
+turn K1 1
+wait 40
+release SEL
+wait 40
+expect songlen 3
+expect songrow0 0
+expect songrow1 0
+expect songrow2 1
+expect songtimes1 2
+expect songedit 0
+press SEL
+wait 20
+turn K1 -1
+wait 40
+release SEL
+wait 40
+expect songlen 2
+expect songrow0 0
+expect songrow1 1
+expect songtimes0 2
+expect songtimes1 1
+# the end row stays
+turn K1 2
+wait 40
+expect songedit 2
+press SEL
+wait 20
+turn K1 -1
+wait 40
+turn K1 1
+wait 40
+release SEL
+wait 40
+expect songlen 2
+expect songrow2 64
+
+# saved and rebooted, the rows keep their repeats
+press SEL
+wait 20
+tap SAVE
+wait 20
+release SEL
+wait 200
+reboot
+wait 800
+expect songlen 2
+expect songrow0 0
+expect songtimes0 2
+expect songrow1 1
+expect songtimes1 1
+
+# removing the row playing: the row after it plays next
+press SEQ
+wait 20
+tap ARP
+wait 20
+release SEQ
+wait 40
+turn K4 1
+wait 40
+tap PLAY
+wait 1000
+expect songpos 0
+turn K1 -2
+wait 40
+press SEL
+wait 20
+turn K1 -1
+wait 40
+release SEL
+wait 40
+expect songlen 1
+expect songrow0 1
+wait 2000
+expect pattern 1
+expect songpos 0
+tap PLAY
+wait 60

@@ -36,6 +36,10 @@ enum { TACK_SONG_OFF, TACK_SONG_CHAIN, TACK_SONG_ON };
 int tack_post_chain(uint8_t index, uint8_t pattern);     /* after a tack_post_pattern, index 0 of the chain */
 int tack_post_song_row(uint8_t row, uint8_t value);
 int tack_post_song_on(uint8_t on);
+#define TACK_SONG_REPS 8u                                 /* a row plays 1, 2, 3, 4, 6, 8, 12 or 16 times */
+int tack_post_song_reps(uint8_t row, uint8_t reps);      /* reps an index, below TACK_SONG_REPS */
+int tack_post_song_insert(uint8_t row);                  /* a copy of the row goes in after it */
+int tack_post_song_delete(uint8_t row);
 uint32_t tack_chain_len(void);
 int tack_post_chain_to_song(uint8_t row);                /* the chain playing, written over the song's rows from this one */
 int tack_post_mute(uint8_t voice, uint8_t muted);
@@ -90,7 +94,10 @@ int tack_lane_used(uint8_t voice);                       /* it has steps in the 
 int tack_song_mode(void);
 int tack_song_pos(void);                                 /* the row playing, -1 before the first */
 uint8_t tack_song_get(uint32_t row);
-const uint8_t *tack_song(void);
+uint8_t tack_song_reps(uint32_t row);
+uint32_t tack_song_times(uint8_t reps);                  /* how many times an index plays */
+int tack_song_pass(void);                                /* which time the row playing is on, from 0 */
+void tack_song_save(uint8_t *rows);                      /* TACK_SONG_ROWS bytes, each row with its count */
 void tack_song_load(const uint8_t *rows, int on);        /* stopped; rows 0: an empty song */
 int tack_muted(uint8_t voice);
 uint16_t tack_bpm(void);

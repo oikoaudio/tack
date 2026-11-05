@@ -742,6 +742,23 @@ static void seq_CheckIfNextPatternNeedsBankSwitch()
 }
 #endif
 //------------------------------------------------------------------------------
+#ifdef LXR_FM1_BUILD
+/* Each row of the song, seq_songData[0], plays as many times as seq_songRowTimes says for its index. Asked at the end of each play */
+const uint8_t seq_songRowTimes[SEQ_SONG_REPS] = { 1, 2, 3, 4, 6, 8, 12, 16 };
+uint8_t seq_songRowReps[MAX_SONG_LENGTH];
+uint8_t seq_songRowPass;	/* which time the row playing is on, from 0 */
+static int seq_songRowHolds(uint8_t count)
+{
+	const uint8_t row = seq_songPositionPointer;
+	if(seq_activeSong == seq_songData[0] && row < MAX_SONG_LENGTH && seq_songRowPass + 1u < seq_songRowTimes[seq_songRowReps[row]])
+	{
+		if(count) seq_songRowPass++;
+		return 1;
+	}
+	if(count) seq_songRowPass = 0;
+	return 0;
+}
+#endif
 static uint8_t seq_determineNextPattern(uint8_t autoIncrement)
 {
 
@@ -751,6 +768,10 @@ static uint8_t seq_determineNextPattern(uint8_t autoIncrement)
 	 */
 	if(seq_songModeEnabled)
 	{
+#ifdef LXR_FM1_BUILD
+		if(seq_songRowHolds(autoIncrement))
+			return seq_activeSong[seq_songPositionPointer];
+#endif
 		if(autoIncrement)
 		{
 			seq_songPositionPointer++;
