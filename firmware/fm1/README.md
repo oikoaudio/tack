@@ -75,6 +75,21 @@ One script can run alone, with `firmware/fm1/build/host/tack_host firmware/fm1/t
 
 The simulator has the host's whole C library, and the FM-1 has only `memset`, `memcpy` and `memcmp`. `firmware/fm1/tests/libc_check.sh` compiles the app as the FM-1 does, without the JieLi toolchain, so a call like `strlen` fails there and not at the device build. It needs the simulator built first.
 
+## Release and the website
+
+The website is the oikoaudio site repository, `WEB_DIR` below, and a push to its `main` deploys it. Prepare it on a branch, and merge only when the release is out.
+
+1. `bash firmware/fm1/tests/verify.sh OUTDIR` ends in `verify: passed`.
+2. Set the version in `host/CMakeLists.txt`. `.github/workflows/release.yml` checks that the tag matches it.
+3. Build the release package with `python3 third_party/fm1-base/tools/build.py firmware/fm1 --release X.Y.Z`, which writes `firmware/fm1/build/tack-X.Y.Z.fwsc`. Build the browser emulator with `--web` (needs Emscripten) and the simulator with `--host`.
+4. `python3 firmware/fm1/tools/make_web.py X.Y.Z WEB_DIR` writes the install, backup, kit bank and try-it pages' files into the site.
+5. `firmware/fm1/build/host/tack_host firmware/fm1/tests/site_shots.txt OUTDIR` takes the manual's screens. Each goes into `WEB_DIR/public/images/` as `tack-NAME-240.png` as it is, and as `tack-NAME.png` scaled 3× to 720 px.
+6. `python3 firmware/fm1/tools/docs/make_docs.py OUTDIR WEB_DIR` writes the mode maps and the cheat sheet, with their screens from `tests/doc_shots.txt`. A control that moved or changed its job needs its callout edited in `tools/docs/doc_maps.py` first, and the cheat sheet's text in `tools/docs/cheat_sheet.html`.
+7. Bring the manual's text, `WEB_DIR/app/tack-content.tsx`, up to date with any panel change.
+8. In `WEB_DIR`, `npm run build:pages` builds the site into `out/`. Look at it from a local server (`python3 -m http.server` in `out/`), commit on the branch, and merge to `main` to publish.
+
+`fm1 install` takes `build/tack.fwsc`, from a normal build, not the release package.
+
 ## Layout
 
 | Path | Contents |
