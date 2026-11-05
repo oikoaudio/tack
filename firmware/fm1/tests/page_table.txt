@@ -86,7 +86,7 @@ GLO     EDIT  EDIT
 GLO     ENV   ENV
 GLO     LFO   LFO
 GLO     FX    FX
-GLO     GLO   GLO
+GLO     GLO   MIX
 GLO     ARP   LANE
 GLO     SAVE  SAVE
 LANE    HOME  HOME

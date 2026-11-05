@@ -14,7 +14,7 @@ wait 30
 tapkey w12
 wait 30
 
-# GLO opens the mixer, a second press the settings, and a third stays there
+# GLO opens the mixer, a second press the settings, and a third the mixer again
 tap GLO
 wait 40
 expect mixpage 1
@@ -24,7 +24,7 @@ wait 40
 expect setpage 1
 tap GLO
 wait 40
-expect setpage 1
+expect mixpage 1
 tap HOME
 wait 40
 tap GLO
