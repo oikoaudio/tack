@@ -510,6 +510,36 @@ static void morph_target_tests(void)
     run(4);
 }
 
+/* Frankenkit: each section of each voice from one parent, whole, the level from the first, and a seed always the same */
+static void franken_tests(void)
+{
+    static uint8_t one[256], two[256], out[256], again[256];
+    const uint8_t *parents[2] = {one, two};
+    uint8_t where[TACK_FRANKEN_CELLS];
+    const int fp = probe_param_filter1(), vol = probe_param_vol1();
+    int used = 0;
+    memset(one, 40, sizeof one);
+    memset(two, 50, sizeof two);
+    two[vol] = 99;
+    tack_franken(parents, 2, 12345u, where, out);
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+        used |= 1 << where[c];
+    check("from both parents", used == 3, 3, used);
+    check("drum 1's filter from its cell's parent", out[fp] == (where[3] ? 50 : 40), where[3] ? 50 : 40, out[fp]);
+    check("the level from the first", out[vol] == 40, 40, out[vol]);
+    tack_franken(parents, 2, 12345u, where, again);
+    check("a seed rolls the same", !memcmp(out, again, (size_t)probe_kit_size()), 1, 0);
+    for (int seed = 0, all = 1; seed < 64 && all; seed++) {
+        tack_franken(parents, 2, (uint32_t)seed, where, out);
+        used = 0;
+        for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+            used |= 1 << where[c];
+        all &= used == 3;
+        if (seed == 63 || !all)
+            check("every roll takes from both", all, 1, seed);
+    }
+}
+
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
 int tack_step_get(uint8_t voice, uint8_t step, uint32_t slot);
 int tack_post_ext_sync(uint8_t on);
@@ -1322,6 +1352,7 @@ int main(void)
     lane_format_tests();
     morph_tests();
     morph_target_tests();
+    franken_tests();
     nudge_tests();
     nudged_lock_tests(fp);
     pattern_state_tests(fp);

@@ -1,0 +1,95 @@
+# Frankenkit, MONO pressed: firmware/fm1/build/host/tack_host firmware/fm1/tests/franken.txt OUTDIR
+# verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50 (morph.txt says more).
+# MONO is the ninth black key, POLY the tenth. A roll is the pattern's kit, heard at once. Drum 1's volume, parameter 88, is in no section, so
+# it comes from K1's kit, here the kit before the rolls: the init kit's 127. 70 is F, of FRANKEN
+wait 600
+data kits.bin 770048
+
+# MONO opens the page, K1 on this kit and the rest on none; a second press does nothing
+tapkey b8
+wait 40
+expect frankenpage 1
+expect fkparent0 1
+expect fkparent1 0
+tapkey b8
+wait 40
+expect frankenpage 1
+
+# one parent is not enough to roll
+turn PRESET 1
+wait 40
+expect fkroll 0
+expect kitname0 0
+
+# K2 and K3 on the bank's two kits (none, this kit, then the bank), and a roll is the kit, from at least two of the three
+turn K2 2
+wait 40
+expect fkparent1 2
+turn K3 3
+wait 40
+expect fkparent2 3
+turn PRESET 1
+wait 60
+expect fkroll 1
+expect kitname0 70
+expect fkparents >2
+expect kitv88 127
+expect hastarget 0
+shot franken.png
+
+# back to 0: the kit from before
+turn PRESET -1
+wait 60
+expect fkroll 0
+expect kitname0 0
+expect kitv37 127
+
+# away and back with nothing changed: the rolls go on where they were
+turn PRESET 2
+wait 60
+expect fkroll 2
+tap HOME
+wait 40
+expect frankenpage 0
+tapkey b8
+wait 40
+expect fkroll 2
+
+# an edit makes it your kit: the rolls start again from it, and the level comes from it
+tap HOME
+wait 40
+turn K4 -10
+wait 60
+expect kitv88 117
+tapkey b8
+wait 40
+expect fkroll 0
+expect fkparent1 2
+turn PRESET 1
+wait 60
+expect fkroll 1
+expect kitv88 117
+
+# SAVE keeps it as the pattern's kit
+press SEL
+wait 20
+tap SAVE
+wait 20
+release SEL
+wait 300
+reboot
+wait 800
+expect kitname0 70
+expect kitv88 117
+
+# POLY held and a dial is the morph target, and opens nothing
+tap HOME
+wait 40
+key b9 down
+wait 40
+turn K2 -5
+wait 40
+key b9 up
+wait 40
+expect frankenpage 0
+expect hastarget 1

@@ -79,6 +79,8 @@ static void input_keys(uint32_t keys, uint32_t btn)
         ui.copy_used = 0;
     if (down >> BK[KEY_MORPH] & 1u)              /* what was said gives way to MORPH TO: it may be the hint to hold this key */
         ui.msg_until = 0;
+    if ((down >> BK[KEY_FRANKEN] & 1u) && !keys_notes(btn) && ui.held < 0)   /* MONO, printed on it */
+        franken_open();
     for (k = 0; k < 16u; k++) {                  /* the white keys: steps, or the voices */
         if (down >> WK[k] & 1u) {
             if (btn >> B_SEQ & 1u) {             /* SEQ held: a pattern, in either mode; more of them a chain */
@@ -284,7 +286,9 @@ static void input_dials(uint32_t btn)
     for (k = 0; k < TACK_NP; k++)
         if ((e = plat_enc(EN_K1 + (int)k)) != 0) {
             ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
-            if (ui.over == PAGE_SET) {
+            if (ui.over == PAGE_FRANKEN) {
+                franken_turn(k, e);
+            } else if (ui.over == PAGE_SET) {
                 set_turn(k, e);
             } else if (vel_page()) {
                 vel_turn(k, e);
@@ -373,6 +377,8 @@ static void input_dials(uint32_t btn)
             ui.sel_used = 1;
             mutate_turn(TACK_VOICES, e);
         }
+        else if (ui.over == PAGE_FRANKEN)
+            franken_roll(e);
         else if (morph_held())
             morph_kit_step(e);
         else
@@ -383,6 +389,7 @@ static void input_dials(uint32_t btn)
 
 static void input(void)
 {
+    fk_settle();
     const uint32_t keys = plat_keys(), btn = plat_buttons();
     input_keys(keys, btn);
     input_buttons(keys, btn);

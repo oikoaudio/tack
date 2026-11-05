@@ -46,6 +46,7 @@ static int seq_detail(void) { return voice_page() || note_view(); }
 #define PAGE_FX 6u
 #define PAGE_SET 7u
 #define PAGE_MIX 8u                      /* GLO's first screen, the settings its second */
+#define PAGE_FRANKEN 9u                  /* MONO: Frankenkit */
 static int song_pages(void) { return ui.over && ui.over <= PAGE_SAVE; }
 enum { SAVE_PATTERN, SAVE_BLEND, SAVE_KIT };
 static int vel_page(void) { return ui.over == PAGE_VEL; }

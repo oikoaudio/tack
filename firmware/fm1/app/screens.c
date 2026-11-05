@@ -731,12 +731,56 @@ static void pg_mix_strips(uint32_t *last)
     cv_blit(0, PG_Y);
 }
 
+/* Frankenkit: K1 to K4's parent kits, each in its colour, and the roll */
+static const uint16_t FK_COLOUR[4] = {RGB(240, 125, 36), RGB(80, 170, 240), RGB(120, 200, 90), RGB(200, 110, 220)};
+
+static void pg_fk_parents(uint32_t *last)
+{
+    uint32_t key = 29u;
+    for (uint32_t i = 0; i < 4u; i++)
+        key = rk(key, (uint32_t)ui.fk_parent[i]);
+    key = rk(rk(key, ui.fk_before_name[0]), ui.fk_before_name[1]);
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, PG_RH, C_BLACK);
+    row_lines(0xFu, C_HI);
+    for (uint32_t i = 0; i < 4u; i++) {
+        const int32_t x = (int32_t)i * PG_CW + 3;
+        const int none = ui.fk_parent[i] == FK_NONE;
+        char t[10], label[6] = "KIT 1";
+        fk_name(ui.fk_parent[i], t);
+        outline(x, 12, PG_CW - 6, 30, 2, none ? C_DIM : FK_COLOUR[i]);
+        cv_text(x + (PG_CW - 6) / 2 - text_w(&FONT_XS, t) / 2, 23, &FONT_XS, t, none ? C_GRAY : C_WHITE);
+        label[4] = (char)('1' + i);
+        pg_column(i, label, 1);
+    }
+    cv_blit(0, PG_Y);
+}
+
+static void pg_fk_roll(uint32_t *last)
+{
+    char t[16];
+    const uint32_t key = 31u + (uint32_t)ui.fk_roll;
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, 2u * PG_RH - 2u, C_BLACK);
+    if (ui.fk_roll)
+        int_text(ui.fk_roll, text_put(t, "ROLL "));
+    else
+        text_put(t, "PRESET ROLLS");
+    cv_text(120 - text_w(&FONT_M, t) / 2, 36, &FONT_M, t, ui.fk_roll ? C_WHITE : C_HI);
+    cv_text(120 - text_w(&FONT_XS, "BACK TO 0: THE KIT BEFORE") / 2, 70, &FONT_XS, "BACK TO 0: THE KIT BEFORE", C_GRAY);
+    cv_blit(0, PG_Y + PG_RH);
+}
+
 /* the whole screen; invalid: all of it, as it comes from another page */
 static void pg_screen(int invalid)
 {
     static uint32_t rows[SCREEN_ROWS];
     static int was;
-    const int now = ui.over == PAGE_MIX ? 11 : ui.over == PAGE_FX ? 1 : ui.over == PAGE_SET ? 2 : vel_page() ? 6 : ui.over == PAGE_LANE ? 7 : ui.over == PAGE_EUCLID ? 8
+    const int now = ui.over == PAGE_FRANKEN ? 12 : ui.over == PAGE_MIX ? 11 : ui.over == PAGE_FX ? 1 : ui.over == PAGE_SET ? 2 : vel_page() ? 6 : ui.over == PAGE_LANE ? 7 : ui.over == PAGE_EUCLID ? 8
                     : ui.over == PAGE_SAVE ? (ui.ks_what == SAVE_PATTERN ? 10 : 9) : song_pages() ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
     if (invalid || now != was) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -755,6 +799,9 @@ static void pg_screen(int invalid)
     } else if (now == 11) {
         pg_mix_strips(&rows[0]);
         pg_row(2, MIX_ROW, &rows[2]);
+    } else if (now == 12) {
+        pg_fk_parents(&rows[0]);
+        pg_fk_roll(&rows[1]);
     } else if (now == 1) {
         pg_fx_sends(&rows[0]);
         pg_fx_row(1, &rows[1]);
