@@ -262,10 +262,11 @@ def sound(o):
     right_btns(o, ["ENV", "LFO", "EDIT"], OY + 50, ["EDIT ENV LFO", "the voice's sound", "EDIT: two screens"], ch=0)
 
 def kits(o):
-    k_bracket(o, ["K1–K4", "Franken: the four parent kits", "POLY held: the morph target's values"])
+    k_bracket(o, ["K1–K4", "Franken: the parent kits, random till set", "POLY held: the morph target's values"])
     algo_top(o, ["ALGORITHM", "morph, kit to target", "SEL held: mutate the voice"])
-    presets_left(o, ["PRESETS", "a kit from the bank", "SEL held: mutate the kit", "Franken: roll · left: back to 0"])
-    roll_poly_copy(o, mono=["MONO", "Franken: roll a kit", "from up to four"], poly=["POLY HELD", "+ K1–K4: target values", "+ PRESETS: a bank kit", "as the target"])
+    presets_left(o, ["PRESETS", "a kit from the bank", "SEL held: mutate the kit", "Franken: a new combo · left: back"])
+    voices_left(o, ["VOICE KEYS", "Franken, held + PRESETS:", "a combo of that voice"])
+    roll_poly_copy(o, mono=["MONO", "Franken: a kit made", "from up to four"], poly=["POLY HELD", "+ K1–K4: target values", "+ PRESETS: a bank kit", "as the target"])
     right_btn(o, "SAVE", OY + 380, ["SAVE", "K4: pattern, blend or kit", "blend keeps the morph", "as a kit"])
     right_btn(o, "HOME", OY + 520, ["SEL + HOME, 1 s", "reload the kit", "as last saved"], ch=1)
 
@@ -299,7 +300,7 @@ INTRO = {
     "song": "Patterns are picked with SEQ held. A chain loops until you pick a single pattern; the song plays its rows in order.",
     "glo": "Every lane's level at a glance, with mute and solo. The settings are the second screen.",
     "sound": "The selected voice's parameters, three rows of four, and the FX bus.",
-    "kits": "Frankensound (Franken on the screen) rolls a new kit from up to four, a section of each voice from each, into the pattern's kit: edit and save it as any other. Morph blends the kit towards the pattern's own target.",
+    "kits": "Frankensound (Franken on the screen) makes the pattern's kit from up to four kits, a section of each voice from each: edit and save it as any other. Kits left on random are drawn from the bank for each combo, and a voice key held makes a combo of that voice alone. Morph blends the kit towards the pattern's own target.",
 }
 
 
