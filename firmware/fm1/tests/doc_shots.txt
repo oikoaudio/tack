@@ -84,8 +84,6 @@ tap HOME
 wait 60
 tapkey b8
 wait 60
-turn K2 3
-wait 60
 turn PRESET 2
 wait 120
 expect frankenpage 1
