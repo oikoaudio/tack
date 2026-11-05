@@ -4,7 +4,7 @@ Tack replaces the firmware of an M-VAVE FM-1 with a seven-voice drum synth and a
 
 <p>
 <img src="../../docs/images/fm1-overview.png" width="240" alt="Tack on the FM-1, HOME: seven lanes of steps, the selected voice's four main dials, the pattern map and the envelope.">
-<img src="../../docs/images/fm1-note.png" width="240" alt="Tack on the FM-1, NOTE: each step's note as a mark, with its velocity as a grey bar behind it.">
+<img src="../../docs/images/fm1-mixer.png" width="240" alt="Tack on the FM-1, the mixer on GLO: a strip for each lane with its level, a live meter and its pan, and the selected lane's level, pan, FX send and distortion on the dials.">
 <img src="../../docs/images/fm1-edit.png" width="240" alt="Tack on the FM-1, EDIT: three rows of dials and pictures for one voice, with the knobs on the middle row.">
 </p>
 
