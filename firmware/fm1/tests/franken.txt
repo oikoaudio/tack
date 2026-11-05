@@ -1,33 +1,23 @@
 # Frankenkit, MONO pressed: firmware/fm1/build/host/tack_host firmware/fm1/tests/franken.txt OUTDIR
 # verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50 (morph.txt says more).
-# MONO is the ninth black key, POLY the tenth. A roll is the pattern's kit, heard at once. Drum 1's volume, parameter 88, is in no section, so
-# it comes from K1's kit, here the kit before the rolls: the init kit's 127. 70 is F, of FRANKEN
+# MONO is the ninth black key, POLY the tenth. A combo is the pattern's kit, heard at once. The parent dials go RANDOM (-1),
+# NONE (0), this kit (1), then the bank (2 KITONE, 3 KITTWO). Parameter 37 is drum 1's filter, 40 the snare's, 88 drum 1's
+# volume, which no section has: it comes from K1's kit. 70 is F, of FRANKEN
 wait 600
 data kits.bin 770048
 
-# MONO opens the page, K1 on this kit and the rest on none; a second press does nothing
+# MONO opens the page, K1 on this kit and the rest on RANDOM; a second press does nothing
 tapkey b8
 wait 40
 expect frankenpage 1
 expect fkparent0 1
-expect fkparent1 0
+expect fkparent1 -1
+expect fkparent3 -1
 tapkey b8
 wait 40
 expect frankenpage 1
 
-# one parent is not enough to roll
-turn PRESET 1
-wait 40
-expect fkroll 0
-expect kitname0 0
-
-# K2 and K3 on the bank's two kits (none, this kit, then the bank), and a roll is the kit, from at least two of the three
-turn K2 2
-wait 40
-expect fkparent1 2
-turn K3 3
-wait 40
-expect fkparent2 3
+# a combo of this kit and kits drawn from the bank: at least two of them
 turn PRESET 1
 wait 60
 expect fkroll 1
@@ -44,10 +34,40 @@ expect fkroll 0
 expect kitname0 0
 expect kitv37 127
 
-# away and back with nothing changed: the rolls go on where they were
-turn PRESET 2
+# K1 and K2 locked on the bank's two kits, K3 and K4 on none
+turn K1 1
+wait 40
+expect fkparent0 2
+turn K2 4
+wait 40
+expect fkparent1 3
+turn K3 1
+wait 40
+turn K4 1
+wait 40
+expect fkparent3 0
+
+# the snare held: a combo of its sections alone, the other voices as they were
+key b3 down
+wait 40
+turn PRESET 1
+wait 60
+key b3 up
+wait 40
+expect fkroll 1
+expect kitv40 >39
+expect kitv40 <51
+expect kitv37 127
+
+# then the whole kit
+turn PRESET 1
 wait 60
 expect fkroll 2
+expect kitv37 >39
+expect kitv37 <51
+expect kitv88 40
+
+# away and back with nothing changed: the combos go on where they were
 tap HOME
 wait 40
 expect frankenpage 0
@@ -55,20 +75,24 @@ tapkey b8
 wait 40
 expect fkroll 2
 
-# an edit makes it your kit: the rolls start again from it, and the level comes from it
+# an edit makes it your kit: the combos start again from it, and 0 gives it back. Holding the snare's key picked it: drum 1 again
 tap HOME
+wait 40
+tapkey b0
 wait 40
 turn K4 -10
 wait 60
-expect kitv88 117
+expect kitv88 30
 tapkey b8
 wait 40
 expect fkroll 0
-expect fkparent1 2
 turn PRESET 1
 wait 60
 expect fkroll 1
-expect kitv88 117
+turn PRESET -1
+wait 60
+expect fkroll 0
+expect kitv88 30
 
 # SAVE keeps it as the pattern's kit
 press SEL
@@ -80,7 +104,7 @@ wait 300
 reboot
 wait 800
 expect kitname0 70
-expect kitv88 117
+expect kitv88 30
 
 # POLY held and a dial is the morph target, and opens nothing
 tap HOME

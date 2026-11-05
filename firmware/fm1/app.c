@@ -115,6 +115,10 @@ static const uint8_t *kit_params(uint32_t i)
     return p ? p + 8 : 0;
 }
 
+/* a Frankenkit combo: each parent slot's kit, as RANDOM drew it, each cell's kit, and the kit the rest comes from */
+#define FK_DEPTH 32
+typedef struct { int16_t parent[4], cell[TACK_FRANKEN_CELLS], base; } FkCombo;
+
 static struct {
     uint32_t keys, btn, redraw;
     int32_t voice, bar;
@@ -123,13 +127,14 @@ static struct {
     uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
     uint8_t meter[TACK_FX_SENDS];        /* the mixer's meters, falling back from each voice's peaks */
-    /* Frankenkit: K1 to K4's parents (0 none, 1 this kit, 2 on the bank's slots), the roll and its seed, each cell's parent, the
-     * kit there was before the first roll, which is "this kit" and which roll 0 gives back, and the kit the last roll made, as
-     * it went in (fk_settle), so that an edit since shows */
+    /* Frankenkit: K1 to K4's parents (RANDOM -1, NONE 0, this kit 1, 2 on the bank's slots), the combos made, newest last, with
+     * fk_roll of them showing (0: the kit before), the kit before the first, which is "this kit" and which 0 gives back, and the
+     * kit the last combo made, as it went in (fk_settle), so that an edit since shows */
     int16_t fk_parent[4];
     int32_t fk_roll;
     uint32_t fk_seed;
-    uint8_t fk_ready, fk_pending, fk_where[TACK_FRANKEN_CELLS], fk_before[256], fk_before_name[8], fk_kit[256], fk_last[256];
+    uint8_t fk_ready, fk_pending, fk_before[256], fk_before_name[8], fk_kit[256], fk_last[256];
+    FkCombo fk_hist[FK_DEPTH];
     uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
     uint8_t note_last;                   /* the detail HOME left was NOTE: where SEQ goes back to */
     uint8_t vs_shape, vs_shift, vs_centre, vs_amount;   /* the velocity page's dials: a tool's settings, kept nowhere */

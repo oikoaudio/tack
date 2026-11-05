@@ -53,7 +53,7 @@ static void input_keys(uint32_t keys, uint32_t btn)
                 if (!(btn >> B_SEQ & 1u)) {
                     if (!ui.keys_quiet || tack_recording())   /* what REC is taking in plays, or nothing could be recorded */
                         tack_post_note((uint8_t)k, TACK_NOTE_CENTRE, 110);
-                    ui.lane_key = (uint8_t)(k + 1u);
+                    ui.lane_key = ui.over == PAGE_FRANKEN ? 0 : (uint8_t)(k + 1u);   /* there it is held for its own combo */
                     ui.lane_at = plat_ms();
                 }
             }
@@ -377,8 +377,13 @@ static void input_dials(uint32_t btn)
             ui.sel_used = 1;
             mutate_turn(TACK_VOICES, e);
         }
-        else if (ui.over == PAGE_FRANKEN)
-            franken_roll(e);
+        else if (ui.over == PAGE_FRANKEN) {      /* a voice key held: that voice's combo */
+            int32_t lane = -1;
+            for (k = 0; k < TACK_VOICES && lane < 0; k++)
+                if (ui.keys >> BK[k] & 1u)
+                    lane = (int32_t)k;
+            franken_roll(e, lane);
+        }
         else if (morph_held())
             morph_kit_step(e);
         else
