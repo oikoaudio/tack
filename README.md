@@ -111,11 +111,11 @@ These are bugs in the original code, found while running it on a computer. They 
 | 030b62d | `Core/Inc/Soundengine/config.h` | FM-1: the FX buffer and the sequencer's data go in the FM-1's large memory region, as they don't fit in its main RAM. |
 | 030b62d | `Core/Src/Soundengine/DSPAudio/Oscillator.c` | FM-1: wavetable interpolation multiplies in 32 bits, as the FM-1's core has been seen to corrupt a register with 64-bit multiplies among 16-bit loads. FM's phase offsets convert through a signed integer, which gives what the desktop computes. |
 | aa704be, 9e57eb9 | `Core/Src/Soundengine/DSPAudio/mixer.c`, `Core/Src/Soundengine/MIDI/MidiVoiceControl.c` | FM-1: copies of each voice and of the FX return for 10-channel USB audio, and a count of each voice's hits for the key lights. |
-| 0e7d21e | `Core/Src/Soundengine/DSPAudio/mixer.c` | FM-1: each voice's loudest sample per block, for the mixer's meters. |
+| ae6433c | `Core/Src/Soundengine/DSPAudio/mixer.c` | FM-1: each voice's loudest sample per block, for the mixer's meters. |
 | 3d6598a | `Core/Src/Soundengine/FxBus.c` | FM-1: the distortion puts out a steady level with no input, and that exact level comes off its output, so nothing plays at rest. |
 | aa704be, 3d6598a | `Core/Src/Soundengine/Sequencer/clockSync.c`, `clockSync.h` | FM-1: one pulse of the sequencer is its own function, so steps can run from a clock counted in audio frames that MIDI clock corrects. |
 | 9e57eb9, ce78e8e, 8e162c5, dca45f4 | `Core/Src/Soundengine/Sequencer/sequencer.c`, `sequencer.h`, `Core/Inc/Preset/SeqStep.h` | FM-1: each lane has a direction (forward, reverse, ping-pong, bounce or random), a speed (1, 1/2 or 1/4) and a start step. Nudge moves in single pulses near the grid. Parameter locks, recurrence and lane wraps come from the FM-1's own code. Under external clock the rest of a step plays before the next one starts, and a nudged hit gives way only to a hit on the same lane and pulse. |
-| 2475f08 | `Core/Src/Soundengine/Sequencer/sequencer.c`, `sequencer.h` | FM-1: a song row plays up to 16 times before the song moves on. |
+| b2247d6 | `Core/Src/Soundengine/Sequencer/sequencer.c`, `sequencer.h` | FM-1: a song row plays up to 16 times before the song moves on. |
 | 2d0bd12 | `Core/Src/main.c` | The start-up screen's second line reads "Modified V 1.7" instead of "LXR2 Drums V 1.7". The first line still credits Sonic Potions. |
 | 2d0bd12 | `Core/Inc/Soundengine/config.h`, `Core/Inc/main.h` | Builds for a computer (`LXR_HOST_BUILD`) leave out the attributes that place code and data in the STM32's fast memories, since macOS rejects their section names. The device build is unchanged, byte for byte. |
 
