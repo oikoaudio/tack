@@ -147,7 +147,7 @@ static void input_buttons(uint32_t keys, uint32_t btn)
     if (pressed(btn, B_GLO))
         ui.glo_used = 0;
     if (((ui.btn & ~btn) >> B_GLO & 1u) && !ui.glo_used) {
-        ui.over = ui.over == PAGE_MIX || ui.over == PAGE_SET ? PAGE_SET : PAGE_MIX;
+        ui.over = ui.over == PAGE_MIX ? PAGE_SET : PAGE_MIX;   /* round its two screens, as EDIT and ARP go round theirs */
         ui.redraw = 1;
     }
     if (pressed(btn, B_ARP)) {

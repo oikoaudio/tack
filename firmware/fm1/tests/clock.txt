@@ -24,7 +24,7 @@ expect running 0
 wait 1100
 expect msgext 0
 expect ext 1
-tap GLO
+wait 80                      # (the settings stay: a GLO here would go round to the mixer)
 wait 40
 out
 # stopped, clock alone moves nothing. 6 pulses, as the first note came 2 pulses late after 1 to 7 of them
@@ -1302,5 +1302,5 @@ turn K3 -1
 wait 40
 expect ext 0
 expect bpm 120
-tap GLO
+wait 80                      # (the settings stay: a GLO here would go round to the mixer)
 wait 40
