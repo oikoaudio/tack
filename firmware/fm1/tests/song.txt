@@ -151,6 +151,8 @@ expect songpage 0
 # GLO's page and the SONG page close each other
 tap GLO
 wait 40
+tap GLO
+wait 40
 expect setpage 1
 press SEQ
 wait 20
@@ -160,6 +162,8 @@ release SEQ
 wait 40
 expect setpage 0
 expect songpage 1
+tap GLO
+wait 40
 tap GLO
 wait 40
 expect setpage 1

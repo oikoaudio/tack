@@ -10,12 +10,12 @@ import os, re, subprocess, sys
 
 START = {
     "HOME": [], "STEP": ["tap SEQ"], "NOTE": ["tap SEQ", "tap SEQ"], "EDIT": ["tap EDIT"], "EDIT2": ["tap EDIT", "tap EDIT"],
-    "ENV": ["tap ENV"], "LFO": ["tap LFO"], "FX": ["tap FX"], "GLO": ["tap GLO"], "LANE": ["tap ARP"],
+    "ENV": ["tap ENV"], "LFO": ["tap LFO"], "FX": ["tap FX"], "MIX": ["tap GLO"], "GLO": ["tap GLO", "tap GLO"], "LANE": ["tap ARP"],
     "EUCLID": ["tap ARP", "tap ARP"], "VEL": ["tap ARP", "tap ARP", "tap ARP"],
     "SONG": ["press SEQ", "tap ARP", "release SEQ"], "SAVE": ["tap SAVE"],
 }
 BUTTONS = ["HOME", "SEQ", "EDIT", "ENV", "LFO", "FX", "GLO", "ARP", "SAVE"]
-OVER = {1: "SONG", 2: "LANE", 3: "EUCLID", 4: "VEL", 5: "SAVE", 6: "FX", 7: "GLO"}
+OVER = {1: "SONG", 2: "LANE", 3: "EUCLID", 4: "VEL", 5: "SAVE", 6: "FX", 7: "GLO", 8: "MIX"}
 
 
 def name(code):

@@ -668,12 +668,75 @@ static void pg_note_dials(uint32_t *last)
     cv_blit(0, PG_Y + 2u * (VV_H + 2u));
 }
 
+/* The mixer: a strip for each lane, its level a fader with the voice's meter beside it, its pan under it, and FX, M for a mute
+ * and S for a solo at the foot. The hats share their level, pan and meter */
+#define MIX_W 34
+#define MIX_TOP 18
+#define MIX_H 94
+
+static uint32_t meter_level(uint32_t peak)      /* 0 to 128 over the top 48 dB, 16 to a 6 dB step */
+{
+    uint32_t bit, level;
+    if (peak < 128u)
+        return 0;
+    bit = 31u - (uint32_t)__builtin_clz(peak);
+    level = (bit - 7u) * 16u + ((peak >> (bit - 4u)) & 15u);
+    return level > 128u ? 128u : level;
+}
+
+static void pg_mix_strips(uint32_t *last)
+{
+    static const char *const LANE[TACK_VOICES] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};
+    uint32_t key = 23u;
+    for (uint32_t v = 0; v < TACK_FX_SENDS; v++) {
+        const uint32_t level = meter_level(tack_voice_peak(v));
+        ui.meter[v] = (uint8_t)(level > ui.meter[v] ? level : ui.meter[v] > 3u ? ui.meter[v] - 3u : 0u);
+        key = rk(key, ui.meter[v]);
+    }
+    key = rk(key, (uint32_t)ui.voice);
+    for (uint32_t k = 0; k < TACK_VOICES; k++)
+        key = rk(rk(rk(rk(rk(key, tack_get_param(mix_slot(k, 0)->par)), tack_get_param(mix_slot(k, 1)->par)),
+                       (uint32_t)tack_fx_send(k < TACK_FX_SENDS ? k : TACK_FX_SENDS - 1u)),
+                    (uint32_t)tack_muted((uint8_t)k) | (uint32_t)tack_soloed((uint8_t)k) << 1),
+                 (uint32_t)tack_audible((uint8_t)k));
+    if (key == *last)
+        return;
+    *last = key;
+    cv_begin(240, 2u * PG_RH - 2u, C_BLACK);
+    for (uint32_t k = 0; k < TACK_VOICES; k++) {
+        const int32_t x = 1 + (int32_t)k * MIX_W;
+        const uint32_t send = k < TACK_FX_SENDS ? k : TACK_FX_SENDS - 1u;
+        const int heard = tack_audible((uint8_t)k), sel = (int32_t)k == ui.voice;
+        const uint16_t c = heard ? VOICE_COLOUR[k] : C_DIM;
+        const int32_t vol = (int32_t)tack_get_param(mix_slot(k, 0)->par) * MIX_H / 127;
+        const int32_t meter = (int32_t)ui.meter[send] * MIX_H / 128;
+        const int32_t pan = (int32_t)tack_get_param(mix_slot(k, 1)->par) * 24 / 127;
+        if (sel)
+            cv_rect(x + 2, 0, MIX_W - 4, 15, VOICE_COLOUR[k]);
+        cv_text(x + MIX_W / 2 - text_w(&FONT_B, LANE[k]) / 2, 1, &FONT_B, LANE[k], sel ? C_BLACK : heard ? VOICE_COLOUR[k] : C_GRAY);
+        outline(x + 6, MIX_TOP, 12, MIX_H, 1, sel ? C_GRAY : C_DIM);
+        if (vol)
+            cv_rect(x + 7, MIX_TOP + MIX_H - vol, 10, vol, c);
+        if (meter)
+            cv_rect(x + 21, MIX_TOP + MIX_H - meter, 4, meter, heard ? C_WHITE : C_GRAY);
+        cv_rect(x + 5, MIX_TOP + MIX_H + 7, 24, 1, C_DIM);
+        cv_rect(x + 4 + pan, MIX_TOP + MIX_H + 4, 3, 7, heard ? C_WHITE : C_GRAY);
+        if (tack_fx_send(send))
+            cv_text(x + 3, MIX_TOP + MIX_H + 16, &FONT_XS, "FX", heard ? C_WHITE : C_GRAY);
+        if (tack_soloed((uint8_t)k))
+            cv_text(x + 24, MIX_TOP + MIX_H + 16, &FONT_XS, "S", C_HI);
+        else if (tack_muted((uint8_t)k))
+            cv_text(x + 24, MIX_TOP + MIX_H + 16, &FONT_XS, "M", C_GRAY);
+    }
+    cv_blit(0, PG_Y);
+}
+
 /* the whole screen; invalid: all of it, as it comes from another page */
 static void pg_screen(int invalid)
 {
     static uint32_t rows[SCREEN_ROWS];
     static int was;
-    const int now = ui.over == PAGE_FX ? 1 : ui.over == PAGE_SET ? 2 : vel_page() ? 6 : ui.over == PAGE_LANE ? 7 : ui.over == PAGE_EUCLID ? 8
+    const int now = ui.over == PAGE_MIX ? 11 : ui.over == PAGE_FX ? 1 : ui.over == PAGE_SET ? 2 : vel_page() ? 6 : ui.over == PAGE_LANE ? 7 : ui.over == PAGE_EUCLID ? 8
                     : ui.over == PAGE_SAVE ? (ui.ks_what == SAVE_PATTERN ? 10 : 9) : song_pages() ? 3 : voice_page() ? 4 : note_view() ? 5 : 0;
     if (invalid || now != was) {
         lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -689,6 +752,9 @@ static void pg_screen(int invalid)
         pg_save_top(&rows[0]);
         pg_save_name(&rows[1]);
         pg_save_note(&rows[2]);
+    } else if (now == 11) {
+        pg_mix_strips(&rows[0]);
+        pg_row(2, MIX_ROW, &rows[2]);
     } else if (now == 1) {
         pg_fx_sends(&rows[0]);
         pg_fx_row(1, &rows[1]);

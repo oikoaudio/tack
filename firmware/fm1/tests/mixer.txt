@@ -1,0 +1,119 @@
+# GLO's mixer: firmware/fm1/build/host/tack_host firmware/fm1/tests/mixer.txt OUTDIR
+# A bar of 16 steps is 2000 ms at the default 120 BPM
+wait 600
+
+# steps on drum 1 only
+tapkey b0
+wait 40
+tapkey w0
+wait 30
+tapkey w4
+wait 30
+tapkey w8
+wait 30
+tapkey w12
+wait 30
+
+# GLO opens the mixer, a second press the settings, and a third stays there
+tap GLO
+wait 40
+expect mixpage 1
+expect setpage 0
+tap GLO
+wait 40
+expect setpage 1
+tap GLO
+wait 40
+expect setpage 1
+tap HOME
+wait 40
+tap GLO
+wait 40
+expect mixpage 1
+
+# a black key picks the voice, and K1 to K4 are its level, pan, FX send and drive
+tapkey b3
+wait 40
+expect voice 3
+turn K1 -27
+wait 40
+expect kitv91 100
+turn K2 10
+wait 40
+expect kitv99 >63
+expect fxsends 0
+turn K3 1
+wait 40
+expect fxsends 8
+turn K3 -1
+wait 40
+expect fxsends 0
+turn K4 5
+wait 40
+expect kitv105 >63
+expect kitv88 127
+
+# the meters follow what plays: drum 1 and nothing else
+tapkey b0
+wait 40
+tap PLAY
+wait 1200
+expect meter0 >40
+expect meter1 0
+expect meter3 0
+shot mixer.png
+
+# SEL and a black key solo a lane, a second time lift it; the mutes stay under a solo
+press ARP
+wait 20
+tapkey b1
+wait 40
+release ARP
+wait 40
+expect audible 125
+press SEL
+wait 20
+tapkey b2
+wait 40
+release SEL
+wait 40
+expect solo 4
+expect audible 4
+expect voice 0
+press SEL
+wait 20
+tapkey b1
+wait 40
+release SEL
+wait 40
+expect solo 6
+expect audible 4
+press SEL
+wait 20
+tapkey b1
+wait 40
+tapkey b2
+wait 40
+release SEL
+wait 40
+expect solo 0
+expect audible 125
+press ARP
+wait 20
+tapkey b1
+wait 40
+release ARP
+wait 40
+expect audible 127
+tap PLAY
+wait 60
+
+# a step held and a dial turned locks it there
+key w4 down
+wait 40
+turn K1 -10
+wait 40
+key w4 up
+wait 40
+expect locks4 1
+expect kitv88 127

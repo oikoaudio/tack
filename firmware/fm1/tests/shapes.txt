@@ -201,6 +201,8 @@ expect step4 1
 # HOME says what is queued: a pattern picked while running, until it arrives
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K2 20
 wait 40
 tap HOME

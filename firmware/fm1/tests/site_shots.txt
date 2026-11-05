@@ -192,6 +192,8 @@ tapkey 1
 wait 40
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K2 24
 wait 40
 tap HOME

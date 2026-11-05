@@ -1,5 +1,6 @@
 # External MIDI clock through the app, as a DAW sends it: Start, then 24 pulses a quarter, then Stop.
-wait 600
+# (480, not 600: the second GLO below takes 120 ms, and the clock checks need the time they always had)
+wait 480
 # drum 1 on steps 0 and 4
 tapkey 0
 wait 40
@@ -8,6 +9,8 @@ wait 40
 expect step0 1
 expect step4 1
 # GLO, the third knob: external clock
+tap GLO
+wait 40
 tap GLO
 wait 40
 turn K3 1
@@ -1291,6 +1294,8 @@ midi USB F8
 wait 18
 expect bpm 125
 # off again: the stored tempo, and the knob and PLAY are back
+tap GLO
+wait 40
 tap GLO
 wait 40
 turn K3 -1

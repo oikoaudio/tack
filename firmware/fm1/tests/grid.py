@@ -9,7 +9,7 @@ BLOCK_MS = 64 / 44.1
 HEAD = ["wait 600", "tapkey b5", "wait 40", "turn K3 -60", "wait 40"]
 for k in (0, 2, 4, 6, 7, 9, 11, 12, 14, 16, 18, 19, 21, 23, 24, 26):
     HEAD += [f"tapkey {k}", "wait 30"]
-HEAD += ["tap GLO", "wait 40", "turn K3 1", "wait 40", "tap GLO", "wait 40", "wav grid.wav"]
+HEAD += ["tap GLO", "wait 40", "tap GLO", "wait 40", "turn K3 1", "wait 40", "tap GLO", "wait 40", "wav grid.wav"]
 
 
 def pulses(n, ms, jitter=0.0):

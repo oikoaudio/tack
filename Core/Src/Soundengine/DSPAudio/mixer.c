@@ -446,13 +446,22 @@ volatile uint8_t mixer_tapOn;
 int16_t mixer_tapVoice[6][OUTPUT_DMA_SIZE];
 int16_t mixer_tapFx[OUTPUT_DMA_SIZE*2];
 static uint8_t mixer_tapN;
+volatile uint16_t mixer_peak[6];	// the loudest sample of each voice since the panel last took it
 #endif
 IN_ITCM_RAM static inline void mixer_addDataToOutput(uint8_t dest, const float panL, const float panR,  int16_t* data,int16_t* outL,int16_t* outR,int16_t* outL2, int16_t* outR2, int16_t *fxBuffer)
 {
 #ifdef LXR_FM1_BUILD
-	if(mixer_tapOn && mixer_tapN < 6)
+	if(mixer_tapN < 6)
 	{
-		for(uint32_t t=0;t<OUTPUT_DMA_SIZE;t++) mixer_tapVoice[mixer_tapN][t] = data[t];
+		uint16_t peak = mixer_peak[mixer_tapN];
+		for(uint32_t t=0;t<OUTPUT_DMA_SIZE;t++)
+		{
+			const uint16_t a = (uint16_t)(data[t] < 0 ? -(int32_t)data[t] : data[t]);
+			if(a > peak) peak = a;
+		}
+		mixer_peak[mixer_tapN] = peak;
+		if(mixer_tapOn)
+			for(uint32_t t=0;t<OUTPUT_DMA_SIZE;t++) mixer_tapVoice[mixer_tapN][t] = data[t];
 		mixer_tapN++;
 	}
 #endif

@@ -17,6 +17,7 @@ static void toggle_step(uint8_t s)
 #define SCREEN_ROWS 3
 #define NO_PAGE (-1)
 #define PITCH_ROW 20                     /* a row of no page of its own: FINE and what moves the pitch, beside the oscillator */
+#define MIX_ROW 21                       /* the mixer's dials: the voice's level, pan, FX send and drive */
 static int sound_page(void)
 {
     return ui.group != TACK_G_MAIN && !ui.over;
@@ -44,6 +45,7 @@ static int seq_detail(void) { return voice_page() || note_view(); }
 #define PAGE_SAVE 5u                     /* SAVE: what is saved and where, K4 and K1 or SELECT, and a second press writes it */
 #define PAGE_FX 6u
 #define PAGE_SET 7u
+#define PAGE_MIX 8u                      /* GLO's first screen, the settings its second */
 static int song_pages(void) { return ui.over && ui.over <= PAGE_SAVE; }
 enum { SAVE_PATTERN, SAVE_BLEND, SAVE_KIT };
 static int vel_page(void) { return ui.over == PAGE_VEL; }
@@ -162,6 +164,8 @@ static int screen_now(void) { return ui.group == TACK_G_EDIT && ui.sub != 0; }
 
 static int row_now(void)
 {
+    if (ui.over == PAGE_MIX)
+        return MIX_ROW;
     const int r = ui.btn >> B_OCTUP & 1u ? 0 : ui.btn >> B_OCTDN & 1u ? 2 : 1;
     const int page = sound_page() ? screen_page(screen_now(), r) : NO_PAGE;
     return page == NO_PAGE ? ui.sub : page;
@@ -171,8 +175,28 @@ static int same(const char *a, const char *b);
 
 /* ENV keeps the voice's level by its envelope, so a slot may not be the page's own: the fourth of AMP EG is LEVEL, and REPEAT,
  * which some voices have there, moves to the fourth of the last row */
+/* the voice's output page: its pan and drive */
+static int output_page(uint32_t voice)
+{
+    for (int p = 0; p < tack_pages(voice, TACK_G_EDIT); p++)
+        if (tack_page_kind(voice, TACK_G_EDIT, (uint32_t)p) == TACK_PAGE_OUTPUT)
+            return p;
+    return 0;
+}
+
+static const TackSlot *mix_slot(uint32_t voice, uint32_t i)
+{
+    if (i == 0u)
+        return tack_slot(voice, TACK_G_MAIN, 0, 3);
+    if (i == 2u)
+        return tack_send_slot(voice);
+    return tack_slot(voice, TACK_G_EDIT, (uint32_t)output_page(voice), i == 1u ? 0u : 1u);
+}
+
 static const TackSlot *page_slot(int page, uint32_t i)
 {
+    if (page == MIX_ROW)
+        return mix_slot((uint32_t)ui.voice, i);
     if (page == PITCH_ROW) {                     /* the five page voices all have a MOD EG, ENV's second page */
         static const uint8_t MOD_EG[3] = {2u, 0u, 1u};
         return i ? tack_slot((uint32_t)ui.voice, TACK_G_ENV, 1, MOD_EG[i - 1u])

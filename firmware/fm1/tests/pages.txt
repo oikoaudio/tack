@@ -41,8 +41,12 @@ wait 40
 expect fxpage 1
 tap GLO
 wait 40
+tap GLO
+wait 40
 expect setpage 1
 expect fxpage 0
+tap GLO
+wait 40
 tap GLO
 wait 40
 expect setpage 1
@@ -119,6 +123,8 @@ tap EDIT
 wait 40
 expect fxpage 0
 expect page 12
+tap GLO
+wait 40
 tap GLO
 wait 40
 tap EDIT

@@ -85,6 +85,18 @@ int app_expect(const char *what, int *got)
         *got = song_pages() ? ui.over : 0;
     else if (!strcmp(what, "songmode"))
         *got = tack_song_mode();
+    else if (!strcmp(what, "mixpage"))
+        *got = ui.over == PAGE_MIX;
+    else if (!strcmp(what, "solo")) {
+        *got = 0;
+        for (int v = 0; v < TACK_VOICES; v++)
+            *got |= tack_soloed((uint8_t)v) << v;
+    } else if (!strcmp(what, "audible")) {
+        *got = 0;
+        for (int v = 0; v < TACK_VOICES; v++)
+            *got |= tack_audible((uint8_t)v) << v;
+    } else if (numbered(what, "meter"))  /* meterN: the mixer's meter for the voice, 0 to 128 */
+        *got = ui.meter[atoi(what + 5) % TACK_FX_SENDS];
     else if (!strcmp(what, "songpos"))
         *got = tack_song_pos();
     else if (!strcmp(what, "songedit"))

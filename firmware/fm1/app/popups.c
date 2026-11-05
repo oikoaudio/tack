@@ -37,6 +37,8 @@ static void draw_sel_help(void)
         help_row(&y, "OCT+ OCT-", "ADD, REMOVE BAR");
     if (ui.over == PAGE_SONG)
         help_row(&y, "K1", "COPY, REMOVE ROW");
+    if (ui.over == PAGE_MIX)
+        help_row(&y, "BLACK KEY", "SOLO");
     if (!saving) {
         help_row(&y, "PRESET", "MUTATE KIT");
         help_row(&y, "ALGORITHM", "MUTATE VOICE");

@@ -386,7 +386,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND, EV_SONG_REPS, EV_SONG_EDIT };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND, EV_SONG_REPS, EV_SONG_EDIT, EV_SOLO };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -411,7 +411,7 @@ static uint16_t ui_bpm = 120;
 static uint8_t ui_record, ui_ext;
 static uint8_t ui_roll = 5;              /* the sequencer's default, 1/16 */
 static uint8_t ui_eu[TACK_VOICES][TACK_EU_SLOTS];
-static volatile uint8_t mute_mask;
+static volatile uint8_t mute_mask, solo_mask, quiet_mask;   /* quiet: what the sequencer has muted, the mutes and the solos together */
 static volatile uint8_t stress;
 static volatile uint32_t dirty;          /* patterns changed since they were saved */
 static void kit_for_pattern(uint8_t kit);
@@ -717,6 +717,27 @@ int tack_ext_sync(void) { return ui_ext; }
 int tack_running(void) { return seq_isRunning(); }
 int tack_pattern(void) { return seq_activePattern; }
 int tack_muted(uint8_t voice) { return (mute_mask >> voice) & 1u; }
+int tack_soloed(uint8_t voice) { return (solo_mask >> voice) & 1u; }
+int tack_audible(uint8_t voice) { return !((quiet_mask >> voice) & 1u); }
+int tack_post_solo(uint8_t voice) { return voice < TACK_VOICES && post(EV_SOLO, voice, 0, 0); }
+
+/* A solo silences the lanes not soloed, and the mutes stay as they were under it */
+static void mutes_apply(void)
+{
+    const uint8_t quiet = (uint8_t)(mute_mask | (solo_mask ? ~solo_mask : 0u)) & ((1u << NUM_TRACKS) - 1u);
+    for (uint8_t t = 0; t < NUM_TRACKS; t++)
+        if (((quiet ^ quiet_mask) >> t) & 1u)
+            seq_setMute(t, (quiet >> t) & 1u);
+    quiet_mask = quiet;
+}
+
+extern volatile uint16_t mixer_peak[6];
+uint32_t tack_voice_peak(uint32_t voice)
+{
+    const uint32_t v = voice < TACK_FX_SENDS ? voice : TACK_FX_SENDS - 1u, p = mixer_peak[v];
+    mixer_peak[v] = 0;
+    return p;
+}
 int tack_playhead(uint8_t voice) { return seq_getStepIndex(voice); }
 int tack_length(uint8_t voice)
 {
@@ -1899,8 +1920,14 @@ static void drain(void)
             break;
         case EV_MUTE:
             if (e.a < NUM_TRACKS) {
-                seq_setMute(e.a, e.b);
                 mute_mask = (uint8_t)(e.b ? mute_mask | 1u << e.a : mute_mask & ~(1u << e.a));
+                mutes_apply();
+            }
+            break;
+        case EV_SOLO:
+            if (e.a < NUM_TRACKS) {
+                solo_mask ^= (uint8_t)(1u << e.a);
+                mutes_apply();
             }
             break;
         case EV_RECORD:
