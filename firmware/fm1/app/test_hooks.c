@@ -159,6 +159,10 @@ int app_expect(const char *what, int *got)
         *got = tack_heard((uint16_t)atoi(what + 5));
     else if (numbered(what, "kept"))      /* keptN: morph leaves parameter N alone */
         *got = tack_morph_kept((uint16_t)atoi(what + 4));
+    else if (!strcmp(what, "hastarget"))
+        *got = tack_has_target();
+    else if (numbered(what, "target"))    /* targetN: parameter N in the morph target, or the kit's without one */
+        *got = tack_target_value((uint16_t)atoi(what + 6));
     else if (numbered(what, "kitv"))      /* kitvN: parameter N as the kit has it */
         *got = tack_get_param((uint16_t)atoi(what + 4));
     else if (!strcmp(what, "bits"))

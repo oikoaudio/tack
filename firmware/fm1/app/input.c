@@ -305,6 +305,9 @@ static void input_dials(uint32_t btn)
             } else if (ui.held >= 0) {
                 lock_turn(k, e);
                 touch(k);
+            } else if (morph_held()) {
+                target_turn(k, e);
+                touch(k);
             } else {
                 const TackSlot *sl = slot(k);
                 if (sl == tack_send_slot((uint32_t)ui.voice)) {

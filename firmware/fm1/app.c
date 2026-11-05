@@ -355,6 +355,7 @@ void app_init(void)
     tack_init();
     seq_platform_set_midi_out(seq_midi_out);
     tack_set_kit_find(kit_params);
+    tack_set_kit_name_find(kit_slot);
     load_saved(0);
 }
 
@@ -445,7 +446,7 @@ static void draw(void)
     }
     on_grid = 0;
     cv_begin(240, HEADER_H, C_BLACK);
-    if (tack_morph_kit() && !ui.msg_until && !key_word()) {   /* a crossfader between the two kits */
+    if (tack_has_target() && !ui.msg_until && !key_word()) {   /* a crossfader between the two kits */
         char to[9];
         const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
         morph_name(to);
@@ -491,7 +492,7 @@ static void draw(void)
     }
     if (ui.touched_until && ui.touched) {        /* the parameter in hand, large */
         const TackSlot *sl = ui.touched;
-        const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
+        const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : morph_shown(sl) ? tack_target_value(sl->par) : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
         cv_text(EDGE, 20, &FONT_M, sl->label, VOICE_COLOUR[ui.voice]);
         if (name) {
@@ -529,6 +530,9 @@ header_done:
             lit = tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &v);
             if (lit)
                 v = ui.held_val[i];
+        } else if (morph_shown(sl)) {
+            v = tack_target_value(sl->par);
+            lit = 1;
         }
         cv_text(x, 2, &FONT_XS, sl->label, PG_TEXT);
         name = tack_slot_text(sl, v);
@@ -577,7 +581,9 @@ void app_frame(void)
     for (v = 0; v < TACK_VOICES; v++)          /* any lane's playhead moved */
         h = h * 67u + (uint32_t)tack_playhead((uint8_t)v);
     h = h * 67u + (uint32_t)(tack_song_mode() * 256 + tack_song_pos());
-    h = h * 67u + (uint32_t)(tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384);
+    h = h * 67u + (uint32_t)(tack_bits() + tack_morph() * 128 + tack_morph_kit() * 16384 + tack_has_target() * 4194304);
+    for (v = 0; v < TACK_NP; v++)               /* POLY held: the target's values */
+        h = h * 67u + (morph_held() && slot((uint32_t)v) ? tack_target_value(slot((uint32_t)v)->par) + 256u : 0u);
     h = h * 67u + (uint32_t)(tack_bpm() * 128u + tack_shuffle());   /* a turn reaches the engine after the frame that drew it */
     h = h * 67u + (uint32_t)(tack_lane_start((uint8_t)ui.voice) + tack_lane_nudge_get((uint8_t)ui.voice) * 64);
     h = h * 67u + (uint32_t)(tack_length((uint8_t)ui.voice) * 64) + tack_lane_dir((uint8_t)ui.voice) * 4u + tack_lane_speed((uint8_t)ui.voice);

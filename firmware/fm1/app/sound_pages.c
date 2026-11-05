@@ -9,6 +9,9 @@ static uint8_t pg_value(const TackSlot *sl, int on, uint32_t i, int *lit)
         *lit = tack_lock_get((uint8_t)ui.voice, ui.held_step, sl->par, &value);
         if (on)
             value = ui.held_val[i];
+    } else if (morph_shown(sl)) {
+        value = tack_target_value(sl->par);
+        *lit = 1;
     }
     return value;
 }
@@ -168,7 +171,7 @@ static void pg_top(void)
             cv_text(EDGE + text_w(&FONT_B, "TEMPO") + 8, TOP_LINE - 1, &FONT_XS, "SEL+ SHUFFLE", C_GRAY);
     } else if (ui.touched_until && ui.touched) {     /* the exact value, while it turns */
         const TackSlot *sl = ui.touched;
-        const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : tack_get_param(sl->par);
+        const uint8_t v = ui.held >= 0 ? ui.held_val[ui.touched_at] : morph_shown(sl) ? tack_target_value(sl->par) : tack_get_param(sl->par);
         const char *name = tack_slot_text(sl, v);
         cv_text(EDGE, TOP_LINE - 2, &FONT_B, page_label(ui.touched_row, sl), C_WHITE);
         if (name && v && sl->role == TACK_ROLE_RETRIG)  /* the box has room for D1, and here there is for the voice */

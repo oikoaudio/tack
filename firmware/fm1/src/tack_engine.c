@@ -386,7 +386,7 @@ uint16_t tack_rate_param(void) { return PAR_VOICE_DECIMATION_ALL; }
 /* one writer (the main loop), one reader (the audio interrupt): each index is written by one side only */
 enum { EV_NOTE, EV_PARAM, EV_STEP, EV_RUN, EV_BPM, EV_SHUFFLE, EV_PATTERN, EV_MUTE, EV_RECORD, EV_EXT, EV_STRESS, EV_LENGTH,
        EV_LOCK, EV_LOCK_CLEAR, EV_KIT, EV_ROLL, EV_ROLL_RATE, EV_EUCLID, EV_COPY, EV_CLEAR, EV_STEP_EDIT, EV_LANE_NUDGE,
-       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND, EV_SONG_REPS, EV_SONG_EDIT, EV_SOLO };
+       EV_CHAIN, EV_SONG_ROW, EV_SONG_ON, EV_STEP_NOTE, EV_NOTE_OFF, EV_RECUR, EV_SHAPE, EV_EU_UNDO, EV_CHAIN_SONG, EV_LANE_MODE, EV_BITS, EV_MORPH, EV_MORPH_KIT, EV_KIT_HOME, EV_LANE_START, EV_MUTATE, EV_EXTEND, EV_SONG_REPS, EV_SONG_EDIT, EV_SOLO, EV_TARGET };
 #define EV_N 128u
 typedef struct { uint8_t kind, a, b, c, d; } Ev;
 static Ev ev[EV_N];
@@ -431,9 +431,10 @@ typedef struct { uint8_t name[8], v[248]; } PatternKit;
 typedef struct {
     uint8_t bits;                                /* how far it takes BITS: 0 not at all, 127 all the way */
     uint8_t morph;                               /* how far it is morphed: 0 not at all, 127 all the way */
-    uint8_t morph_kit;                           /* the bank's kit it morphs to: slot + 1, 0 none */
+    uint8_t morph_kit;                           /* the bank's kit its target was copied from: slot + 1, 0 none */
     uint8_t has_kit;                             /* kit holds its own kit */
-    PatternKit kit;
+    uint8_t has_target;                          /* target holds what morph goes to */
+    PatternKit kit, target;
 } PatternExtra;
 static PatternExtra extra[NUM_PATTERN];
 _Static_assert(LXR_HOST_NUM_PARAMS <= 248u, "a kit's slot in the bank, and in a pattern");
@@ -623,10 +624,11 @@ static const uint8_t *kit_pending_name;       /* with it, for a kit from the ban
 static volatile uint32_t kit_applied;
 static uint32_t kit_seen;
 static volatile int kit_now;
-static TackKitFind kit_find;
+static TackKitFind kit_find, kit_name_find;
 int tack_kit_now(void) { return kit_now; }
 void tack_set_kit_now(int kit) { kit_now = kit; }
 void tack_set_kit_find(TackKitFind fn) { kit_find = fn; }
+void tack_set_kit_name_find(TackKitFind fn) { kit_name_find = fn; }
 
 /* Each pattern keeps its own copy of its kit, so that a sound comes back with the pattern, edits and all, whatever happens to the
  * bank. kitNr says which of the bank's kits it came from, for a revert. morph_a is the sound of kit_pattern */
@@ -956,12 +958,15 @@ uint32_t tack_kit_size(void) { return sizeof shadow; }
 static void shuffle_follow(void) { seq_setShuffle((float)seq_patternSet.shuffle[seq_activePattern] / 127.0f); }
 
 /* A pattern as the store holds it, little-endian: the magic, u16 the count of locks, then for each track and step volume,
- * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes and starts, BITS, morph and its kit, the pattern's own kit, the locks, and in what is left the steps
- * with recurrence, 3 bytes each: the key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as
- * they need to be. Anything else is refused whole: patterns of older builds, and whatever a bad write or a bad file left */
-#define IMAGE_MAGIC "KPT7"
+ * chance and note, the steps' timing, the main steps, the lengths, shuffle, kit, the lanes' modes and starts, BITS, morph and its
+ * kit, the pattern's own kit, its morph target, the locks, and in what is left the steps with recurrence, 3 bytes each: the
+ * key's low byte, the mask, the length - 1 with the key's top bit. The lists are as long as they need to be. KPT7, the layout
+ * before the target, still loads, its morph to a bank kit as a target copied from it. Anything else is refused whole: patterns
+ * of older builds, and whatever a bad write or a bad file left */
+#define IMAGE_MAGIC "KPT8"
+#define IMAGE_MAGIC_7 "KPT7"
 #define IMAGE_STEPS (NUM_TRACKS * NUM_STEPS)
-#define IMAGE_SETTINGS 4u                /* BITS, how far morph goes, its kit, and whether a kit follows */
+#define IMAGE_SETTINGS 5u                /* BITS, how far morph goes, its kit, and whether a kit and a target follow */
 enum {                                   /* where each part starts: the one statement of the layout */
     IMG_COUNT = 4,
     IMG_STEPS = IMG_COUNT + 2,
@@ -974,7 +979,10 @@ enum {                                   /* where each part starts: the one stat
     IMG_LANE_STARTS = IMG_LANE_MODES + NUM_TRACKS,
     IMG_OPTIONS = IMG_LANE_STARTS + NUM_TRACKS,
     IMG_KIT = IMG_OPTIONS + IMAGE_SETTINGS,
-    IMG_LOCKS = IMG_KIT + (int)sizeof(PatternKit)
+    IMG_TARGET = IMG_KIT + (int)sizeof(PatternKit),
+    IMG_LOCKS = IMG_TARGET + (int)sizeof(PatternKit),
+    IMG_7_KIT = IMG_OPTIONS + 4,         /* KPT7's: no target */
+    IMG_7_LOCKS = IMG_7_KIT + (int)sizeof(PatternKit)
 };
 #define IMAGE_HEAD ((uint32_t)IMG_LOCKS)
 #define IMAGE_MAX (IMAGE_HEAD + TACK_LOCKS_MAX * sizeof(Lock))
@@ -1013,7 +1021,9 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     if (pattern == kit_pattern && (extra[pattern].has_kit || dirty >> pattern & 1u))   /* its kit as it is now */
         kit_keep(pattern);
     o[IMG_OPTIONS + 3] = extra[pattern].has_kit;
+    o[IMG_OPTIONS + 4] = extra[pattern].has_target;
     memcpy(o + IMG_KIT, &extra[pattern].kit, sizeof(PatternKit));
+    memcpy(o + IMG_TARGET, &extra[pattern].target, sizeof(PatternKit));
     memcpy(o + IMG_LOCKS, p->l, p->n * sizeof(Lock));
     q = o + IMG_LOCKS + p->n * sizeof(Lock);
     for (uint32_t t = 0; t < NUM_TRACKS; t++)
@@ -1029,16 +1039,19 @@ uint32_t tack_pattern_export(uint8_t pattern, void *image)
     return IMAGE_HEAD + (p->n + c) * sizeof(Lock);
 }
 
-static int image_ok(const uint8_t *in, uint32_t len)
+/* where its locks start: IMAGE_HEAD, or KPT7's; 0 refused */
+static uint32_t image_ok(const uint8_t *in, uint32_t len)
 {
     const uint8_t *q;
+    const int old = len >= IMG_COUNT && !memcmp(in, IMAGE_MAGIC_7, IMG_COUNT);
+    const uint32_t head = old ? (uint32_t)IMG_7_LOCKS : IMAGE_HEAD;
     uint32_t n, c, last = 0, run = 0;
-    if (len < IMAGE_HEAD || memcmp(in, IMAGE_MAGIC, IMG_COUNT))
+    if (len < head || (!old && memcmp(in, IMAGE_MAGIC, IMG_COUNT)))
         return 0;
     n = (uint32_t)in[IMG_COUNT] | (uint32_t)in[IMG_COUNT + 1] << 8;
-    if (n > TACK_LOCKS_MAX || len < IMAGE_HEAD + n * sizeof(Lock) || (len - IMAGE_HEAD) % sizeof(Lock))
+    if (n > TACK_LOCKS_MAX || len < head + n * sizeof(Lock) || (len - head) % sizeof(Lock))
         return 0;
-    c = (len - IMAGE_HEAD) / sizeof(Lock) - n;
+    c = (len - head) / sizeof(Lock) - n;
     if (n + c > TACK_LOCKS_MAX)
         return 0;
     q = in + IMG_STEPS;
@@ -1060,9 +1073,9 @@ static int image_ok(const uint8_t *in, uint32_t len)
     if (in[IMG_SHUFFLE] > 127u || in[IMG_KIT_NR] > 128u)
         return 0;
     q = in + IMG_OPTIONS;
-    if (q[0] > 127u || q[1] > 127u || q[2] > TACK_MORPH_KITS || q[3] > 1u)
+    if (q[0] > 127u || q[1] > 127u || q[2] > TACK_MORPH_KITS || q[3] > 1u || (!old && q[4] > 1u))
         return 0;
-    q = in + IMG_LOCKS;
+    q = in + head;
     for (uint32_t i = 0; i < n; i++, q += sizeof(Lock)) {
         Lock l;
         memcpy(&l, q, sizeof l);
@@ -1083,15 +1096,32 @@ static int image_ok(const uint8_t *in, uint32_t len)
             return 0;
         last = key;
     }
-    return 1;
+    return head;
+}
+
+/* A pattern's morph target: a kit of its own, copied from the bank or started from the kit as it is. A change goes to morph
+ * through target_rev */
+static volatile uint8_t target_rev;
+
+static void target_from_bank(uint32_t pattern, uint8_t kit)
+{
+    const uint8_t *k = kit && kit_find ? kit_find(kit - 1u) : 0, *name = k && kit_name_find ? kit_name_find(kit - 1u) : 0;
+    extra[pattern].morph_kit = k ? kit : 0;
+    extra[pattern].has_target = k != 0;
+    if (k) {
+        memcpy(extra[pattern].target.v, k, LXR_HOST_NUM_PARAMS);
+        memcpy(extra[pattern].target.name, name ? name : (const uint8_t *)"        ", 8);
+    }
+    target_rev++;
 }
 
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
 {
     const uint8_t *in = image, *q;
     LockList *p = &lock_list[pattern];
+    const uint32_t head = image_ok(in, len);
     uint32_t n;
-    if (!image_ok(in, len))
+    if (!head)
         return -1;
     n = (uint32_t)in[IMG_COUNT] | (uint32_t)in[IMG_COUNT + 1] << 8;
     q = in + IMG_STEPS;
@@ -1116,11 +1146,18 @@ int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
     extra[pattern].morph = in[IMG_OPTIONS + 1];
     extra[pattern].morph_kit = in[IMG_OPTIONS + 2];
     extra[pattern].has_kit = in[IMG_OPTIONS + 3];
-    memcpy(&extra[pattern].kit, in + IMG_KIT, sizeof(PatternKit));
-    memcpy(p->l, in + IMG_LOCKS, n * sizeof(Lock));
+    if (head == IMAGE_HEAD) {
+        extra[pattern].has_target = in[IMG_OPTIONS + 4];
+        memcpy(&extra[pattern].kit, in + IMG_KIT, sizeof(PatternKit));
+        memcpy(&extra[pattern].target, in + IMG_TARGET, sizeof(PatternKit));
+    } else {
+        memcpy(&extra[pattern].kit, in + IMG_7_KIT, sizeof(PatternKit));
+        target_from_bank(pattern, extra[pattern].morph_kit);
+    }
+    memcpy(p->l, in + head, n * sizeof(Lock));
     p->n = (uint16_t)n;
-    q = in + IMG_LOCKS + n * sizeof(Lock);
-    for (uint32_t i = (len - IMAGE_HEAD) / sizeof(Lock) - n; i; i--, q += sizeof(Lock)) {
+    q = in + head + n * sizeof(Lock);
+    for (uint32_t i = (len - head) / sizeof(Lock) - n; i; i--, q += sizeof(Lock)) {
         Lock r;
         memcpy(&r, q, sizeof r);
         const uint32_t key = lock_key(&r);
@@ -1321,7 +1358,7 @@ int tack_bits(void) { return 127 - extra[seq_activePattern].bits; }
 enum { MORPH_KEEP, MORPH_BLEND, MORPH_SWITCH };
 #define MORPH_PER_BLOCK 16u
 static uint8_t morph_kind[LXR_HOST_NUM_PARAMS], morph_b[LXR_HOST_NUM_PARAMS], morph_sent[LXR_HOST_NUM_PARAMS];
-static uint8_t morph_kit_in, morph_kit_ok, morph_now, morph_dirty;
+static uint8_t morph_pattern_in = 0xFFu, morph_rev_in, morph_kit_ok, morph_now, morph_dirty;
 static uint32_t morph_at, morph_clean;
 
 /* Mutate walks the kit, on the main loop as a step back replays the whole way. What it arrives at goes to the audio side as one event,
@@ -1382,13 +1419,14 @@ static void morph_capture(void)
 
 static void morph_sync(void)
 {
-    const uint8_t kit = extra[seq_activePattern].morph_kit, amount = extra[seq_activePattern].morph;
-    if (kit != morph_kit_in) {
-        const uint8_t *k = kit && kit_find ? kit_find(kit - 1u) : 0;
-        if (k)
-            memcpy(morph_b, k, sizeof morph_b);
-        morph_kit_ok = k != 0;
-        morph_kit_in = kit;
+    const PatternExtra *x = &extra[seq_activePattern];
+    const uint8_t amount = x->morph;
+    if (seq_activePattern != morph_pattern_in || target_rev != morph_rev_in) {
+        if (x->has_target)
+            memcpy(morph_b, x->target.v, sizeof morph_b);
+        morph_kit_ok = x->has_target;
+        morph_pattern_in = seq_activePattern;
+        morph_rev_in = target_rev;
         morph_touch();
     }
     if (amount != morph_now) {
@@ -1457,7 +1495,56 @@ void tack_morph_now(uint8_t amount)
     dirty |= 1u << seq_activePattern;
 }
 int tack_post_morph_kit(uint8_t kit) { return post(EV_MORPH_KIT, kit, 0, 0); }
-void tack_morph_kit_changed(void) { morph_kit_in = 0xFFu; }   /* its slot was written: morph_sync reads it again */
+
+/* one of the target's values. The first starts the target from the kit as it is, named after it with a + */
+static void target_set(uint16_t param, uint8_t value)
+{
+    PatternExtra *x = &extra[seq_activePattern];
+    if (param >= LXR_HOST_NUM_PARAMS || morph_kind[param] == MORPH_KEEP)
+        return;
+    if (!x->has_target) {
+        uint32_t n = 8u;
+        memcpy(x->target.v, morph_a, sizeof morph_a);
+        memcpy(x->target.name, kit_name_now, 8);
+        while (n && (x->target.name[n - 1u] == ' ' || !x->target.name[n - 1u]))
+            n--;
+        if (!n) {                                /* the init kit has no name */
+            memcpy(x->target.name, "INIT    ", 8);
+            n = 4u;
+        }
+        x->target.name[n < 8u ? n : 7u] = '+';
+        x->has_target = 1;
+        x->morph_kit = 0;
+    }
+    x->target.v[param] = value;
+    target_rev++;
+    dirty |= 1u << seq_activePattern;
+}
+
+/* the main loop's view: a value posted reads back at once, until the audio side has taken it */
+static uint16_t target_posted = 0xFFFFu;
+static uint8_t target_posted_value, target_posted_rev;
+int tack_has_target(void) { return extra[seq_activePattern].has_target || (target_posted != 0xFFFFu && target_rev == target_posted_rev); }
+uint8_t tack_target_value(uint16_t param)
+{
+    const PatternExtra *x = &extra[seq_activePattern];
+    if (param >= LXR_HOST_NUM_PARAMS)
+        return 0;
+    if (param == target_posted && target_rev == target_posted_rev)
+        return target_posted_value;
+    return x->has_target ? x->target.v[param] : shadow[param];
+}
+const uint8_t *tack_target_name(void) { return extra[seq_activePattern].target.name; }
+int tack_morph_keeps(uint16_t param) { return param >= LXR_HOST_NUM_PARAMS || morph_kind[param] == MORPH_KEEP; }
+int tack_post_target(uint16_t param, uint8_t value)
+{
+    if (tack_morph_keeps(param) || !post(EV_TARGET, (uint8_t)param, (uint8_t)(param >> 8), value))
+        return 0;
+    target_posted = param;
+    target_posted_value = value;
+    target_posted_rev = target_rev;
+    return 1;
+}
 #ifdef PLAT_HOST
 uint8_t tack_heard(uint16_t param) { return lxr_host_getParam(param); }
 int tack_morph_kept(uint16_t param) { return morph_kind[param] == MORPH_KEEP; }
@@ -1889,8 +1976,11 @@ static void drain(void)
             tack_morph_now(e.a);
             break;
         case EV_MORPH_KIT:
-            extra[seq_activePattern].morph_kit = e.a;
+            target_from_bank(seq_activePattern, e.a);
             dirty |= 1u << seq_activePattern;
+            break;
+        case EV_TARGET:
+            target_set((uint16_t)(e.a | e.b << 8), e.c);
             break;
         case EV_BITS:
             extra[seq_activePattern].bits = (uint8_t)(127u - e.a);

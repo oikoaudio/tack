@@ -69,8 +69,7 @@ static void kit_name_of(const uint8_t *k, char *t)
 /* the name of the kit morph goes to */
 static void morph_name(char *t)
 {
-    const int kit = tack_morph_kit();
-    kit_name_of(kit ? kit_slot((uint32_t)kit - 1u) : 0, t);
+    kit_name_of(tack_has_target() ? tack_target_name() : 0, t);
 }
 
 static int seq_in_view(void);
@@ -79,6 +78,8 @@ static int seq_in_view(void);
 static int on_home(void) { return seq_in_view() && !ui.voice_view; }
 
 static int morph_held(void) { return !keys_notes(ui.btn) && ui.held < 0 && (ui.keys >> BK[KEY_MORPH] & 1u); }
+/* POLY held: a dial shows, and sets, the morph target's value */
+static int morph_shown(const TackSlot *sl) { return sl && morph_held() && !sl->target && !tack_morph_keeps(sl->par); }
 
 /* SEL held a moment where it can set the lane's end: what the end is now. Not at once, or it would flash on each tap that walks
  * the steps */

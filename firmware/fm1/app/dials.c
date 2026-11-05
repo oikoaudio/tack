@@ -141,6 +141,18 @@ static void set_turn(uint32_t slot, int32_t e)
     }
 }
 
+/* POLY held and a dial turned: that parameter in the morph target */
+static void target_turn(uint32_t i, int32_t e)
+{
+    const TackSlot *sl = slot(i);
+    if (!sl)
+        return;
+    if (!morph_shown(sl) || sl == tack_send_slot((uint32_t)ui.voice))
+        app_say("NO MORPH", "ON THIS");
+    else
+        tack_post_target(sl->par, tack_slot_step(sl, tack_target_value(sl->par), e));
+}
+
 /* the kit to morph to, with the POLY key held: the bank in order, from none */
 static void morph_kit_step(int32_t e)
 {
@@ -160,8 +172,8 @@ static void morph_turn(int32_t e)
 {
     char t[4];
     const int32_t v = clamp(tack_morph() + e * MORPH_STEP, 0, 127);
-    if (!tack_morph_kit()) {
-        app_say(kit_slot(0) ? "HOLD" : "KITS", kit_slot(0) ? "POLY+PRESET" : "NONE LOADED");
+    if (!tack_has_target()) {
+        app_say("HOLD POLY", "TURN A DIAL");
         return;
     }
     tack_post_morph((uint8_t)v);
@@ -363,7 +375,7 @@ static uint32_t kit_free(void)
 }
 
 /* what morph makes can be saved: there is a blend to save */
-static int save_can_blend(void) { return tack_morph_kit() && tack_morph(); }
+static int save_can_blend(void) { return tack_has_target() && tack_morph(); }
 
 static int save_name_empty(void)
 {
@@ -377,7 +389,7 @@ static int save_name_empty(void)
 static void save_name_load(void)
 {
     const uint8_t *now = kit_slot(ui.ks_slot);
-    const uint8_t *to = ui.ks_morph ? kit_slot((uint32_t)tack_morph_kit() - 1u) : 0;
+    const uint8_t *to = ui.ks_morph && tack_has_target() ? tack_target_name() : 0;
     const char *own = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
     for (uint32_t i = 0; i < 8u; i++)
         ui.ks_name[i] = KIT_LETTERS[kit_letter(now ? (char)now[i] : to && i >= 4u ? (char)to[i - 4u] : own[i])];
@@ -506,7 +518,6 @@ static void kit_bank_save(void)
         app_say("KIT SAVE", "FAILED");
         return;
     }
-    tack_morph_kit_changed();
     if (!ui.ks_morph) {                          /* a blend is a new kit: this pattern stays on its two */
         tack_set_kit_name((const uint8_t *)ui.ks_name);
         tack_post_kit_home((uint8_t)slot);

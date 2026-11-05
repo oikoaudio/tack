@@ -1,0 +1,45 @@
+# A pattern's own morph target, set with POLY held and a dial: firmware/fm1/build/host/tack_host firmware/fm1/tests/morph_target.txt OUTDIR
+# POLY is the tenth black key. Drum 1's filter frequency is parameter 37
+wait 600
+expect hastarget 0
+
+# without a target ALGORITHM has nothing to morph to
+turn ALGO 5
+wait 40
+expect morph 0
+
+# POLY held: K2, drum 1's filter on HOME, sets the target and leaves the kit
+expect kitv37 127
+key b9 down
+wait 40
+turn K2 -40
+wait 40
+shot morph_target.png
+key b9 up
+wait 40
+expect hastarget 1
+expect target37 87
+expect kitv37 127
+expect target88 127
+
+# ALGORITHM goes there, and the voice hears it
+turn ALGO 43
+wait 200
+expect morph 127
+expect heard37 87
+shot morph_home.png
+
+# saved, and back after a reboot
+press SEL
+wait 20
+tap SAVE
+wait 20
+release SEL
+wait 300
+reboot
+wait 800
+expect hastarget 1
+expect target37 87
+expect kitv37 127
+expect morph 127
+
