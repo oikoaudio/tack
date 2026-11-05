@@ -165,10 +165,12 @@ int app_expect(const char *what, int *got)
         *got = ui.fk_roll;
     else if (numbered(what, "fkparent"))  /* fkparentN: K(N+1)'s parent: 0 none, 1 this kit, 2 on the bank's slots */
         *got = ui.fk_parent[atoi(what + 8) & 3];
-    else if (!strcmp(what, "fkparents")) {   /* which parents the cells came from, a bit each */
+    else if (!strcmp(what, "fkparents")) {   /* which parent slots the combo showing took cells from, a bit each */
         *got = 0;
-        for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
-            *got |= 1 << ui.fk_where[c];
+        for (uint32_t k = 0; ui.fk_roll && k < 4u; k++)
+            for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+                if (ui.fk_hist[ui.fk_roll - 1].parent[k] != FK_NONE && ui.fk_hist[ui.fk_roll - 1].cell[c] == ui.fk_hist[ui.fk_roll - 1].parent[k])
+                    *got |= 1 << k;
     } else if (!strcmp(what, "hastarget"))
         *got = tack_has_target();
     else if (numbered(what, "target"))    /* targetN: parameter N in the morph target, or the kit's without one */

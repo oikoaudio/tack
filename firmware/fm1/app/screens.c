@@ -731,14 +731,15 @@ static void pg_mix_strips(uint32_t *last)
     cv_blit(0, PG_Y);
 }
 
-/* Frankenkit: K1 to K4's parent kits, each in its colour, and the roll */
+/* Frankenkit: K1 to K4's parent kits, each in its colour, and the combo */
 static const uint16_t FK_COLOUR[4] = {RGB(240, 125, 36), RGB(80, 170, 240), RGB(120, 200, 90), RGB(200, 110, 220)};
 
 static void pg_fk_parents(uint32_t *last)
 {
+    const FkCombo *now = ui.fk_roll ? &ui.fk_hist[ui.fk_roll - 1] : 0;
     uint32_t key = 29u;
     for (uint32_t i = 0; i < 4u; i++)
-        key = rk(key, (uint32_t)ui.fk_parent[i]);
+        key = rk(rk(key, (uint32_t)ui.fk_parent[i]), now ? (uint32_t)now->parent[i] : 0u);
     key = rk(rk(key, ui.fk_before_name[0]), ui.fk_before_name[1]);
     if (key == *last)
         return;
@@ -746,12 +747,20 @@ static void pg_fk_parents(uint32_t *last)
     cv_begin(240, PG_RH, C_BLACK);
     row_lines(0xFu, C_HI);
     for (uint32_t i = 0; i < 4u; i++) {
-        const int32_t x = (int32_t)i * PG_CW + 3;
-        const int none = ui.fk_parent[i] == FK_NONE;
+        const int32_t x = (int32_t)i * PG_CW + 3, w = PG_CW - 6, pos = ui.fk_parent[i];
+        const int none = pos == FK_NONE;
         char t[10], label[6] = "KIT 1";
-        fk_name(ui.fk_parent[i], t);
-        outline(x, 12, PG_CW - 6, 30, 2, none ? C_DIM : FK_COLOUR[i]);
-        cv_text(x + (PG_CW - 6) / 2 - text_w(&FONT_XS, t) / 2, 23, &FONT_XS, t, none ? C_GRAY : C_WHITE);
+        outline(x, 10, w, 34, 2, none ? C_DIM : FK_COLOUR[i]);
+        if (pos == FK_RANDOM) {                  /* and the kit it drew for the combo showing */
+            cv_text(x + w / 2 - text_w(&FONT_XS, "RANDOM") / 2, 15, &FONT_XS, "RANDOM", C_GRAY);
+            if (now && now->parent[i] != FK_NONE) {
+                fk_name(now->parent[i], t);
+                cv_text(x + w / 2 - text_w(&FONT_XS, t) / 2, 29, &FONT_XS, t, C_WHITE);
+            }
+        } else {
+            fk_name(pos, t);
+            cv_text(x + w / 2 - text_w(&FONT_XS, t) / 2, 23, &FONT_XS, t, none ? C_GRAY : C_WHITE);
+        }
         label[4] = (char)('1' + i);
         pg_column(i, label, 1);
     }
@@ -760,18 +769,20 @@ static void pg_fk_parents(uint32_t *last)
 
 static void pg_fk_roll(uint32_t *last)
 {
-    char t[16];
+    char t[24];
     const uint32_t key = 31u + (uint32_t)ui.fk_roll;
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, 2u * PG_RH - 2u, C_BLACK);
     if (ui.fk_roll)
-        int_text(ui.fk_roll, text_put(t, "ROLL "));
+        int_text(ui.fk_roll, text_put(t, "COMBO "));
     else
-        text_put(t, "PRESET ROLLS");
-    cv_text(120 - text_w(&FONT_M, t) / 2, 36, &FONT_M, t, ui.fk_roll ? C_WHITE : C_HI);
-    cv_text(120 - text_w(&FONT_XS, "BACK TO 0: THE KIT BEFORE") / 2, 70, &FONT_XS, "BACK TO 0: THE KIT BEFORE", C_GRAY);
+        text_put(t, "PRESETS: NEW COMBO");
+    cv_text(120 - text_w(&FONT_M, t) / 2, 30, &FONT_M, t, ui.fk_roll ? C_WHITE : C_HI);
+    cv_text(120 - text_w(&FONT_XS, "A VOICE KEY HELD: THAT VOICE") / 2, 66, &FONT_XS, "A VOICE KEY HELD: THAT VOICE", C_GRAY);
+    cv_text(120 - text_w(&FONT_XS, "LEFT GOES BACK") / 2, 82, &FONT_XS, "LEFT GOES BACK", C_GRAY);
+    cv_text(120 - text_w(&FONT_XS, "0: THE KIT BEFORE") / 2, 98, &FONT_XS, "0: THE KIT BEFORE", C_GRAY);
     cv_blit(0, PG_Y + PG_RH);
 }
 

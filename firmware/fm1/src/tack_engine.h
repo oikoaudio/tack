@@ -224,13 +224,15 @@ uint8_t tack_target_value(uint16_t param);               /* the target's, or the
 const uint8_t *tack_target_name(void);                   /* 8 characters */
 int tack_post_target(uint16_t param, uint8_t value);
 int tack_morph_keeps(uint16_t param);                    /* morph leaves it as the kit has it: no target value of its own */
-/* Frankenkit: a kit from 1 to 4 parent kits into values, each section of each voice (OSC, its modulator, TRANSIENT, FILTER,
- * OUTPUT, the envelopes, the LFO) and the FX whole from one of them, picked by seed, and at least two of them. What no section
- * has, the level among it, comes from the first. where gets each cell's parent: voice * TACK_FRANKEN_SECTIONS + section, then
- * the FX */
+/* Frankenkit: a kit made of sections of other kits. A cell is one voice's section (OSC, its modulator, TRANSIENT, FILTER, OUTPUT,
+ * the envelopes, the LFO), voice * TACK_FRANKEN_SECTIONS + section of the engine's six voices, and the last is the FX. The cymbal's
+ * pitch, oscillator and modulators are one section: its three FM oscillators only sound right together.
+ * tack_franken_pick: by seed, each cell's parent of n, or only voice's cells (voice < 0: all, then at least two parents).
+ * tack_franken_kit: the kit, each cell's parameters from its own kit and the rest (the level, the other voices' pitch) from base */
 #define TACK_FRANKEN_SECTIONS 7u
 #define TACK_FRANKEN_CELLS (6u * TACK_FRANKEN_SECTIONS + 1u)
-void tack_franken(const uint8_t *const *parents, uint32_t n, uint32_t seed, uint8_t *where, uint8_t *values);
+void tack_franken_pick(uint32_t seed, uint32_t n, int voice, uint8_t *pick);
+void tack_franken_kit(const uint8_t *const *cells, const uint8_t *base, uint8_t *values);
 void tack_kit_blended(uint8_t *values);                  /* the kit as morph has it now */
 /* Walks the kit, or one voice of it, by steps; negative goes back the same way. Returns the step reached, 0 the walk's start. The main
  * loop only. An edit or another kit starts a new walk, and voice TACK_VOICES or above is the whole kit */

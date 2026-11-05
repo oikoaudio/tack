@@ -1368,6 +1368,7 @@ static uint8_t mutate_top[LXR_HOST_NUM_PARAMS], mutate_voice[LXR_HOST_NUM_PARAMS
 static volatile uint8_t mutate_waiting;          /* the audio side has mutate_next still to take */
 
 static uint8_t franken_cell[LXR_HOST_NUM_PARAMS];   /* Frankenkit's cell + 1, 0 none */
+#define FRANKEN_CYMBAL 4u                          /* its voice, of the engine's six */
 
 static uint32_t franken_section(const char *title)
 {
@@ -1391,7 +1392,9 @@ static void morph_kinds(void)
             for (int sub = 0; sub < tack_pages(v, g); sub++)
                 for (uint32_t n = 0; n < 4u; n++) {
                     const TackSlot *s = tack_slot(v, g, (uint32_t)sub, n);
-                    const uint32_t section = g == TACK_G_MAIN ? TACK_FRANKEN_SECTIONS : franken_section(tack_page_title(v, g, (uint32_t)sub));
+                    uint32_t section = g == TACK_G_MAIN ? TACK_FRANKEN_SECTIONS : franken_section(tack_page_title(v, g, (uint32_t)sub));
+                    if (lxr_param_voice(v) == FRANKEN_CYMBAL && (section == 1u || (g == TACK_G_MAIN && s && s->role == TACK_ROLE_PITCH)))
+                        section = 0;     /* the cymbal's two modulators and its pitch only sound right with its own oscillator */
                     if (s && section < TACK_FRANKEN_SECTIONS)
                         franken_cell[s->par] = (uint8_t)(1u + lxr_param_voice(v) * TACK_FRANKEN_SECTIONS + section);
                     if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6)) {
@@ -1568,17 +1571,22 @@ static uint32_t franken_hash(uint32_t x)
     return x ^ (x >> 16);
 }
 
-void tack_franken(const uint8_t *const *parents, uint32_t n, uint32_t seed, uint8_t *where, uint8_t *values)
+void tack_franken_pick(uint32_t seed, uint32_t n, int voice, uint8_t *pick)
 {
     uint32_t used = 0;
-    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++) {
-        where[c] = (uint8_t)(franken_hash(seed * TACK_FRANKEN_CELLS + c) % n);
-        used |= 1u << where[c];
-    }
-    if (n > 1u && !(used & (used - 1u)))         /* one parent all over: another takes a cell */
-        where[franken_hash(seed) % TACK_FRANKEN_CELLS] = (uint8_t)((where[0] + 1u) % n);
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+        if (voice < 0 || c / TACK_FRANKEN_SECTIONS == (uint32_t)voice) {
+            pick[c] = (uint8_t)(franken_hash(seed * TACK_FRANKEN_CELLS + c) % n);
+            used |= 1u << pick[c];
+        }
+    if (voice < 0 && n > 1u && !(used & (used - 1u)))   /* one parent all over: another takes a cell */
+        pick[franken_hash(seed) % TACK_FRANKEN_CELLS] = (uint8_t)((pick[0] + 1u) % n);
+}
+
+void tack_franken_kit(const uint8_t *const *cells, const uint8_t *base, uint8_t *values)
+{
     for (uint32_t p = 0; p < LXR_HOST_NUM_PARAMS; p++)
-        values[p] = parents[franken_cell[p] ? where[franken_cell[p] - 1u] : 0u][p];
+        values[p] = (franken_cell[p] ? cells[franken_cell[p] - 1u] : base)[p];
 }
 
 int tack_post_target(uint16_t param, uint8_t value)

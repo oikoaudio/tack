@@ -165,29 +165,69 @@ static void morph_kit_step(int32_t e)
         tack_post_morph_kit((uint8_t)next);
 }
 
-/* Frankenkit's parents, in the order K1 to K4 step through them: none, this kit, then the bank's kits that are there */
+/* Frankenkit's parents, in the order K1 to K4 step through them: a kit from the bank at random for each combo, none, this kit,
+ * then the bank's kits that are there */
+#define FK_RANDOM (-1)
 #define FK_NONE 0
 #define FK_THIS 1
+#define FK_END (-2)
 static int32_t fk_next(int32_t pos, int32_t dir)
 {
     for (;;) {
         pos += dir;
-        if (pos < FK_NONE || pos >= (int32_t)KIT_SLOTS + 2)
-            return -1;
+        if (pos < FK_RANDOM || pos >= (int32_t)KIT_SLOTS + 2)
+            return FK_END;
         if (pos < 2 || kit_slot((uint32_t)pos - 2u))
             return pos;
     }
 }
-static const uint8_t *fk_parent_kit(int32_t pos) { return pos == FK_THIS ? ui.fk_before : pos >= 2 ? kit_params((uint32_t)pos - 2u) : 0; }
+static const uint8_t *fk_src(int32_t pos)
+{
+    const uint8_t *k = pos >= 2 ? kit_params((uint32_t)pos - 2u) : 0;
+    return k ? k : ui.fk_before;
+}
 static void fk_name(int32_t pos, char *t)
 {
     if (pos == FK_THIS)
         kit_name_of(ui.fk_before_name[0] ? ui.fk_before_name : (const uint8_t *)"INIT KIT", t);
     else
-        kit_name_of(pos >= 2 ? kit_slot((uint32_t)pos - 2u) : (const uint8_t *)"NONE    ", t);
+        kit_name_of(pos >= 2 ? kit_slot((uint32_t)pos - 2u) : (const uint8_t *)(pos == FK_RANDOM ? "RANDOM  " : "NONE    "), t);
+}
+static uint32_t fk_rand(void)
+{
+    uint32_t x = ui.fk_seed ? ui.fk_seed : 0x9E3779B9u;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return ui.fk_seed = x;
+}
+static int fk_has(const int16_t *list, uint32_t n, int32_t pos)
+{
+    for (uint32_t i = 0; i < n; i++)
+        if (list[i] == pos)
+            return 1;
+    return 0;
+}
+/* a kit from the bank for a RANDOM slot: not one already in the combo, nor with this kit in it the bank's kit it came from */
+static int fk_drawable(uint32_t i, const int16_t *list, uint32_t n)
+{
+    return kit_slot(i) && !fk_has(list, n, (int32_t)i + 2) && !(fk_has(list, n, FK_THIS) && (int32_t)i + 1 == tack_kit_now());
+}
+static int16_t fk_draw(const int16_t *list, uint32_t n)
+{
+    uint32_t count = 0, k;
+    for (uint32_t i = 0; i < KIT_SLOTS; i++)
+        count += (uint32_t)fk_drawable(i, list, n);
+    if (!count)
+        return FK_NONE;
+    k = fk_rand() % count;
+    for (uint32_t i = 0; i < KIT_SLOTS; i++)
+        if (fk_drawable(i, list, n) && !k--)
+            return (int16_t)(i + 2u);
+    return FK_NONE;
 }
 
-/* a roll's kit as it went in, once it has */
+/* a combo's kit as it went in, once it has */
 static void fk_settle(void)
 {
     if (ui.fk_pending && !tack_kit_busy()) {
@@ -196,40 +236,30 @@ static void fk_settle(void)
     }
 }
 
-/* where the rolls start from: the kit as it is now */
+/* where the combos start from: the kit as it is now */
 static void fk_start(void)
 {
     memcpy(ui.fk_before, tack_kit(), tack_kit_size());
     memcpy(ui.fk_before_name, tack_kit_name(), 8);
     ui.fk_roll = 0;
-    ui.fk_seed = plat_ms() * 2246822519u;
+    if (!ui.fk_seed)
+        ui.fk_seed = plat_ms() * 2246822519u + 1u;
 }
 
-/* the roll's kit, from the parents set, into the pattern */
-static int fk_apply(void)
+/* a combo into the pattern's kit */
+static int fk_play(const FkCombo *c)
 {
-    const uint8_t *p[4];
-    uint8_t of[4];
-    uint32_t n = 0;
-    for (uint32_t i = 0; i < 4u; i++)
-        if (fk_parent_kit(ui.fk_parent[i])) {
-            p[n] = fk_parent_kit(ui.fk_parent[i]);
-            of[n++] = (uint8_t)i;
-        }
-    if (n < 2u) {
-        app_say("PICK", "TWO KITS");
-        return 0;
-    }
-    tack_franken(p, n, ui.fk_seed + (uint32_t)ui.fk_roll * 2654435761u, ui.fk_where, ui.fk_kit);
-    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
-        ui.fk_where[c] = of[ui.fk_where[c]];
+    const uint8_t *cells[TACK_FRANKEN_CELLS];
+    for (uint32_t i = 0; i < TACK_FRANKEN_CELLS; i++)
+        cells[i] = fk_src(c->cell[i]);
+    tack_franken_kit(cells, fk_src(c->base), ui.fk_kit);
     if (!tack_post_kit(ui.fk_kit, (const uint8_t *)"FRANKEN ", TACK_KIT_EDIT))
         return 0;
     ui.fk_pending = 1;
     return 1;
 }
 
-/* the kit changed since the last roll: an edit, a kit loaded, another pattern. The rolls start again from it */
+/* the kit changed since the last combo: an edit, a kit loaded, another pattern. The combos start again from it */
 static int fk_moved(void)
 {
     fk_settle();
@@ -238,10 +268,11 @@ static int fk_moved(void)
 
 static void franken_open(void)
 {
-    if (ui.over == PAGE_FRANKEN)                 /* a second tap: nothing, as a page's button */
+    if (ui.over == PAGE_FRANKEN)                 /* a second press: nothing, as a page's button */
         return;
     if (!ui.fk_ready) {
         ui.fk_parent[0] = FK_THIS;
+        ui.fk_parent[1] = ui.fk_parent[2] = ui.fk_parent[3] = FK_RANDOM;
         ui.fk_ready = 1;
     }
     if (!ui.fk_roll || fk_moved())
@@ -250,42 +281,75 @@ static void franken_open(void)
     ui.redraw = 1;
 }
 
-/* PRESET: each click a roll further, back the way it came, and at 0 the kit from before */
-static void franken_roll(int32_t e)
+/* a new combo: the whole kit, or with a voice key held (lane >= 0) that voice's sections, the rest as they are */
+static void fk_new(int32_t lane)
 {
-    int32_t to;
+    const int voice = lane < 0 ? -1 : lane < 6 ? (int)lane : 5;   /* the hats are one voice */
+    const FkCombo *prev = ui.fk_roll ? &ui.fk_hist[ui.fk_roll - 1] : 0;
+    FkCombo next;
+    int16_t list[4];
+    uint8_t pick[TACK_FRANKEN_CELLS];
+    uint32_t n = 0;
+    for (uint32_t k = 0; k < 4u; k++) {
+        const int16_t pos = ui.fk_parent[k] == FK_RANDOM ? fk_draw(list, n) : ui.fk_parent[k];
+        next.parent[k] = pos;
+        if (pos != FK_NONE && !fk_has(list, n, pos))
+            list[n++] = pos;
+    }
+    if (n < 2u) {
+        app_say(kit_slot(0) ? "PICK" : "NO KITS", kit_slot(0) ? "TWO KITS" : "IN THE BANK");
+        return;
+    }
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+        next.cell[c] = prev ? prev->cell[c] : FK_THIS;
+    next.base = prev ? prev->base : FK_THIS;
+    tack_franken_pick(fk_rand(), n, voice, pick);
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+        if (voice < 0 || c / TACK_FRANKEN_SECTIONS == (uint32_t)voice)
+            next.cell[c] = list[pick[c]];
+    if (voice < 0)
+        next.base = list[0];
+    if (!fk_play(&next))
+        return;
+    if (ui.fk_roll == FK_DEPTH) {                /* the oldest goes */
+        for (uint32_t i = 0; i + 1u < FK_DEPTH; i++)
+            ui.fk_hist[i] = ui.fk_hist[i + 1u];
+        ui.fk_roll--;
+    }
+    ui.fk_hist[ui.fk_roll++] = next;
+    if (lane >= 0)
+        app_say(VOICE_NAME[lane], "NEW COMBO");
+}
+
+/* PRESETS: a new combo a click, back through them, and at 0 the kit from before */
+static void franken_roll(int32_t e, int32_t lane)
+{
     if (tack_kit_busy())
         return;
     if (!ui.fk_roll || fk_moved())
         fk_start();
-    to = clamp(ui.fk_roll + e, 0, 9999);
-    if (to == ui.fk_roll)
-        return;
-    if (!to) {
-        if (tack_post_kit(ui.fk_before, ui.fk_before_name, TACK_KIT_EDIT))
-            ui.fk_roll = 0;
-        return;
-    }
-    {
-        const int32_t was = ui.fk_roll;
-        ui.fk_roll = to;
-        if (!fk_apply())
-            ui.fk_roll = was;
+    if (e > 0) {
+        fk_new(lane);
+    } else {
+        const int32_t to = ui.fk_roll + e < 0 ? 0 : ui.fk_roll + e;
+        if (to == ui.fk_roll)
+            return;
+        if (!to ? tack_post_kit(ui.fk_before, ui.fk_before_name, TACK_KIT_EDIT) : fk_play(&ui.fk_hist[to - 1]))
+            ui.fk_roll = to;
     }
 }
 
+/* K1 to K4: the parents of the combos to come */
 static void franken_turn(uint32_t slot, int32_t e)
 {
     int32_t pos = ui.fk_parent[slot];
     for (int32_t i = 0; i < (e < 0 ? -e : e); i++) {
         const int32_t next = fk_next(pos, e > 0 ? 1 : -1);
-        if (next < 0)
+        if (next == FK_END)
             break;
         pos = next;
     }
     ui.fk_parent[slot] = (int16_t)pos;
-    if (ui.fk_roll && !tack_kit_busy() && !fk_moved())   /* the same roll from the new set */
-        fk_apply();
 }
 
 #define MORPH_STEP 3                     /* a click, so that a good turn crosses the whole of it */

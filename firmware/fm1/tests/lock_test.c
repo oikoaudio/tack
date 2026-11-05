@@ -510,34 +510,47 @@ static void morph_target_tests(void)
     run(4);
 }
 
-/* Frankenkit: each section of each voice from one parent, whole, the level from the first, and a seed always the same */
+/* Frankenkit: each section of each voice from one parent, whole, the level from the base kit, a seed always the same, and a
+ * voice's combo leaving the others alone */
 static void franken_tests(void)
 {
-    static uint8_t one[256], two[256], out[256], again[256];
-    const uint8_t *parents[2] = {one, two};
-    uint8_t where[TACK_FRANKEN_CELLS];
+    static uint8_t one[256], two[256], out[256];
+    const uint8_t *cells[TACK_FRANKEN_CELLS];
+    uint8_t pick[TACK_FRANKEN_CELLS], again[TACK_FRANKEN_CELLS];
     const int fp = probe_param_filter1(), vol = probe_param_vol1();
-    int used = 0;
+    int both = 1, cymbal = 1, drum = 0, hat = 0, alone = 1;
     memset(one, 40, sizeof one);
     memset(two, 50, sizeof two);
     two[vol] = 99;
-    tack_franken(parents, 2, 12345u, where, out);
-    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
-        used |= 1 << where[c];
-    check("from both parents", used == 3, 3, used);
-    check("drum 1's filter from its cell's parent", out[fp] == (where[3] ? 50 : 40), where[3] ? 50 : 40, out[fp]);
-    check("the level from the first", out[vol] == 40, 40, out[vol]);
-    tack_franken(parents, 2, 12345u, where, again);
-    check("a seed rolls the same", !memcmp(out, again, (size_t)probe_kit_size()), 1, 0);
-    for (int seed = 0, all = 1; seed < 64 && all; seed++) {
-        tack_franken(parents, 2, (uint32_t)seed, where, out);
-        used = 0;
-        for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
-            used |= 1 << where[c];
-        all &= used == 3;
-        if (seed == 63 || !all)
-            check("every roll takes from both", all, 1, seed);
+    for (uint32_t seed = 0; seed < 64u; seed++) {
+        int used = 0;
+        tack_franken_pick(seed, 2, -1, pick);
+        for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++) {
+            used |= 1 << pick[c];
+            cells[c] = pick[c] ? two : one;
+        }
+        both &= used == 3;
+        tack_franken_kit(cells, one, out);
+        cymbal &= out[16] == out[6] && out[29] == out[6] && out[32] == out[6] && out[23] == out[6];   /* pitch, wave, modulators */
+        drum |= out[1] != out[82];
+        hat |= out[7] != out[33];
+        if (seed == 12345u % 64u) {
+            check("drum 1's filter from its cell's kit", out[fp] == (pick[3] ? 50 : 40), pick[3] ? 50 : 40, out[fp]);
+            check("the level from the base kit", out[vol] == 40, 40, out[vol]);
+        }
     }
+    check("every combo takes from both kits", both, 1, both);
+    check("the cymbal's tone comes from one kit", cymbal, 1, cymbal);
+    check("a drum's oscillator and FM can come from two kits", drum, 1, drum);
+    check("so can a hat's oscillator and its modulators", hat, 1, hat);
+    tack_franken_pick(12345u, 2, -1, pick);
+    tack_franken_pick(12345u, 2, -1, again);
+    check("a seed picks the same", !memcmp(pick, again, sizeof pick), 1, 0);
+    memset(pick, 7, sizeof pick);
+    tack_franken_pick(9u, 2, 3, pick);
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++)
+        alone &= c / TACK_FRANKEN_SECTIONS == 3u ? pick[c] < 2u : pick[c] == 7u;
+    check("a voice's combo picks for that voice alone", alone, 1, alone);
 }
 
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
