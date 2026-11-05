@@ -371,7 +371,7 @@ static void lane_format_tests(void)
     tack_post_bits(100);
     run(2);
     len = tack_pattern_export(0, lane_image);
-    check("the image holds the lane's mode", lane_image[3] == '7' && lane_image[IMAGE_LANES + 2u] == (3u | 2u << 3), lane_image[3], lane_image[IMAGE_LANES + 2u]);
+    check("the image holds the lane's mode", lane_image[3] == '8' && lane_image[IMAGE_LANES + 2u] == (3u | 2u << 3), lane_image[3], lane_image[IMAGE_LANES + 2u]);
     check("and BITS", lane_image[IMAGE_LANES + 14u] == 27, 27, lane_image[IMAGE_LANES + 14u]);
     check("the image loads", tack_load_pattern(0, lane_image, len) == 0, 0, 0);
     check("and keeps its modes", tack_lane_dir(2) == 3 && tack_lane_speed(2) == 2, tack_lane_dir(2), tack_lane_speed(2));
@@ -452,6 +452,62 @@ static void morph_tests(void)
     tack_post_morph_kit(0);
     tack_post_param((uint16_t)fp, 120);
     run(40);
+}
+
+/* A target of the pattern's own: shaped a parameter at a time from the kit, saved with the pattern, and from a KPT7 image (the
+ * format before targets) a copy of the bank kit it morphed to */
+static uint8_t target_image[3840];
+static void morph_target_tests(void)
+{
+    const int fp = probe_param_filter1(), vol = probe_param_vol1();
+    const uint32_t options = TACK_IMG_LENGTHS + 23u, target = TACK_IMG_LOCKS - 256u;
+    float a, b;
+    uint32_t len;
+    tack_post_param((uint16_t)fp, 120);
+    run(4);
+    a = probe_filter(0);
+    check("no target to begin with", !tack_has_target(), 0, tack_has_target());
+    tack_post_target((uint16_t)fp, 30);
+    run(2);
+    check("a value set starts a target", tack_has_target() && tack_target_value((uint16_t)fp) == 30, 30, tack_target_value((uint16_t)fp));
+    tack_kit_busy();                             /* the main loop's view of the kit, as a frame takes it */
+    check("from the kit as it is", tack_target_value((uint16_t)vol) == tack_get_param((uint16_t)vol), tack_get_param((uint16_t)vol),
+          tack_target_value((uint16_t)vol));
+    check("and the kit keeps its own", tack_get_param((uint16_t)fp) == 120, 120, tack_get_param((uint16_t)fp));
+    tack_post_morph(127);
+    run(40);
+    b = probe_filter(0);
+    check("morph goes to the target", b < a, a, b);
+    check("a routing has no target value", !tack_post_target(tack_send_slot(0)->par, 1), 0, 1);
+
+    /* saved and loaded back */
+    len = tack_pattern_export(0, target_image);
+    check("the image is the new format", !memcmp(target_image, "KPT8", 4) && target_image[options + 4] == 1, 1, target_image[options + 4]);
+    tack_post_morph(0);
+    tack_post_morph_kit(0);
+    run(4);
+    check("no bank kit drops the target", !tack_has_target(), 0, tack_has_target());
+    check("it loads back", tack_load_pattern(0, target_image, len) == 0, 0, 1);
+    run(4);
+    check("with its target", tack_has_target() && tack_target_value((uint16_t)fp) == 30, 30, tack_target_value((uint16_t)fp));
+
+    /* KPT7: no target and its flag, the morph going to bank slot 2 */
+    memcpy(bank[1], tack_kit(), (size_t)probe_kit_size());
+    bank[1][fp] = 11;
+    memmove(target_image + target, target_image + target + 256u, len - target - 256u);
+    len -= 256u;
+    memmove(target_image + options + 4u, target_image + options + 5u, len - options - 5u);
+    len -= 1u;
+    memcpy(target_image, "KPT7", 4);
+    target_image[options + 2u] = 2;
+    check("a KPT7 image loads", tack_load_pattern(0, target_image, len) == 0, 0, 1);
+    run(4);
+    check("its bank kit as its target", tack_has_target() && tack_target_value((uint16_t)fp) == 11 && tack_morph_kit() == 2, 11,
+          tack_target_value((uint16_t)fp));
+    target_image[options + 2u] = 0;
+    check("and none without one", tack_load_pattern(0, target_image, len) == 0 && (run(4), !tack_has_target()), 0, tack_has_target());
+    tack_post_morph(0);
+    run(4);
 }
 
 int tack_step_turn(uint8_t voice, uint8_t step, uint32_t slot, int32_t e);
@@ -1021,7 +1077,7 @@ static void list_tests(void)
                     run(2);
             }
     run(4);
-    check("a pattern holds 500", tack_lock_count() == 500, 500, tack_lock_count());
+    check("a pattern holds its limit", tack_lock_count() == TACK_LOCKS_MAX, TACK_LOCKS_MAX, tack_lock_count());
     check("and then says so", tack_lock_room(6, 60, 80) == TACK_LOCK_PATTERN_FULL, TACK_LOCK_PATTERN_FULL, tack_lock_room(6, 60, 80));
     check("recurrence shares that room", !tack_recur_room(6, 60), 0, tack_recur_room(6, 60));
     len = tack_pattern_export(5, image);
@@ -1265,6 +1321,7 @@ int main(void)
     pattern_tests();
     lane_format_tests();
     morph_tests();
+    morph_target_tests();
     nudge_tests();
     nudged_lock_tests(fp);
     pattern_state_tests(fp);

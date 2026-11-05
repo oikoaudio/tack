@@ -9,7 +9,7 @@
 #define TACK_RATE 44100u       /* the FM-1's output; REAL_FS is set to match (fm1.toml) */
 #define TACK_PATTERNS 16u
 #define TACK_BARS 4u
-#define TACK_LOCKS_MAX 500u            /* in a pattern: its record has room for more, kept for what comes next */
+#define TACK_LOCKS_MAX 480u            /* in a pattern, with its recurrences: what its record has room for beside its morph target */
 #define TACK_STEP_LOCKS 8u             /* on a step: each costs two parameter updates when the step fires */
 
 void tack_init(void);
@@ -72,6 +72,7 @@ int tack_post_kit_home(uint8_t slot);                    /* the kit playing is n
  * runs in the audio interrupt */
 typedef const uint8_t *(*TackKitFind)(uint32_t slot);
 void tack_set_kit_find(TackKitFind fn);
+void tack_set_kit_name_find(TackKitFind fn);             /* the slot's 8-character name, for a morph target taken from it */
 /* the bank's kit now playing: slot + 1, 0 none */
 int tack_kit_now(void);
 void tack_set_kit_now(int kit);
@@ -120,7 +121,7 @@ int tack_step_lock(uint8_t voice, uint8_t step, uint32_t i, uint16_t *param, uin
 #define TACK_RECUR_MAX 8u
 int tack_recur_len(uint8_t voice, uint8_t step);
 uint8_t tack_recur_mask(uint8_t voice, uint8_t step);
-int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 500 */
+int tack_recur_room(uint8_t voice, uint8_t step);        /* the pattern can hold it: it shares the locks' 480 */
 int tack_post_recur(uint8_t voice, uint8_t step, uint8_t len, uint8_t mask);
 int tack_recur_slot(uint8_t voice, uint8_t step);        /* the slot this pass is on, -1 if it has no cycle or nothing runs */
 int tack_recur_skips(uint8_t voice, uint8_t step);       /* it will not play on this pass */
@@ -210,11 +211,18 @@ int tack_post_lane(uint8_t voice, uint32_t dir, uint32_t speed);
 int tack_lane_start(uint8_t voice);
 int tack_post_lane_start(uint8_t voice, uint8_t start);
 #define TACK_LANE_SPEEDS 3u
-/* Morph blends the kit towards a second kit from the bank, saved with the pattern with how far it goes, 0 to 127. kit is the
- * bank's slot + 1, 0 none. The kit's own values, on the dials and in a save, do not change */
+/* Morph blends the kit towards the pattern's own target, a second kit saved with it, as is how far it goes, 0 to 127. A kit from
+ * the bank is copied in (kit: the bank's slot + 1, 0 none, which drops the target), and a parameter set on its own starts a target
+ * from the kit as it is. The kit's own values, on the dials and in a save, do not change */
 #define TACK_MORPH_KITS 128u
 int tack_morph(void);
-int tack_morph_kit(void);
+int tack_morph_kit(void);                                /* the slot the target was copied from: slot + 1, 0 none */
+int tack_post_morph_kit(uint8_t kit);
+int tack_has_target(void);
+uint8_t tack_target_value(uint16_t param);               /* the target's, or the kit's while there is none */
+const uint8_t *tack_target_name(void);                   /* 8 characters */
+int tack_post_target(uint16_t param, uint8_t value);
+int tack_morph_keeps(uint16_t param);                    /* morph leaves it as the kit has it: no target value of its own */
 void tack_kit_blended(uint8_t *values);                  /* the kit as morph has it now */
 /* Walks the kit, or one voice of it, by steps; negative goes back the same way. Returns the step reached, 0 the walk's start. The main
  * loop only. An edit or another kit starts a new walk, and voice TACK_VOICES or above is the whole kit */
@@ -222,8 +230,6 @@ int tack_mutate(uint32_t voice, int32_t steps, uint32_t seed);
 uint8_t tack_lfo_sync(uint32_t voice);          /* its clock sync, 0 free */
 int tack_lfo_once(uint32_t voice);              /* it plays once on a retrigger */
 int tack_post_morph(uint8_t amount);
-int tack_post_morph_kit(uint8_t kit);
-void tack_morph_kit_changed(void);                                     /* the bank was written: morph reads its kit again */
 void tack_morph_now(uint8_t amount);                     /* from the audio interrupt: MIDI in */
 uint32_t tack_patterns_used(void);                       /* a bit each: the patterns with a step set */
 int tack_lane_nudge_get(uint8_t voice);
@@ -260,7 +266,7 @@ uint32_t tack_kit_size(void);
 /* Patterns changed since they were saved, a bit each. Any pattern's image, for the store: pat_image_size bytes */
 uint32_t tack_dirty(void);
 #define TACK_IMG_LENGTHS 1854u         /* where a pattern image holds the lanes' lengths, and its locks */
-#define TACK_IMG_LOCKS 2137u
+#define TACK_IMG_LOCKS 2394u
 void tack_clean(uint8_t pattern);
 void tack_mark_dirty(uint8_t pattern);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);   /* its size */
