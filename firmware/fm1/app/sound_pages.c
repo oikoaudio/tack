@@ -192,9 +192,10 @@ static void pg_top(void)
         for (int k = 0; k < len; k++)
             cv_rect(240 - (8 - k) * 16, 4, 12, 11, mask >> k & 1 ? C_HI : C_DIM);
     } else {
-        if (ui.over == PAGE_FX || ui.over == PAGE_SET || ui.over == PAGE_SONG || ui.over == PAGE_SAVE || ui.over == PAGE_MIX)
+        if (ui.over == PAGE_FX || ui.over == PAGE_SET || ui.over == PAGE_SONG || ui.over == PAGE_SAVE || ui.over == PAGE_MIX ||
+            ui.over == PAGE_FRANKEN)
             cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.over == PAGE_FX ? "FX" : ui.over == PAGE_SET ? "SETTINGS" : ui.over == PAGE_SAVE ? "SAVE"
-                                                 : ui.over == PAGE_MIX ? "MIXER" : "SONG", C_HI);
+                                                 : ui.over == PAGE_MIX ? "MIXER" : ui.over == PAGE_FRANKEN ? "FRANKEN" : "SONG", C_HI);
         else
             cv_text(EDGE, TOP_LINE - 2, &FONT_B, VOICE_NAME[ui.voice], VOICE_COLOUR[ui.voice]);
         t[0] = 'P';

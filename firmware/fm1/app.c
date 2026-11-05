@@ -8,8 +8,9 @@
  *                  SEQ held: pattern 1-16
  *   black keys   the first seven select a voice and play it, or on the FX page send it to the FX; with ARP held, mute it;
  *                  with SEQ held, select it silently. REC with the sequencer running records them
- *                the eighth: ROLL held. The last: COPY held with a white key, this pattern onto that one. Each names itself
- *                in the top bar while held. The two between do nothing
+ *                the eighth: ROLL held. The ninth, MONO: FRANKEN. The tenth, POLY, held: the morph target, its values on
+ *                K1-K4 and a bank kit on PRESET. The last: COPY held with a white key, this pattern onto that one. Each names
+ *                itself in the top bar while held
  *   SEQ          tap: a voice in detail, its steps or NOTE, as last seen; tapped there, the other one
  *   OCT- OCT+    the bar               PLAY  start, stop     REC  live recording
  *                  SEL held: a bar more or less on the lane, 16 steps either way
@@ -70,7 +71,7 @@ static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 #define CELL_X(i) (EDGE + (int32_t)(i) * (CELL_W + 4))
 static const uint16_t VOICE_COLOUR[TACK_VOICES] = {RGB(224, 66, 52), RGB(224, 66, 52), RGB(224, 66, 52), RGB(240, 125, 36),
                                                      RGB(242, 194, 61), RGB(237, 230, 212), RGB(237, 230, 212)};
-enum { KEY_ROLL = TACK_VOICES, KEY_MORPH = TACK_VOICES + 2, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices */
+enum { KEY_ROLL = TACK_VOICES, KEY_FRANKEN = TACK_VOICES + 1, KEY_MORPH = TACK_VOICES + 2, KEY_COPY = TACK_VOICES + 3 };   /* the black keys after the voices: ROLL, MONO, POLY, COPY */
 
 #define SET_MAGIC 0x4B544C31u            /* "KTL1" */
 #define KIT_SLOT 256u
@@ -122,6 +123,13 @@ static struct {
     uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
     uint8_t meter[TACK_FX_SENDS];        /* the mixer's meters, falling back from each voice's peaks */
+    /* Frankenkit: K1 to K4's parents (0 none, 1 this kit, 2 on the bank's slots), the roll and its seed, each cell's parent, the
+     * kit there was before the first roll, which is "this kit" and which roll 0 gives back, and the kit the last roll made, as
+     * it went in (fk_settle), so that an edit since shows */
+    int16_t fk_parent[4];
+    int32_t fk_roll;
+    uint32_t fk_seed;
+    uint8_t fk_ready, fk_pending, fk_where[TACK_FRANKEN_CELLS], fk_before[256], fk_before_name[8], fk_kit[256], fk_last[256];
     uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
     uint8_t note_last;                   /* the detail HOME left was NOTE: where SEQ goes back to */
     uint8_t vs_shape, vs_shift, vs_centre, vs_amount;   /* the velocity page's dials: a tool's settings, kept nowhere */

@@ -65,13 +65,13 @@ wait 40
 expect velpage 0
 expect lanepage 1
 
-# the two black keys before COPY do nothing
-tapkey b8
-wait 40
-expect lanepage 1
+# POLY tapped does nothing, and MONO is Frankenkit
 tapkey b9
 wait 40
 expect lanepage 1
+tapkey b8
+wait 40
+expect frankenpage 1
 tap HOME
 wait 40
 expect songpage 0

@@ -1367,6 +1367,23 @@ static KitWalk mutate_walk;
 static uint8_t mutate_top[LXR_HOST_NUM_PARAMS], mutate_voice[LXR_HOST_NUM_PARAMS], mutate_next[LXR_HOST_NUM_PARAMS];
 static volatile uint8_t mutate_waiting;          /* the audio side has mutate_next still to take */
 
+static uint8_t franken_cell[LXR_HOST_NUM_PARAMS];   /* Frankenkit's cell + 1, 0 none */
+
+static uint32_t franken_section(const char *title)
+{
+    static const char *const NAME[] = {"OSC", "NOISE", "FM", "MOD OSC", "MOD WAVE", "TRANSIENT", "FILTER", "OUTPUT", "AMP EG", "MOD EG",
+                                       "VELOCITY", "LFO", "LFO SYNC"};
+    static const uint8_t SECTION[] = {0, 0, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 6};
+    for (uint32_t i = 0; i < sizeof SECTION; i++) {
+        const char *a = title, *b = NAME[i];
+        while (*a && *a == *b)
+            a++, b++;
+        if (!*a && !*b)
+            return SECTION[i];
+    }
+    return TACK_FRANKEN_SECTIONS;
+}
+
 static void morph_kinds(void)
 {
     for (uint32_t v = 0; v < TACK_VOICES; v++)
@@ -1374,6 +1391,9 @@ static void morph_kinds(void)
             for (int sub = 0; sub < tack_pages(v, g); sub++)
                 for (uint32_t n = 0; n < 4u; n++) {
                     const TackSlot *s = tack_slot(v, g, (uint32_t)sub, n);
+                    const uint32_t section = g == TACK_G_MAIN ? TACK_FRANKEN_SECTIONS : franken_section(tack_page_title(v, g, (uint32_t)sub));
+                    if (s && section < TACK_FRANKEN_SECTIONS)
+                        franken_cell[s->par] = (uint8_t)(1u + lxr_param_voice(v) * TACK_FRANKEN_SECTIONS + section);
                     if (s && s->label && !s->target && (s->par < PAR_VOICE_LFO1 || s->par > PAR_VOICE_LFO6)) {
                         morph_kind[s->par] = s->par >= PAR_RETRIGGER_LFO1 && s->par <= PAR_RETRIGGER_LFO6 ? MORPH_SWITCH : MORPH_BLEND;
                         mutate_top[s->par] = s->max;
@@ -1382,9 +1402,12 @@ static void morph_kinds(void)
                 }
     for (uint32_t k = 0; k < sizeof FX_KIND / sizeof FX_KIND[0]; k++)
         for (uint32_t n = 0; n < 5u; n++)
-            if (FX_KIND[k].s[n].max)
+            if (FX_KIND[k].s[n].max) {
                 morph_kind[FX_KIND[k].s[n].par] = FX_KIND[k].s[n].max >= 126u ? MORPH_BLEND : MORPH_SWITCH;
+                franken_cell[FX_KIND[k].s[n].par] = TACK_FRANKEN_CELLS;
+            }
     morph_kind[PAR_FX_TYPE] = MORPH_SWITCH;
+    franken_cell[PAR_FX_TYPE] = franken_cell[PAR_FX_DRY_WET] = TACK_FRANKEN_CELLS;
     morph_kind[PAR_FX_DRY_WET] = MORPH_BLEND;
     morph_kind[PAR_VOICE_DECIMATION_ALL] = MORPH_BLEND;
 }
@@ -1536,6 +1559,28 @@ uint8_t tack_target_value(uint16_t param)
 }
 const uint8_t *tack_target_name(void) { return extra[seq_activePattern].target.name; }
 int tack_morph_keeps(uint16_t param) { return param >= LXR_HOST_NUM_PARAMS || morph_kind[param] == MORPH_KEEP; }
+static uint32_t franken_hash(uint32_t x)
+{
+    x ^= x >> 16;
+    x *= 0x7FEB352Du;
+    x ^= x >> 15;
+    x *= 0x846CA68Bu;
+    return x ^ (x >> 16);
+}
+
+void tack_franken(const uint8_t *const *parents, uint32_t n, uint32_t seed, uint8_t *where, uint8_t *values)
+{
+    uint32_t used = 0;
+    for (uint32_t c = 0; c < TACK_FRANKEN_CELLS; c++) {
+        where[c] = (uint8_t)(franken_hash(seed * TACK_FRANKEN_CELLS + c) % n);
+        used |= 1u << where[c];
+    }
+    if (n > 1u && !(used & (used - 1u)))         /* one parent all over: another takes a cell */
+        where[franken_hash(seed) % TACK_FRANKEN_CELLS] = (uint8_t)((where[0] + 1u) % n);
+    for (uint32_t p = 0; p < LXR_HOST_NUM_PARAMS; p++)
+        values[p] = parents[franken_cell[p] ? where[franken_cell[p] - 1u] : 0u][p];
+}
+
 int tack_post_target(uint16_t param, uint8_t value)
 {
     if (tack_morph_keeps(param) || !post(EV_TARGET, (uint8_t)param, (uint8_t)(param >> 8), value))
@@ -1884,7 +1929,11 @@ static void kit_load_now(uint8_t slot)
     lxr_host_loadKit(kit_pending);
     morph_capture();
     kit_applied++;
-    if (slot != TACK_KIT_NO_SLOT) {
+    if (slot == TACK_KIT_EDIT) {                 /* the pattern's kit, made over: the bank's slot it came from stays */
+        memcpy(kit_name_now, kit_pending_name, sizeof kit_name_now);
+        kit_keep(seq_activePattern);
+        commit_active();
+    } else if (slot != TACK_KIT_NO_SLOT) {
         const int init = slot == TACK_KIT_INIT;      /* no name and no slot, as on a first start */
         if (init)
             memset(kit_name_now, 0, sizeof kit_name_now);

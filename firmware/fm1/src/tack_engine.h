@@ -55,6 +55,7 @@ int tack_post_lock_clear(uint8_t voice, uint8_t step);
 /* A whole kit from the bank: values stays untouched until tack_kit_busy() is 0. The active pattern takes it as its own */
 #define TACK_KIT_NO_SLOT 0xFFu /* a kit from outside the bank: no pattern takes it */
 #define TACK_KIT_INIT 0xFEu    /* the init kit: in no slot, and the pattern takes it */
+#define TACK_KIT_EDIT 0xFDu    /* a kit made from the one playing (Frankenkit): the pattern takes it and its name, and its slot stays */
 int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot);
 /* the init kit into the pattern, as a bank kit goes in: 0 when a kit is still on its way */
 int tack_post_init_kit(void);
@@ -223,6 +224,13 @@ uint8_t tack_target_value(uint16_t param);               /* the target's, or the
 const uint8_t *tack_target_name(void);                   /* 8 characters */
 int tack_post_target(uint16_t param, uint8_t value);
 int tack_morph_keeps(uint16_t param);                    /* morph leaves it as the kit has it: no target value of its own */
+/* Frankenkit: a kit from 1 to 4 parent kits into values, each section of each voice (OSC, its modulator, TRANSIENT, FILTER,
+ * OUTPUT, the envelopes, the LFO) and the FX whole from one of them, picked by seed, and at least two of them. What no section
+ * has, the level among it, comes from the first. where gets each cell's parent: voice * TACK_FRANKEN_SECTIONS + section, then
+ * the FX */
+#define TACK_FRANKEN_SECTIONS 7u
+#define TACK_FRANKEN_CELLS (6u * TACK_FRANKEN_SECTIONS + 1u)
+void tack_franken(const uint8_t *const *parents, uint32_t n, uint32_t seed, uint8_t *where, uint8_t *values);
 void tack_kit_blended(uint8_t *values);                  /* the kit as morph has it now */
 /* Walks the kit, or one voice of it, by steps; negative goes back the same way. Returns the step reached, 0 the walk's start. The main
  * loop only. An edit or another kit starts a new walk, and voice TACK_VOICES or above is the whole kit */
