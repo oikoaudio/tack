@@ -123,9 +123,9 @@ def demo(out):
     if not (emu / "app.wasm").exists():
         raise SystemExit("make_web: no build/emu: build.py firmware/fm1 --web first")
     pattern = (APP / "site" / "demo_pattern.bin").read_bytes()
-    magic = re.search(r'PATTERN_MAGIC = b"(\w+)"', (HERE / "tack_check.py").read_text(encoding="utf-8")).group(1)
-    if pattern[:4] != magic.encode():
-        raise SystemExit(f"make_web: site/demo_pattern.bin is not a {magic} pattern: save it again from this build")
+    magics = re.findall(r'b"(KPT\w)"', re.search(r"PATTERN_MAGICS = \(([^)]*)\)", (HERE / "tack_check.py").read_text(encoding="utf-8")).group(1))
+    if pattern[:4].decode("latin-1") not in magics:
+        raise SystemExit(f"make_web: site/demo_pattern.bin is none of {', '.join(magics)}: save it again from this build")
     objects = {"2": base64.b64encode(pattern).decode()}                    # 2: app.h's OBJ_PAT0
     settings = APP / "site" / "demo_settings.bin"                           # the tempo, which is not the pattern's
     if settings.exists():
