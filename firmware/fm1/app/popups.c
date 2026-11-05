@@ -45,7 +45,7 @@ static void draw_sel_help(void)
     }
     help_row(&y, "SAVE", "WRITE CHANGES");
     help_row(&y, "EDIT, HOLD", "CLEAR LANE");
-    help_row(&y, "HOME, HOLD", "REVERT KIT");
+    help_row(&y, "HOME, HOLD", "RELOAD KIT");
     if (on_home())                               /* not SEL's, but the next thing to want on the page a new pattern starts from */
         cv_text(10, y + 2, &FONT_XS, "HOLD SEQ AND PRESS A KEY: PATTERN", C_AMB);
     cv_blit(0, HEADER_H);

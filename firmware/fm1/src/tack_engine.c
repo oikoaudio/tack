@@ -1115,6 +1115,19 @@ static void target_from_bank(uint32_t pattern, uint8_t kit)
     target_rev++;
 }
 
+int tack_image_kit(const void *image, uint32_t len, uint8_t *values, uint8_t *name)
+{
+    const uint8_t *in = image;
+    const uint32_t head = image_ok(in, len);
+    const PatternKit *k;
+    if (!head || !in[IMG_OPTIONS + 3])
+        return 0;
+    k = (const PatternKit *)(in + (head == IMAGE_HEAD ? (uint32_t)IMG_KIT : (uint32_t)IMG_7_KIT));
+    memcpy(values, k->v, LXR_HOST_NUM_PARAMS);
+    memcpy(name, k->name, 8);
+    return 1 + in[IMG_KIT_NR];
+}
+
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len)
 {
     const uint8_t *in = image, *q;

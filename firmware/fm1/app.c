@@ -43,7 +43,7 @@
  *                  GLO held: PLAY starts the load test, and PLAY alone ends it; HOME zeroes PEAK and XRUN
  *   SELECT       tempo                 ALGORITHM  shuffle             PRESET  kit       (the first two on a screen of their own)
  *   SAVE         every changed pattern, the kit and tempo (stopped)     SEL and EDIT held a second  clear the lane
- *                                                                       SEL and HOME held a second  the kit as in the bank
+ *                                                                       SEL and HOME held a second  the kit as last saved
  */
 #include "src/tack_engine.h"
 #include "src/seq_platform.h"

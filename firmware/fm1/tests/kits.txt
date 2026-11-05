@@ -61,7 +61,8 @@ release SEL
 wait 1200
 expect param0 53
 
-# with SEL held HOME does not leave the page, and after a SAVE the bank still has the kit as it was
+# with SEL held HOME does not leave the page, and after a SAVE the hold reloads the pattern's kit as saved, while the bank
+# still has its kit as it was
 tap EDIT
 wait 40
 expect tall 1
@@ -81,12 +82,20 @@ tap SAVE
 wait 20
 release SEL
 wait 200
+turn K1 4
+wait 60
+expect param0 57
 press SEL
 wait 20
 press HOME
 wait 1200
 release HOME
 release SEL
+wait 60
+expect param0 53
+turn PRESET -1
+wait 60
+turn PRESET 1
 wait 60
 expect param0 50
 
@@ -103,7 +112,7 @@ release HOME
 release SEL
 wait 60
 expect running 1
-expect param0 50
+expect param0 53
 tap PLAY
 wait 60
 expect dropped 0

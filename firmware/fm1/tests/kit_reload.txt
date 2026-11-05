@@ -1,0 +1,51 @@
+# SEL and HOME held a second: the kit as the pattern was last saved: firmware/fm1/build/host/tack_host firmware/fm1/tests/kit_reload.txt OUTDIR
+# verify.sh writes kits.bin here: two made-up kits, every parameter of the first 40 and of the second 50. K2 on HOME is drum 1's
+# filter, parameter 37. 75 is K, of KITTWO
+wait 600
+data kits.bin 770048
+turn PRESET 2
+wait 60
+expect kitv37 50
+turn K2 10
+wait 60
+expect kitv37 60
+
+# saved with that edit, edited again, and reloaded: the saved edit, not the bank's kit and not the last edit
+press SEL
+wait 20
+tap SAVE
+wait 20
+release SEL
+wait 300
+turn K2 10
+wait 60
+expect kitv37 70
+press SEL
+wait 20
+press HOME
+wait 1100
+release HOME
+release SEL
+wait 100
+expect kitv37 60
+expect kitname0 75
+
+# a pattern never saved goes back to the bank's kit it came from
+press SEQ
+wait 20
+tapkey w1
+wait 40
+release SEQ
+wait 100
+expect pattern 1
+turn K2 5
+wait 60
+expect kitv37 65
+press SEL
+wait 20
+press HOME
+wait 1100
+release HOME
+release SEL
+wait 100
+expect kitv37 50
