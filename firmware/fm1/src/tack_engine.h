@@ -280,6 +280,9 @@ uint32_t tack_dirty(void);
 void tack_clean(uint8_t pattern);
 void tack_mark_dirty(uint8_t pattern);
 uint32_t tack_pattern_export(uint8_t pattern, void *image);   /* its size */
+/* the kit a saved pattern holds: its values (LXR_HOST_NUM_PARAMS) and name, and the bank's slot + 1 it came from, 0 none; 0 if
+ * the image is bad or the pattern had no kit of its own */
+int tack_image_kit(const void *image, uint32_t len, uint8_t *values, uint8_t *name);
 /* Loading: before the audio starts, or stopped */
 int tack_load_pattern(uint8_t pattern, const void *image, uint32_t len);   /* 0, or -1 and nothing changed */
 void tack_clear_pattern(uint8_t pattern);

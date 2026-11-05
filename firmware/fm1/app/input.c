@@ -232,7 +232,7 @@ static void input_buttons(uint32_t keys, uint32_t btn)
     if (pressed(btn, B_LFO))
         page_press(TACK_G_LFO);
     clear_hold(btn);
-    if (held_second(btn, 1u << B_SEL | 1u << B_HOME, &ui.revert_at, "TO REVERT"))
+    if (held_second(btn, 1u << B_SEL | 1u << B_HOME, &ui.revert_at, "TO RELOAD"))
         kit_revert();
     if (pressed(btn, B_EDIT) && ui.held < 0 && !(btn >> B_SEL & 1u))
         page_press(TACK_G_EDIT);

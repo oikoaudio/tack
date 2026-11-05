@@ -500,6 +500,11 @@ static void morph_target_tests(void)
     len -= 1u;
     memcpy(target_image, "KPT7", 4);
     target_image[options + 2u] = 2;
+    {
+        static uint8_t vals[256], name[8];
+        const int got = tack_image_kit(target_image, len, vals, name);
+        check("a KPT7 image gives its kit for a reload", got && vals[fp] == 120, 120, vals[fp]);
+    }
     check("a KPT7 image loads", tack_load_pattern(0, target_image, len) == 0, 0, 1);
     run(4);
     check("its bank kit as its target", tack_has_target() && tack_target_value((uint16_t)fp) == 11 && tack_morph_kit() == 2, 11,

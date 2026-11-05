@@ -887,10 +887,17 @@ static int held_second(uint32_t btn, uint32_t both, uint32_t *at, const char *wo
 }
 
 /* the kit as it is in the bank: every edit to it goes, saved or not */
+/* SEL and HOME held a second: the kit as the pattern was last saved with it. A pattern never saved, or saved without a kit of its
+ * own, goes back to the bank's kit it came from */
 static void kit_revert(void)
 {
     const int now = tack_kit_now();
-    if (now && kit_slot((uint32_t)now - 1u)) {
+    const int len = tack_kit_busy() ? -1 : plat_store_load(OBJ_PAT0 + (uint32_t)tack_pattern(), pat_buf, sizeof pat_buf);
+    const int saved = len > 0 ? tack_image_kit(pat_buf, (uint32_t)len, kit_buf + 8, kit_buf) : 0;
+    if (saved) {
+        if (tack_post_kit(kit_buf + 8, kit_buf, saved > 1 ? (uint8_t)(saved - 2) : TACK_KIT_EDIT))
+            app_say("KIT", "RELOADED");
+    } else if (now && kit_slot((uint32_t)now - 1u)) {
         kit_load(now - 1);
         app_say("KIT", "REVERTED");
     } else {
