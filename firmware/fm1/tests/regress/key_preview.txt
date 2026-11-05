@@ -10,6 +10,8 @@ expect fires1 1
 
 tap GLO
 wait 40
+tap GLO
+wait 40
 press OCT-
 wait 40
 turn K4 -1
@@ -43,6 +45,8 @@ tap SAVE
 wait 60
 tap SAVE
 wait 300
+tap GLO
+wait 40
 tap GLO
 wait 40
 press OCT-

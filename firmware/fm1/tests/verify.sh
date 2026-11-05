@@ -47,7 +47,7 @@ python3 -c "import sys; sys.stdout.buffer.write(b''.join(b'KIT%d    ' % i + byte
 python3 -c "import sys; sys.stdout.buffer.write(b'KITONE  ' + bytes([40]) * 248 + b'\xff' * 768)" > "$out/sim/kits1.bin"
 script() { (cd "$out/sim" && timeout 60 "$sim" "$root/firmware/fm1/tests/$1.txt" . 2>&1 | grep -v -E '^  ok' | tail -3); }
 python3 -c "import sys; sys.stdout.buffer.write((b'SAMPLES ' + bytes([20]) * 248) * 2)" > "$out/sim/kits_samples.bin"
-for t in keys fxswitch sequencer song song_rows note kits recur rows voice clock fxdc pages shapes lanes crush morph patkit mutate bars lfosync reverb; do
+for t in keys fxswitch sequencer song song_rows note kits recur rows voice clock fxdc pages shapes lanes crush mixer morph patkit mutate bars lfosync reverb; do
     run "script $t" script "$t"
 done
 for f in firmware/fm1/tests/regress/*.txt; do    # one script a bug, each from a fresh start

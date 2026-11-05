@@ -40,6 +40,9 @@ static void input_keys(uint32_t keys, uint32_t btn)
             } else if (ui.over == PAGE_FX) {
                 mark('F');
                 tack_post_fx_send(k, (uint8_t)!tack_fx_send(k));
+            } else if (ui.over == PAGE_MIX && (btn >> B_SEL & 1u)) {
+                ui.sel_used = 1;
+                tack_post_solo((uint8_t)k);
             } else {
                 const int screen = screen_now();  /* the same screen, whose pages may be numbered differently */
                 ui.voice = (int32_t)k;
@@ -144,7 +147,7 @@ static void input_buttons(uint32_t keys, uint32_t btn)
     if (pressed(btn, B_GLO))
         ui.glo_used = 0;
     if (((ui.btn & ~btn) >> B_GLO & 1u) && !ui.glo_used) {
-        ui.over = PAGE_SET;
+        ui.over = ui.over == PAGE_MIX || ui.over == PAGE_SET ? PAGE_SET : PAGE_MIX;
         ui.redraw = 1;
     }
     if (pressed(btn, B_ARP)) {

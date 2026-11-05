@@ -100,6 +100,8 @@ expect echo 250
 shot delay_sync.png
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K1 -60
 wait 40
 tap FX

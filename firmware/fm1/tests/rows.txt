@@ -228,6 +228,8 @@ shot back_main.png
 # USB audio, an OCT- away on GLO. The 10 channels are never saved: USB is how an update arrives, so a power-on is stereo
 tap GLO
 wait 40
+tap GLO
+wait 40
 press OCT-
 wait 40
 turn K1 1
@@ -242,6 +244,8 @@ turn K1 -1
 wait 40
 expect usb10 0
 release OCT-
+wait 40
+tap GLO
 wait 40
 tap GLO
 wait 40
@@ -327,6 +331,8 @@ tap HOME
 wait 40
 
 # RATE, every voice's sample rate, and BITS, the mix's depth: GLO, OCT- held, K2 and K3
+tap GLO
+wait 40
 tap GLO
 wait 40
 expect crush 127

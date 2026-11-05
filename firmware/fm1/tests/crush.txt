@@ -23,6 +23,8 @@ wait 1500
 wavstop
 tap GLO
 wait 40
+tap GLO
+wait 40
 press OCT-
 wait 40
 turn K2 -117

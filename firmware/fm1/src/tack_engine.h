@@ -100,6 +100,10 @@ int tack_song_pass(void);                                /* which time the row p
 void tack_song_save(uint8_t *rows);                      /* TACK_SONG_ROWS bytes, each row with its count */
 void tack_song_load(const uint8_t *rows, int on);        /* stopped; rows 0: an empty song */
 int tack_muted(uint8_t voice);
+int tack_soloed(uint8_t voice);
+int tack_audible(uint8_t voice);                         /* not muted, and soloed if any lane is */
+int tack_post_solo(uint8_t voice);                       /* soloed, or not any more; not saved */
+uint32_t tack_voice_peak(uint32_t voice);                /* the loudest sample since the last call, 0 to 32768; the hats share one */
 uint16_t tack_bpm(void);
 uint8_t tack_shuffle(void);
 int tack_recording(void);

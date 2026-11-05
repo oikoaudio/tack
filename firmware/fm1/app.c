@@ -36,7 +36,8 @@
  *                  is the voice. REC on writes them: running live, stopped step by step. SEL and SELECT select a step, K1 its
  *                  note, K2 its velocity, K3 how hard the keys write, K4 on or off, and ALGORITHM nudges it
  *   FX           the FX pages: type, mix, two settings, then the type's others
- *   GLO          the settings page: tempo, shuffle, external MIDI clock, roll rate, the load
+ *   GLO          the mixer: a strip a lane, and the voice's level, pan, FX send and drive; SEL and a black key solo.
+ *                  Again, the settings page: tempo, shuffle, external MIDI clock, roll rate, the load
  *   ARP          the selected lane: LANE, EUCL and VEL in turn. SEQ held with it: SONG, where the white keys fill the rows
  *                  GLO held: PLAY starts the load test, and PLAY alone ends it; HOME zeroes PEAK and XRUN
  *   SELECT       tempo                 ALGORITHM  shuffle             PRESET  kit       (the first two on a screen of their own)
@@ -120,6 +121,7 @@ static struct {
     uint8_t keys_quiet;                  /* PREVIEW off: settings_t's */
     uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
+    uint8_t meter[TACK_FX_SENDS];        /* the mixer's meters, falling back from each voice's peaks */
     uint8_t note_mode, note_step, note_vel;   /* NOTE: the keys are notes; the step it writes next, how hard */
     uint8_t note_last;                   /* the detail HOME left was NOTE: where SEQ goes back to */
     uint8_t vs_shape, vs_shift, vs_centre, vs_amount;   /* the velocity page's dials: a tool's settings, kept nowhere */

@@ -114,7 +114,7 @@ static void lights(void)
         btn |= 1u << B_LFO;
     if (tack_recording())
         btn |= 1u << B_REC;
-    if (ui.over == PAGE_SET)
+    if (ui.over == PAGE_SET || ui.over == PAGE_MIX)
         btn |= 1u << B_GLO;
     if (arp_page() || ui.over == PAGE_SONG)
         btn |= 1u << (arp_page() ? B_ARP : B_SEQ);

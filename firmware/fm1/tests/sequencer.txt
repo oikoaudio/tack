@@ -126,6 +126,8 @@ wait 40
 expect bpm 130
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K2 20
 wait 40
 expect shuffle 20
@@ -329,6 +331,8 @@ expect page 0
 # the settings page
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K1 3
 wait 40
 expect bpm 133
@@ -344,6 +348,8 @@ expect ext 1
 turn K3 -1
 wait 40
 expect ext 0
+tap GLO
+wait 40
 tap GLO
 wait 40
 # Euclid, ARP's second screen: drum 3, a lane of 8 with 3 hits. Opening it changes nothing; a turn writes the lane
@@ -431,9 +437,13 @@ key 17 up
 wait 40
 tap GLO
 wait 40
+tap GLO
+wait 40
 turn K4 -2
 wait 40
 expect roll 3
+tap GLO
+wait 40
 tap GLO
 wait 40
 # the bars view: a held step takes all four dials, and SEL held K4 nudges the lane
