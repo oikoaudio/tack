@@ -246,11 +246,11 @@ def song(o):
     right_btn(o, "SAVE", OY + 585, ["SAVE", "patterns, song, kit (stopped)", "SEL + SAVE: at once"], ch=2)
 
 def glo(o):
-    k_bracket(o, ["K1–K4", "mixer: level · pan · FX send · drive", "settings: tempo · shuffle · MIDI clock · roll rate"])
+    k_bracket(o, ["K1–K4", "mixer: level · pan · FX send · drive", "settings: tempo · shuffle · rate · bits"])
     screen_top(o, ["SCREEN", "Mixer: a strip a lane, with level,", "meter, pan, FX, M muted, S soloed"])
-    oct_left(o, ["OCT− HELD", "settings: USB audio, rate,", "bits, preview"])
+    oct_left(o, ["OCT− HELD", "settings: USB audio, MIDI clock,", "preview, roll rate"])
     voices_left(o, ["VOICE KEYS", "mixer: pick the strip", "SEL held: solo", "ARP held: mute"])
-    roll_poly_copy(o, roll=["ROLL", "its rate: K4 on settings"])
+    roll_poly_copy(o, roll=["ROLL", "its rate: OCT− K4 on settings"])
     right_btn(o, "GLO", OY + 60, ["GLO", "the mixer, again the settings,", "again the mixer"])
 
 def sound(o):

@@ -25,7 +25,7 @@ static void save(void)
     if (ui.save_hold || ui.save_todo)
         return;
     mark('S');
-    plat_tick_gap();                     /* what this save held the tick up by: the USB AUDIO row */
+    plat_tick_gap();                     /* what this save held the tick up by: the USB row */
     if (save_settings() != 0) {
         app_say("SAVE", "FAILED");
         return;

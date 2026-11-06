@@ -339,15 +339,19 @@ expect bpm 133
 turn K2 5
 wait 40
 expect shuffle 25
-turn K3 -1
+press OCT-
+wait 40
+turn K2 -1
 wait 40
 expect ext 0
-turn K3 1
+turn K2 1
 wait 40
 expect ext 1
-turn K3 -1
+turn K2 -1
 wait 40
 expect ext 0
+release OCT-
+wait 40
 tap GLO
 wait 40
 tap GLO
@@ -439,7 +443,11 @@ tap GLO
 wait 40
 tap GLO
 wait 40
+press OCT-
+wait 40
 turn K4 -2
+wait 40
+release OCT-
 wait 40
 expect roll 3
 tap GLO

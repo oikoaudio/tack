@@ -124,8 +124,9 @@ static void pg_set_load(uint32_t *last)
 
 static void pg_set_row(uint32_t *last)
 {
-    const uint32_t ext = (uint32_t)tack_ext_sync();
-    uint32_t key = rk(rk(rk(rk(13u + (ui.btn >> B_OCTDN & 1u), tack_bpm()), tack_shuffle()), ext), (uint32_t)tack_roll_rate());
+    const uint32_t rate = tack_get_param(tack_rate_param()), bits = (uint32_t)tack_bits();
+    uint32_t key = rk(rk(rk(rk(13u + (ui.btn >> B_OCTDN & 1u), tack_bpm()), tack_shuffle()), rate), bits);
+    char t[4];
     if (key == *last)
         return;
     *last = key;
@@ -135,10 +136,11 @@ static void pg_set_row(uint32_t *last)
     pg_column(0, "TEMPO", 1);
     wd_value(1, tack_shuffle(), 127, 1, 1);
     pg_column(1, "SHUFFLE", 1);
-    wd_toggle(PG_CW * 2 + PG_CW / 2, 0, (int)ext, C_HI);
-    pg_column(2, "MIDI CLK", 1);
-    wd_box(PG_CW * 3 + PG_CW / 2, 0, tack_roll_name(tack_roll_rate()), C_HI);
-    pg_column(3, "ROLL", 1);
+    wd_value(2, rate, 127, 1, 1);
+    pg_column(2, "RATE", 1);
+    int_text(2 + (int32_t)((bits * 14u + 63u) / 127u), t);
+    wd_dial_text(3, t, bits, 127, 1);
+    pg_column(3, "BITS", 1);
     cv_blit(0, PG_Y + PG_RH);
 }
 
@@ -146,18 +148,18 @@ static void pg_set_row(uint32_t *last)
 static void pg_set_usb(uint32_t *last)
 {
     const int on = (ui.btn >> B_OCTDN & 1u) != 0u, diag = ui.usb10 && (ui.btn >> B_OCTUP & 1u);
-    const uint32_t drops = usb_drops(), rate = tack_get_param(tack_rate_param()), bits = (uint32_t)tack_bits();
+    const uint32_t drops = usb_drops(), ext = (uint32_t)tack_ext_sync();
     uint32_t st[4], key;
     usb_pump_stats(st);
-    key = rk(rk(rk(rk(rk(rk(rk(rk(rk(rk(rk(31u, (uint32_t)on), ui.usb10), drops), st[0]), st[1]), st[2]), st[3]), ui.save_gap), rate), bits), (uint32_t)diag);
-    key = rk(key, ui.keys_quiet);
+    key = rk(rk(rk(rk(rk(rk(rk(rk(rk(31u, (uint32_t)on), ui.usb10), drops), st[0]), st[1]), st[2]), st[3]), ui.save_gap), (uint32_t)diag);
+    key = rk(rk(rk(key, ui.keys_quiet), ext), (uint32_t)tack_roll_rate());
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
     row_lines(on ? (diag ? 0x7u : 0xFu) : 0u, C_HI);
     wd_box(PG_CW / 2, 0, ui.usb10 ? "10 CH" : "STEREO", on ? C_HI : C_GRAY);
-    pg_column(0, "USB AUDIO", on);
+    pg_column(0, "USB", on);
     if (diag) {                                  /* OCT+ held: what USB audio has been doing */
         char t[12];
         wd_value(1, drops, 0, 1, 0);
@@ -178,14 +180,12 @@ static void pg_set_usb(uint32_t *last)
         int_text((int32_t)(ui.save_gap / 1000u), t + 1);
         cv_text(PG_CW * 2 + 4, 48, &FONT_S, t, on ? C_WHITE : PG_TEXT);
     } else {
-        char t[4];
-        wd_value(1, rate, 127, on, 1);
-        pg_column(1, "RATE", on);
-        int_text(2 + (int32_t)((bits * 14u + 63u) / 127u), t);
-        wd_dial_text(2, t, bits, 127, on);
-        pg_column(2, "BITS", on);
-        wd_toggle(PG_CW * 3 + PG_CW / 2, 0, !ui.keys_quiet, on ? C_HI : C_GRAY);
-        pg_column(3, "PREVIEW", on);
+        wd_toggle(PG_CW + PG_CW / 2, 0, (int)ext, on ? C_HI : C_GRAY);
+        pg_column(1, "MIDI CLK", on);
+        wd_toggle(PG_CW * 2 + PG_CW / 2, 0, !ui.keys_quiet, on ? C_HI : C_GRAY);
+        pg_column(2, "PREVIEW", on);
+        wd_box(PG_CW * 3 + PG_CW / 2, 0, tack_roll_name(tack_roll_rate()), on ? C_HI : C_GRAY);
+        pg_column(3, "ROLL", on);
     }
     cv_blit(0, PG_Y + 2u * PG_RH);
 }
