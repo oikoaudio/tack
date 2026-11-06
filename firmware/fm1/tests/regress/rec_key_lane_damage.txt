@@ -4,7 +4,11 @@ tap GLO
 wait 40
 tap GLO
 wait 40
-turn K3 1
+press OCT-
+wait 40
+turn K2 1
+wait 40
+release OCT-
 wait 40
 tap HOME
 wait 40

@@ -25,23 +25,15 @@ tap GLO
 wait 40
 tap GLO
 wait 40
-press OCT-
-wait 40
-turn K2 -117
-wait 40
-release OCT-
+turn K3 -117
 wait 40
 expect crush 10
 wav crush_on.wav
 wait 1500
 wavstop
-press OCT-
+turn K3 117
 wait 40
-turn K2 117
-wait 40
-turn K3 -110
-wait 40
-release OCT-
+turn K4 -110
 wait 40
 expect crush 127
 expect bits 17
@@ -53,11 +45,8 @@ wait 1200
 wav bits_quiet.wav
 wait 800
 wavstop
-press OCT-
 wait 300
 shot glo_low.png
-release OCT-
-wait 40
 
 # BITS is the pattern's: a copy takes it, an empty pattern has none, and it comes back with its pattern
 tap HOME

@@ -330,7 +330,7 @@ wait 40
 tap HOME
 wait 40
 
-# RATE, every voice's sample rate, and BITS, the mix's depth: GLO, OCT- held, K2 and K3
+# RATE, every voice's sample rate, and BITS, the mix's depth: GLO, K3 and K4
 tap GLO
 wait 40
 tap GLO
@@ -338,27 +338,23 @@ wait 40
 expect crush 127
 expect bits 127
 expect bitslabel 16
-press OCT-
-wait 40
-turn K2 -100
+turn K3 -100
 wait 40
 expect crush 27
-turn K2 100
+turn K3 100
 wait 40
 expect crush 127
-turn K3 -64
+turn K4 -64
 wait 40
 expect bits 63
 expect bitslabel 9
-turn K3 -200
+turn K4 -200
 wait 40
 expect bits 0
 expect bitslabel 2
-turn K3 127
+turn K4 127
 wait 40
 expect bits 127
-release OCT-
-wait 40
 tap HOME
 wait 40
 expect dropped 0
