@@ -14,7 +14,7 @@ tap GLO
 wait 40
 press OCT-
 wait 40
-turn K4 -1
+turn K3 -1
 wait 40
 expect keysquiet 1
 release OCT-
@@ -51,7 +51,7 @@ tap GLO
 wait 40
 press OCT-
 wait 40
-turn K4 1
+turn K3 1
 wait 40
 expect keysquiet 0
 release OCT-

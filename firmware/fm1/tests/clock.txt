@@ -1,6 +1,6 @@
 # External MIDI clock through the app, as a DAW sends it: Start, then 24 pulses a quarter, then Stop.
-# (480, not 600: the second GLO below takes 120 ms, and the clock checks need the time they always had)
-wait 480
+# (396, not 600: the second GLO, OCT- and its release below take 204 ms, and the clock checks need the time they always had)
+wait 396
 # drum 1 on steps 0 and 4
 tapkey 0
 wait 40
@@ -8,12 +8,16 @@ tapkey 7
 wait 40
 expect step0 1
 expect step4 1
-# GLO, the third knob: external clock
+# GLO, OCT- held, the second knob: external clock
 tap GLO
 wait 40
 tap GLO
 wait 40
-turn K3 1
+press OCT-
+wait 40
+turn K2 1
+wait 40
+release OCT-
 wait 40
 # PLAY does nothing while the clock runs things, and says so, then the message goes
 expect msgext 0
@@ -1298,7 +1302,11 @@ tap GLO
 wait 40
 tap GLO
 wait 40
-turn K3 -1
+press OCT-
+wait 40
+turn K2 -1
+wait 40
+release OCT-
 wait 40
 expect ext 0
 expect bpm 120
