@@ -1,0 +1,8 @@
+{
+  "what": "A seven-voice drum synth on the LXR firmware's engine. Its step sequencer has per-lane length and direction. Steps have parameter locks, chance and pass conditions, so one pattern can change from pass to pass. It loads LXR-02 .SND kits, sends 10 channels of USB audio and syncs to MIDI clock.",
+  "author": "oikoaudio",
+  "kinds": ["drums"],
+  "play": "https://oikoaudio.com/tack/fm1/try/",
+  "cheat": "https://oikoaudio.com/manuals/tack-fm1/cheat-sheet/",
+  "image": "docs/images/fm1-overview.png"
+}
