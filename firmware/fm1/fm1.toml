@@ -1,7 +1,7 @@
 # Tack for the M-VAVE FM-1 (third_party/fm1-base's tools/build.py). Build from the repository root: the -I paths
 # below are relative to it. See firmware/fm1/README.md.
 name = "TACK"
-id_prefix = "FM-1_47"           # dev builds FM-1_4700
+id_prefix = "FM-1_75"           # dev builds FM-1_7500
 usb_manufacturer = "oikoaudio"
 usb_product = "TACK FM-1"
 words = "words.tsv"
