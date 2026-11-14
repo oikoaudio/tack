@@ -127,6 +127,9 @@ static struct {
     uint8_t over;                        /* the page over the group's: 0 none, or a PAGE_ of view.c. One at a time, by being one value */
     uint8_t song_row, chain_n;           /* the row the SONG page edits; the keys taken while SEQ is held */
     uint8_t meter[TACK_FX_SENDS];        /* the mixer's meters, falling back from each voice's peaks */
+    uint16_t out_meter;                  /* and the output's, after MASTER, in sixteenths of meter_level's units */
+    uint32_t out_clip;                   /* the mix reached full scale: red until then, 0 not */
+    uint32_t out_drawn;                  /* what the screen shows of it, 0 nothing */
     /* Frankenkit: K1 to K4's parents (RANDOM -1, NONE 0, this kit 1, 2 on the bank's slots), the combos made, newest last, with
      * fk_roll of them showing (0: the kit before), the kit before the first, which is "this kit" and which 0 gives back, and the
      * kit the last combo made, as it went in (fk_settle), so that an edit since shows */
@@ -540,6 +543,7 @@ static void draw(void)
         cv_text(240 - EDGE - text_w(&FONT_XS, "FX"), 28, &FONT_XS, "FX", C_HI);
     for (int b = 0; b < (int)TACK_BARS; b++)   /* just over the grid, all of them: the one it shows, those in use, and the room for more */
         cv_rect(240 - EDGE - ((int)TACK_BARS - b) * 14 + 2, 44, 12, 3, b == ui.bar ? C_WHITE : b < bars_used() ? C_GRAY : C_LINE);
+    out_meter_in_header();
     cv_blit(0, 0);
 header_done:
     draw_grid();
@@ -683,10 +687,12 @@ void app_frame(void)
         head = h;
         ui.redraw = 1;
     }
+    out_meter_update();
     if (ui.redraw) {
         ui.redraw = 0;
         draw();
     }
+    out_meter_frame();
 }
 
 #include "app/test_hooks.c"
