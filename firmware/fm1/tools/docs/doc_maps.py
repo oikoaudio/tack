@@ -288,7 +288,7 @@ MODES = [
     ("seq", "One voice: the bars view and the note view", "SEQ; again for the note view", {"K", "W", "SELECT", "ALGORITHM", "REC", "SEL"}, seq,
      {"SEQ"}, [("SEQ",)]),
     ("arp", "The lane: Lane, Euclid and Vel shape", "ARP; again for each screen", {"K", "W", "ALGORITHM"}, arp, {"ARP"}, [("ARP",)]),
-    ("song", "Patterns, chains and the song", "SEQ held with a white key for a pattern, with ARP for the song", {"K", "W", "SEL", "SAVE", "PLAY"}, song,
+    ("song", "Patterns, chains and song mode", "SEQ held with a white key for a pattern, with ARP for the song", {"K", "W", "SEL", "SAVE", "PLAY"}, song,
      {"SEQ", "ARP"}, [("SEQ", "held"), ("ARP",)]),
     ("glo", "The mixer and the settings", "GLO; again for the settings, again for the mixer", {"K", "SELECT", "OCT-"}, glo, {"GLO"}, [("GLO",)]),
     ("sound", "The voice's sound and the FX", "EDIT, ENV, LFO or FX", {"K", "SELECT", "OCT-", "OCT+"}, sound, {"EDIT", "ENV", "LFO", "FX"},
