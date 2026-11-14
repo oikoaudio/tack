@@ -92,7 +92,7 @@ static int morph_shown(const TackSlot *sl) { return sl && morph_held() && !sl->t
  * the same: this is only what shows */
 #define HOLD_SHOW_MS 500u
 /* A step's recurrence as the panel shows it, a lane of eight slots: every pass is all eight playing, as the engine's cycle of
- * one is. SELECT shortens it, down to two, and the keys take slots out. Eight all playing goes back to every pass */
+ * one is. A slot key held and another pressed shortens it, and a tap takes a slot out. Eight all playing goes back to every pass */
 static int recur_len(uint8_t v, uint8_t s) { return tack_recur_len(v, s) == 1 ? (int)TACK_RECUR_MAX : tack_recur_len(v, s); }
 static int recur_mask(uint8_t v, uint8_t s) { return tack_recur_len(v, s) == 1 ? (1 << TACK_RECUR_MAX) - 1 : tack_recur_mask(v, s); }
 static void recur_set(uint8_t v, uint8_t s, int len, int mask)

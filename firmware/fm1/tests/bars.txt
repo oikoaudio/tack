@@ -8,7 +8,11 @@ key 0 down
 wait 40
 turn K1 3
 wait 40
-turn SELECT -6
+key 1 down
+wait 20
+tapkey 3
+wait 20
+key 1 up
 wait 40
 tapkey 3
 wait 40

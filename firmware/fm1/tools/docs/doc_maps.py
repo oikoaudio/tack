@@ -206,11 +206,12 @@ def roll_poly_copy(o, roll=None, poly=None, copy=None, mono=None):
 
 def home(o):
     k_bracket(o, ["K1–K4", "the voice's pitch, filter, decay, volume", "a step held: lock the value on that step"])
-    select_top(o, ["SELECT", "tempo · SEL held: shuffle", "a step held: recurrence"])
+    select_top(o, ["SELECT", "tempo · SEL held: shuffle"])
     algo_top(o, ["ALGORITHM", "morph · SEL held: mutate voice", "a step held: nudge it"])
     presets_left(o, ["PRESETS", "a kit from the bank", "SEL held: mutate the kit", "a step held: its chance"])
     oct_left(o, ["OCT− OCT+", "the bar shown", "SEL held: a bar less, more"])
-    voices_left(o, ["VOICE KEYS", "select and play the voice", "ARP held: mute", "SEQ held: select silently"])
+    voices_left(o, ["VOICE KEYS", "select and play the voice", "ARP held: mute", "SEQ held: select silently",
+                    "a step held: its passes, 1–8"])
     keys_bracket(o, ["WHITE KEYS · STEPS 1–16", "tap: a step on or off", "hold: edit that step", "SEL held: the lane's last step"], x=wkey(4)[0])
     roll_poly_copy(o, ["ROLL", "held: roll", "the voice"], ["POLY", "held: the", "morph target"], ["COPY", "+ a white key:", "copy the pattern"], ["MONO", "Franken"])
     right_btn(o, "SEL", OY + 60, ["SEL", "held 1 s: help", "+ EDIT 1 s: clear the lane"])
