@@ -22,6 +22,13 @@ static void row_lines_at(uint32_t dials, int32_t y, uint16_t c)
 
 static void row_lines(uint32_t dials, uint16_t c) { row_lines_at(dials, PG_RH - 3, c); }
 
+/* the colour a step towards black: a sound page's lines while their dials rest */
+static uint16_t dimmer(uint16_t c)
+{
+    const uint32_t r = c >> 11, g = c >> 5 & 63u, b = c & 31u;
+    return (uint16_t)((r * 5u / 8u) << 11 | (g * 5u / 8u) << 5 | (b * 5u / 8u));
+}
+
 /* a pixel a fifteenth at a time over what is on the canvas, as cv_text's anti-aliased faces */
 static void cv_mix(int32_t x, int32_t y, uint16_t c, uint32_t a)
 {
