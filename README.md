@@ -152,3 +152,5 @@ That firmware grew out of the original LXR by Julian Schmidt of Sonic Potions, p
 Tack's plugin, editor and host code is by oikoaudio, at [github.com/oikoaudio/tack](https://github.com/oikoaudio/tack). The VST3 and the Audio Unit are made from the CLAP with [clap-wrapper](https://github.com/free-audio/clap-wrapper) by the CLAP team.
 
 VST is a registered trademark of Steinberg Media Technologies GmbH.
+
+You can also try Tack in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
