@@ -92,7 +92,7 @@ static void kit_step(int32_t e)
         app_say("KITS", kit_slot(0) ? "END" : "NONE LOADED");
 }
 
-static uint32_t fx_slot(uint32_t knob) { return ui.btn >> B_OCTDN & 1u ? TACK_FX_C + knob : knob; }
+static uint32_t fx_slot(uint32_t knob) { return row_at() == 2 ? TACK_FX_C + knob : knob; }
 
 static void fx_turn(uint32_t slot, int32_t e)
 {
@@ -113,13 +113,13 @@ static void fx_turn(uint32_t slot, int32_t e)
     }
 }
 
-/* the settings page. The tempo and shuffle knobs stay on SELECT and ALGORITHM too */
+/* the settings page. The tempo and shuffle are on SELECT too, where it has no rows to pick */
 static void set_turn(uint32_t slot, int32_t e)
 {
     if (ui.held >= 0) {
         ui.held_used = 1;
         app_say("LOCKS", "VOICE PAGE");
-    } else if (ui.btn >> B_OCTDN & 1u) {         /* the row below */
+    } else if (row_at() == 2) {                  /* the row below */
         if (slot == 0u && tack_running())
             app_say("STOP FIRST", "");
         else if (slot == 0u)
@@ -990,6 +990,27 @@ static void lane_bar(int32_t bars)
     note_cursor_to((uint32_t)(next - 1) / 16u * 16u);
     int_text(next, t);
     app_say("LENGTH", t);
+}
+
+/* SELECT on a page with rows: a row down for each step right, up for each left, and no further than the last */
+static void row_step(int32_t e)
+{
+    const uint32_t m = row_choices();
+    const int dir = e > 0 ? 1 : -1;
+    int r = row_picked();
+    for (; e; e -= dir) {
+        int n = r + dir;
+        while (n >= 0 && n < SCREEN_ROWS && !(m >> n & 1u))
+            n += dir;
+        if (n < 0 || n >= SCREEN_ROWS)
+            break;
+        r = n;
+    }
+    ui.row_move = (int8_t)(r - 1);
+    ui.touched_until = 0;                        /* the header named a dial of the row left */
+    if (ui.held >= 0)
+        held_read(1);
+    ui.redraw = 1;
 }
 
 static void tempo_show(int shuffle)
