@@ -174,6 +174,8 @@ static struct {
     int8_t touched_row;                  /* the row it was on: an OCT since shows another */
     uint8_t last_row[4];                 /* each group's middle row when it was left */
     int8_t row_seen;                     /* the row a held step's knobs started from */
+    int8_t row_move;                     /* SELECT's row, from the middle: -1 above, 1 below */
+    uint32_t row_page;                   /* the page it was picked on */
     uint8_t sel_used;                    /* so was SEL */
     uint8_t sel_was;                     /* the lane's length was showing */
     uint32_t sel_at;                     /* when SEL went down */

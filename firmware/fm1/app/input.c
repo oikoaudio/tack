@@ -271,6 +271,10 @@ static void input_buttons(uint32_t keys, uint32_t btn)
         ui.redraw = 1;
     }
     ui.btn = btn;
+    if (ui.row_page != row_page_id()) {
+        ui.row_page = row_page_id();
+        ui.row_move = 0;
+    }
     if (ui.held >= 0 && ui.row_seen != row_now()) {   /* a step held: the row reached starts from its own values */
         held_read(1);
         ui.redraw = 1;
@@ -328,6 +332,8 @@ static void input_dials(uint32_t btn)
         ui.sel_used |= (uint8_t)(btn >> B_SEL & 1u);
         if (ui.over == PAGE_SAVE)
             save_slot(e);
+        else if (row_choices())
+            row_step(e);
         else if (ui.held >= 0)
             recur_turn(e);
         else if (seq_detail() && (btn >> B_SEL & 1u))

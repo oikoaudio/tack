@@ -11,9 +11,9 @@ static void toggle_step(uint8_t s)
 }
 
 /* A sound page is four dials and a picture, as the OP-1's: one row of the three a screen holds, each one of the LXR's menu
- * pages. The dials are on the middle row, its most used, and an OCT held swaps in the row above or below for as long as it is
- * held, so there is never a row to keep track of. The rows are in the same place on every voice, whichever pages it has.
- * ui.sub is the page of the middle row */
+ * pages. The dials start on the middle row, its most used. SELECT moves them to another row until the page changes, and an
+ * OCT held reaches the row above or below for as long as it is held. The rows are in the same place on every voice, whichever
+ * pages it has. ui.sub is the page of the middle row */
 #define SCREEN_ROWS 3
 #define NO_PAGE (-1)
 #define PITCH_ROW 20                     /* a row of no page of its own: FINE and what moves the pitch, beside the oscillator */
@@ -164,11 +164,39 @@ static int screen_page(int screen, int row)
 
 static int screen_now(void) { return ui.group == TACK_G_EDIT && ui.sub != 0; }
 
+/* the rows SELECT can reach here, a bit each, 0 the top: FX and the settings have theirs under a row with no dials */
+static uint32_t row_choices(void)
+{
+    uint32_t m = 0;
+    if (sound_page()) {
+        for (int r = 0; r < SCREEN_ROWS; r++)
+            m |= (uint32_t)(screen_page(screen_now(), r) != NO_PAGE) << r;
+    } else if (ui.over == PAGE_FX || ui.over == PAGE_SET) {
+        m = 6u;
+    }
+    return m;
+}
+
+/* a page's identity for SELECT's row, which a new one starts in the middle of: the voice is not in it */
+static uint32_t row_page_id(void) { return (uint32_t)ui.over << 8 | (uint32_t)ui.group << 4 | (uint32_t)screen_now(); }
+
+static int row_picked(void)
+{
+    const int r = 1 + ui.row_move;
+    return row_choices() >> r & 1u ? r : 1;
+}
+
+/* both OCTs held is the bottom row: GLO's USB row has a second view under OCT+ */
+static int row_at(void)
+{
+    return ui.btn >> B_OCTDN & 1u ? 2 : ui.btn >> B_OCTUP & 1u ? 0 : row_picked();
+}
+
 static int row_now(void)
 {
     if (ui.over == PAGE_MIX)
         return MIX_ROW;
-    const int r = ui.btn >> B_OCTUP & 1u ? 0 : ui.btn >> B_OCTDN & 1u ? 2 : 1;
+    const int r = row_at();
     const int page = sound_page() ? screen_page(screen_now(), r) : NO_PAGE;
     return page == NO_PAGE ? ui.sub : page;
 }

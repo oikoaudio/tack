@@ -27,7 +27,7 @@ static void draw_sel_help(void)
     cv_text(10, 3, &FONT_XS, "HOLD SEL AND", C_AMB);
     if (seq_detail())
         help_row(&y, "SELECT", "JUMP A BAR");
-    else if (!saving && ui.over != PAGE_SONG)
+    else if (!saving && ui.over != PAGE_SONG && !row_choices())
         help_row(&y, "SELECT", "SHUFFLE");
     if (!saving && ui.over != PAGE_SONG && !keys_notes(ui.btn))
         help_row(&y, "WHITE KEY", "LANE LENGTH");

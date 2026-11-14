@@ -16,7 +16,7 @@ def panel_svg():
         if fn:
             a(f'<text x="{x}" y="{y+r+24}" class="d-fn">{fn}</text>')
     knob(105, 100, 24, "MASTER", "volume")
-    knob(215, 100, 24, "SELECT", "tempo")
+    knob(215, 100, 24, "SELECT", "tempo · row")
     knob(105, 205, 24, "PRESETS", "kit")
     knob(215, 205, 24, "ALGORITHM", "morph")
     for i, fn in enumerate(["pitch", "filter", "decay", "volume"]):

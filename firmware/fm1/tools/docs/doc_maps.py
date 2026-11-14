@@ -248,17 +248,19 @@ def song(o):
 def glo(o):
     k_bracket(o, ["K1–K4", "mixer: level · pan · FX send · drive", "settings: tempo · shuffle · rate · bits"])
     screen_top(o, ["SCREEN", "Mixer: a strip a lane, with level,", "meter, pan, FX, M muted, S soloed"])
-    oct_left(o, ["OCT− HELD", "settings: USB audio, MIDI clock,", "preview, roll rate"])
+    select_top(o, ["SELECT", "settings: the row below,", "USB audio, MIDI clock, preview, roll"])
+    oct_left(o, ["OCT− HELD", "settings: the row below,", "while held"])
     voices_left(o, ["VOICE KEYS", "mixer: pick the strip", "SEL held: solo", "ARP held: mute"])
-    roll_poly_copy(o, roll=["ROLL", "its rate: OCT− K4 on settings"])
+    roll_poly_copy(o, roll=["ROLL", "its rate: K4, the settings' row below"])
     right_btn(o, "GLO", OY + 60, ["GLO", "the mixer, again the settings,", "again the mixer"])
 
 def sound(o):
-    k_bracket(o, ["K1–K4", "the page's middle row", "a step held: lock the value on it"])
-    screen_top(o, ["SCREEN", "three rows of four,", "the middle one on the dials"])
-    oct_left(o, ["OCT+ OCT− HELD", "the dials reach the top", "or the bottom row"])
+    k_bracket(o, ["K1–K4", "the row SELECT picked", "a step held: lock the value on it"])
+    screen_top(o, ["SCREEN", "three rows of four,", "the one on the dials underlined"])
+    select_top(o, ["SELECT", "picks the row on K1–K4,", "the middle one on a new page"])
+    oct_left(o, ["OCT+ OCT− HELD", "the top or bottom row,", "while held"])
     voices_left(o, ["VOICE KEYS", "another voice, same page", "on FX: send it to the FX"])
-    right_btn(o, "FX", OY - 70, ["FX", "type · mix · two settings", "OCT− held: the rest"], ch=1)
+    right_btn(o, "FX", OY - 70, ["FX", "type · mix · two settings", "the row below: the rest"], ch=1)
     right_btns(o, ["ENV", "LFO", "EDIT"], OY + 50, ["EDIT ENV LFO", "the voice's sound", "EDIT: two screens"], ch=0)
 
 def kits(o):
@@ -286,8 +288,8 @@ MODES = [
     ("arp", "The lane: Lane, Euclid and Vel shape", "ARP; again for each screen", {"K", "W", "ALGORITHM"}, arp, {"ARP"}, [("ARP",)]),
     ("song", "Patterns, chains and the song", "SEQ held with a white key for a pattern, with ARP for the song", {"K", "W", "SEL", "SAVE", "PLAY"}, song,
      {"SEQ", "ARP"}, [("SEQ", "held"), ("ARP",)]),
-    ("glo", "The mixer and the settings", "GLO; again for the settings, again for the mixer", {"K", "OCT-"}, glo, {"GLO"}, [("GLO",)]),
-    ("sound", "The voice's sound and the FX", "EDIT, ENV, LFO or FX", {"K", "OCT-", "OCT+"}, sound, {"EDIT", "ENV", "LFO", "FX"},
+    ("glo", "The mixer and the settings", "GLO; again for the settings, again for the mixer", {"K", "SELECT", "OCT-"}, glo, {"GLO"}, [("GLO",)]),
+    ("sound", "The voice's sound and the FX", "EDIT, ENV, LFO or FX", {"K", "SELECT", "OCT-", "OCT+"}, sound, {"EDIT", "ENV", "LFO", "FX"},
      [("EDIT",), ("ENV",), ("LFO",), ("FX",)]),
     ("kits", "Kits, morph and Frankensound", "MONO for Franken; POLY held for the morph target", {"PRESETS", "ALGORITHM", "K", "HOME", "SAVE"}, kits,
      {"MONO", "POLY"}, [("MONO", None, "key"), ("POLY", "held", "key")]),

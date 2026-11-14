@@ -52,7 +52,7 @@ static void pg_fx_sends(uint32_t *last)
 
 static void pg_fx_row(uint32_t r, uint32_t *last)
 {
-    const int on = (r == 2u) == ((ui.btn >> B_OCTDN & 1u) != 0u);
+    const int on = (r == 2u) == (row_at() == 2);
     const uint32_t first = r == 1u ? (uint32_t)TACK_FX_TYPE : (uint32_t)TACK_FX_C, n = r == 1u ? 4u : 3u;
     const int echo = r == 2u ? tack_fx_delay_ms() : 0;
     uint32_t key = rk(r, (uint32_t)on);
@@ -125,13 +125,13 @@ static void pg_set_load(uint32_t *last)
 static void pg_set_row(uint32_t *last)
 {
     const uint32_t rate = tack_get_param(tack_rate_param()), bits = (uint32_t)tack_bits();
-    uint32_t key = rk(rk(rk(rk(13u + (ui.btn >> B_OCTDN & 1u), tack_bpm()), tack_shuffle()), rate), bits);
+    uint32_t key = rk(rk(rk(rk(13u + (uint32_t)(row_at() == 2), tack_bpm()), tack_shuffle()), rate), bits);
     char t[4];
     if (key == *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
-    row_lines(ui.btn >> B_OCTDN & 1u ? 0u : 0xFu, C_HI);
+    row_lines(row_at() == 2 ? 0u : 0xFu, C_HI);
     wd_value(0, tack_bpm(), 0, 1, 0);
     pg_column(0, "TEMPO", 1);
     wd_value(1, tack_shuffle(), 127, 1, 1);
@@ -144,10 +144,10 @@ static void pg_set_row(uint32_t *last)
     cv_blit(0, PG_Y + PG_RH);
 }
 
-/* the row an OCT- held reaches: what USB audio is */
+/* the bottom row: what USB audio is */
 static void pg_set_usb(uint32_t *last)
 {
-    const int on = (ui.btn >> B_OCTDN & 1u) != 0u, diag = ui.usb10 && (ui.btn >> B_OCTUP & 1u);
+    const int on = row_at() == 2, diag = ui.usb10 && (ui.btn >> B_OCTUP & 1u);
     const uint32_t drops = usb_drops(), ext = (uint32_t)tack_ext_sync();
     uint32_t st[4], key;
     usb_pump_stats(st);

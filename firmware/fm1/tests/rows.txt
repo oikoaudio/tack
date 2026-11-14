@@ -206,16 +206,73 @@ wait 1800
 expect popup 0
 turn SELECT -1
 wait 1800
+expect bpm 120
+
+# on a page with rows SELECT picks the row instead, and keeps it, held step or not, until the page changes
+tap EDIT
+wait 40
+expect page 10
+expect row 0
+turn SELECT 1
+wait 40
+expect row 20
+expect tempo 0
+expect bpm 120
+turn SELECT 3
+wait 40
+expect row 20
+turn SELECT -5
+wait 40
+expect row 1
+turn SELECT 1
+wait 40
+expect row 0
+turn SELECT 1
+wait 40
+# an OCT held still reaches its row, and letting go gives SELECT's back
+press OCT+
+wait 40
+expect row 1
+release OCT+
+wait 40
+expect row 20
+# another voice keeps the row
+tapkey 8
+wait 40
+expect voice 3
+expect row 20
+tapkey 1
+wait 40
+expect row 20
+# another page, or the other screen, starts in the middle
 tap ENV
 wait 40
-turn SELECT 1
-wait 1800
-expect popup 0
-shot tempo_gone_env.png
+expect row 0
+tap EDIT
+wait 40
+expect row 0
 turn SELECT -1
-wait 1800
+wait 40
+expect row 1
+tap EDIT
+wait 40
+expect page 12
+expect row 2
+tap EDIT
+wait 40
+expect row 0
+# no row above on LFO: SELECT stays, and the one below is a step away
+tap LFO
+wait 40
+turn SELECT -1
+wait 40
+expect row 0
+turn SELECT 1
+wait 40
+expect row 1
 tap HOME
 wait 40
+expect bpm 120
 
 # back from a sound page the main page's bottom is its own, with nothing changed that would redraw it
 tap LFO
@@ -245,6 +302,24 @@ wait 40
 expect usb10 0
 release OCT-
 wait 40
+# and SELECT's row, where K1 is no longer the tempo
+turn SELECT 1
+wait 40
+turn K1 1
+wait 40
+expect usb10 1
+expect bpm 120
+turn K1 -1
+wait 40
+expect usb10 0
+turn SELECT -1
+wait 40
+turn K1 1
+wait 40
+expect bpm 121
+turn K1 -1
+wait 40
+expect usb10 0
 tap GLO
 wait 40
 tap GLO
@@ -273,6 +348,13 @@ wait 40
 turn K2 3
 wait 40
 expect lockcount 2
+# SELECT with the step held: the row it picks takes the lock
+turn SELECT -1
+wait 40
+expect row 1
+turn K2 3
+wait 40
+expect lockcount 3
 key 0 up
 wait 40
 tap HOME
@@ -319,7 +401,7 @@ wait 40
 turn K4 -1
 wait 40
 expect send0 1
-expect lockcount 2
+expect lockcount 3
 key 0 up
 wait 40
 turn K4 -1
