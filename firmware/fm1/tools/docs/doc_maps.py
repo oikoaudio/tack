@@ -267,7 +267,8 @@ def sound(o):
 def kits(o):
     k_bracket(o, ["K1–K4", "Franken: the parent kits, random till set", "POLY held: the morph target's values"])
     algo_top(o, ["ALGORITHM", "morph, kit to target", "SEL held: mutate the voice"])
-    presets_left(o, ["PRESETS", "a kit from the bank", "SEL held: mutate the kit", "Franken: a new combo · left: back"])
+    presets_left(o, ["PRESETS", "a kit from the bank; back onto", "an edited one: its edits", "SEL held: mutate the kit",
+                     "Franken: a new combo · left: back"])
     voices_left(o, ["VOICE KEYS", "Franken, held + PRESETS:", "a combo of that voice"])
     roll_poly_copy(o, mono=["MONO", "Franken: a kit made", "from up to four"], poly=["POLY HELD", "+ K1–K4: target values", "+ PRESETS: a bank kit", "as the target"])
     right_btn(o, "SAVE", OY + 380, ["SAVE", "K4: pattern, blend or kit", "blend keeps the morph", "as a kit"])

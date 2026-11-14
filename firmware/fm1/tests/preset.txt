@@ -1,0 +1,97 @@
+# PRESET: a spin loads where it stops, and an edited kit left behind comes back once. tack_host firmware/fm1/tests/preset.txt OUTDIR
+# verify.sh writes kits4.bin here: KIT0 to KIT3, every parameter 40 to 43, and kits_samples.bin, a kit whose waves need changing
+wait 600
+data kits4.bin 770048
+wait 100
+
+# the first detent of a turn loads at once, and the rest only where the turn stops
+turn PRESET 4 20
+wait 20
+expect kitnow 1
+wait 120
+expect kitnow 4
+expect param0 43
+expect kitedit 0
+
+# an edit shows on HOME as a star after the name; left, it is kept, and back on its slot it is there again. Left untouched
+# after a second there, the next visit is the bank's
+turn K1 5
+wait 60
+expect param0 48
+expect kitedit 1
+shot preset_star.png
+turn PRESET -1
+wait 300
+expect kitnow 3
+expect param0 42
+expect kitedit 0
+turn PRESET 1
+wait 1200
+expect kitnow 4
+expect param0 48
+expect kitedit 1
+turn PRESET -1
+wait 300
+turn PRESET 1
+wait 300
+expect kitnow 4
+expect param0 43
+expect kitedit 0
+
+# a spin through it is not a visit: the edit is still there after
+turn K1 2
+wait 60
+expect param0 45
+turn PRESET -2 20
+turn PRESET 2 20
+wait 300
+expect kitnow 4
+expect param0 45
+turn PRESET -1
+wait 300
+turn PRESET 1
+wait 1200
+expect param0 45
+
+# a newer edit on another kit takes the place of the last
+turn PRESET -1
+wait 300
+turn K1 3
+wait 60
+expect param0 45
+turn PRESET -1
+wait 300
+expect kitnow 2
+turn PRESET 2 20
+wait 300
+expect kitnow 4
+expect param0 43
+turn PRESET -1
+wait 300
+expect kitnow 3
+expect param0 45
+
+# the init kit, edited, is kept as a bank kit is
+turn PRESET -9 20
+wait 300
+expect kitnow 0
+turn K1 4
+wait 60
+expect kitedit 1
+turn PRESET 1
+wait 300
+expect kitnow 1
+turn PRESET -1
+wait 300
+expect kitnow 0
+expect kitedit 1
+expect kitname0 0
+
+# a kit whose old waves the engine changes on loading is not edited
+data kits_samples.bin 770048
+wait 100
+turn PRESET 1
+wait 300
+expect kitnow 1
+expect kitedit 0
+expect dropped 0

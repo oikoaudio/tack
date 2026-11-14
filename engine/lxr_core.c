@@ -106,19 +106,26 @@ static void sendParam(uint16_t p, uint8_t value)
 	sendCC(p, value);
 }
 //-----------------------------------------------------------
-void lxr_host_loadKit(const uint8_t* values)
+void lxr_host_kitAsLoaded(const uint8_t* values, uint8_t* out)
 {
 	for(int i = 0; i < END_OF_SOUND_PARAMETERS; i++)
-		activeParameters[i] = adjustValue(i, values[i]);
-
-	// as preset_sendDrumsetParametersImmediate(): mod targets first, then every parameter in parameterOrder
+		out[i] = adjustValue(i, values[i]);
 	const uint8_t nmt = getNumModTargets();
 	for(int i = 0; i < 6; i++)
 	{
-		if(activeParameters[PAR_VEL_DEST_1 + i] >= nmt) activeParameters[PAR_VEL_DEST_1 + i] = 0;
-		if(activeParameters[PAR_TARGET_LFO1 + i] >= nmt) activeParameters[PAR_TARGET_LFO1 + i] = 0;
-		if(activeParameters[PAR_VOICE_LFO1 + i] < 1 || activeParameters[PAR_VOICE_LFO1 + i] > 6) activeParameters[PAR_VOICE_LFO1 + i] = 1;
+		if(out[PAR_VEL_DEST_1 + i] >= nmt) out[PAR_VEL_DEST_1 + i] = 0;
+		if(out[PAR_TARGET_LFO1 + i] >= nmt) out[PAR_TARGET_LFO1 + i] = 0;
+		if(out[PAR_VOICE_LFO1 + i] < 1 || out[PAR_VOICE_LFO1 + i] > 6) out[PAR_VOICE_LFO1 + i] = 1;
+	}
+}
+//-----------------------------------------------------------
+void lxr_host_loadKit(const uint8_t* values)
+{
+	lxr_host_kitAsLoaded(values, activeParameters);
 
+	// as preset_sendDrumsetParametersImmediate(): mod targets first, then every parameter in parameterOrder
+	for(int i = 0; i < 6; i++)
+	{
 		setModTarget(PAR_VEL_DEST_1 + i, activeParameters[PAR_VEL_DEST_1 + i]);
 		setModTarget(PAR_TARGET_LFO1 + i, activeParameters[PAR_TARGET_LFO1 + i]);
 	}
