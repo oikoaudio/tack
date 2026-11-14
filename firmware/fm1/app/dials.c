@@ -68,28 +68,111 @@ static int32_t kit_at_or_below(int32_t i)
     return i;
 }
 
-/* PRESET: the bank's kits, and below the first the init kit, a clean start for a pattern. From the init kit, or a kit in no
- * slot, forward is the bank's first */
+/* the kit playing differs from its bank slot, or the init kit with none */
+static int kit_edited(void)
+{
+    const int now = tack_kit_now();
+    const uint8_t *bank = now ? kit_slot((uint32_t)now - 1u) : 0;
+    return !(now && !bank) && !tack_kit_busy() && tack_kit_differs(bank ? bank + 8 : 0);
+}
+
+static uint32_t kit_sum(const uint8_t *v)
+{
+    uint32_t h = 2166136261u;
+    for (uint32_t i = 0; i < tack_kit_size(); i++)
+        h = (h ^ v[i]) * 16777619u;
+    return h;
+}
+
+#define SPIN_MS 150u                     /* PRESET turned again this soon is the same turn, loaded where it stops */
+#define SETTLE_MS 100u                   /* and still this long is where it stopped */
+
+/* PRESET: the bank's kits, and below the first the init kit, a clean start for a pattern. t is a slot, -1 the init kit or a
+ * kit in no slot, from which forward is the bank's first. t again at an end */
+static int32_t kit_next(int32_t t, int dir)
+{
+    if (dir > 0)
+        return t + 1 < (int32_t)KIT_SLOTS && kit_slot((uint32_t)(t + 1)) ? t + 1 : t;
+    return t < 0 ? t : kit_at_or_below(t - 1);
+}
+
+/* An edited kit PRESET leaves is kept, one at a time, and turning back onto its slot brings it back. Left again untouched after a
+ * while it is not kept, so the visit after is the bank's own: a spin passing through is not a visit. 0 while a kit is still
+ * going in */
+#define VISIT_MS 1000u
+static int kit_go(int32_t t)
+{
+    const int now = tack_kit_now();
+    const int back = ui.kept_on && ui.kept_kit == t + 1 && (t < 0 || (kit_slot((uint32_t)t) && !memcmp(kit_slot((uint32_t)t), ui.kept, 8u)));
+    char name[9];
+    if (tack_kit_busy())
+        return 0;
+    if (t == now - 1 && (t >= 0 || !ui.kit_name[0]))   /* the init kit again would only throw its edits away */
+        return 1;
+    if (back)
+        memcpy(kit_buf, ui.kept, KIT_SLOT);
+    else if (t >= 0)
+        memcpy(kit_buf, kit_slot((uint32_t)t), KIT_SLOT);
+    if (kit_edited() && !(ui.back_kit == now && ui.back_sum == kit_sum(tack_kit()) && plat_ms() - ui.back_at >= VISIT_MS)) {
+        memcpy(ui.kept, tack_kit_name(), 8u);
+        memcpy(ui.kept + 8, tack_kit(), tack_kit_size());
+        ui.kept_kit = (int16_t)now;
+        ui.kept_on = 1;
+    } else if (back) {
+        ui.kept_on = 0;
+    }
+    if (!(back || t >= 0 ? tack_post_kit(kit_buf + 8, kit_buf, t < 0 ? TACK_KIT_INIT : (uint8_t)t) : tack_post_init_kit()))
+        return 0;
+    mark('K');
+    ui.back_kit = back ? t + 1 : -1;
+    ui.back_sum = back ? kit_sum(kit_buf + 8) : 0;
+    ui.back_at = plat_ms();
+    kit_name_of(back || t >= 0 ? kit_buf : 0, name);
+    if (back)
+        app_say(name[0] ? name : "INIT KIT", "EDITED");
+    else if (!on_home())
+        app_say("KIT", t < 0 ? "INIT KIT" : name);
+    else                                         /* HOME has the name, and the star a spin's message would hide */
+        ui.msg_until = 0;
+    return 1;
+}
+
+/* a turn or the start of one loads at once; more of it only moves where it will load, which the header names */
 static void kit_step(int32_t e)
 {
-    const int32_t i = e > 0 ? (tack_kit_now() ? ui.kit + 1 : 0) : kit_at_or_below(ui.kit - 1);
-    if (e < 0 && i < 0) {
-        if (!tack_kit_now() && !ui.kit_name[0])  /* already there: turning on would only throw its edits away */
-            app_say("KITS", "START");
-        else if (!tack_kit_busy() && tack_post_init_kit()) {
-            mark('K');
-            if (!on_home())
-                app_say("KIT", "INIT KIT");
-        }
-    } else if (i >= 0 && i < (int32_t)KIT_SLOTS && kit_slot((uint32_t)i)) {
-        kit_load(i);
-        if (!on_home()) {                        /* HOME has the name */
-            char t[9];
-            kit_name_of(kit_slot((uint32_t)i), t);
-            app_say("KIT", t);
-        }
-    } else
-        app_say("KITS", kit_slot(0) ? "END" : "NONE LOADED");
+    const uint32_t now = plat_ms();
+    const int dir = e > 0 ? 1 : -1, spinning = ui.kit_wait || now - ui.kit_turn_at < SPIN_MS;
+    const int32_t from = ui.kit_wait ? ui.kit_to : tack_kit_now() - 1;
+    int32_t t = from;
+    char name[9];
+    ui.kit_turn_at = now;
+    for (; e; e -= dir) {
+        const int32_t n = kit_next(t, dir);
+        if (n == t)
+            break;
+        t = n;
+    }
+    if (t == from && !(dir < 0 && t < 0 && ui.kit_name[0] && !ui.kit_wait)) {
+        if (!ui.kit_wait)
+            app_say("KITS", dir < 0 ? "START" : kit_slot(0) ? "END" : "NONE LOADED");
+        return;
+    }
+    ui.kit_to = t;
+    if (!spinning && kit_go(t))
+        return;
+    ui.kit_wait = 1;
+    kit_name_of(t >= 0 ? kit_slot((uint32_t)t) : 0, name);
+    if (on_home())
+        app_say(t < 0 ? "INIT KIT" : name, "");
+    else
+        app_say("KIT", t < 0 ? "INIT KIT" : name);
+}
+
+/* once a frame: the kit a turn stopped on */
+static void kit_settle(void)
+{
+    if (ui.kit_wait && plat_ms() - ui.kit_turn_at >= SETTLE_MS && kit_go(ui.kit_to))
+        ui.kit_wait = 0;
 }
 
 static uint32_t fx_slot(uint32_t knob) { return row_at() == 2 ? TACK_FX_C + knob : knob; }

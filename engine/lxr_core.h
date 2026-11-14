@@ -28,6 +28,9 @@ void lxr_host_init(void);
 /** Fills values[LXR_HOST_NUM_PARAMS] with the factory init kit. */
 void lxr_host_initKit(uint8_t* values);
 
+/** The kit as loading would leave it: values the engine can't play brought into range. */
+void lxr_host_kitAsLoaded(const uint8_t* values, uint8_t* out);
+
 /** Sends a whole kit to the engine, as the device does when loading one. */
 void lxr_host_loadKit(const uint8_t* values);
 

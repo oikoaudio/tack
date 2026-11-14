@@ -417,6 +417,7 @@ static void input_dials(uint32_t btn)
 static void input(void)
 {
     fk_settle();
+    kit_settle();
     const uint32_t keys = plat_keys(), btn = plat_buttons();
     input_keys(keys, btn);
     input_buttons(keys, btn);

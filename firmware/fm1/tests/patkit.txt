@@ -299,16 +299,26 @@ expect bankname2 76
 expect kitname0 76
 expect kit 2
 
-# from the bank again it is that sound, and the others are as they were
+# from the bank again it is that sound, and the others are as they were: the second kit's edit, left behind on pattern 2, once
+# more, and the bank's on the visit after
 turn PRESET -1
 wait 60
+expect param0 57
+expect kitedit 1
+wait 1200
+turn PRESET 1
+wait 200
+turn PRESET -1
+wait 200
 expect param0 50
+expect kitedit 0
 expect bankname0 75
 expect bankname1 75
 turn PRESET 1
-wait 60
+wait 200
 expect kit 2
 expect param0 57
+expect kitedit 0
 expect kitname0 76
 
 # a slot in use says so and is replaced, and its neighbours in the sector stay

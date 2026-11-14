@@ -174,6 +174,14 @@ static struct {
     int8_t touched_row;                  /* the row it was on: an OCT since shows another */
     uint8_t last_row[4];                 /* each group's middle row when it was left */
     int8_t row_seen;                     /* the row a held step's knobs started from */
+    uint8_t kept[KIT_SLOT];              /* the last edited kit PRESET left, as a slot holds it, */
+    int16_t kept_kit;                    /* its tack_kit_now(), */
+    uint8_t kept_on;                     /* and whether turning back should bring it back */
+    int16_t back_kit;                    /* the kit last brought back, as that, -1 none, */
+    uint32_t back_sum, back_at;          /* and its values' sum then, and when: untouched, it is not kept again */
+    int32_t kit_to;                      /* PRESET still turning: where it goes, -1 the init kit */
+    uint8_t kit_wait, kit_edit;          /* there is a kit to go to; the kit playing is edited */
+    uint32_t kit_turn_at;
     uint8_t slot_key, slot_used;         /* a held step's slot key down first, + 1, and whether a second set the length */
     int8_t row_move;                     /* SELECT's row, from the middle: -1 above, 1 below */
     uint32_t row_page;                   /* the page it was picked on */
@@ -462,16 +470,22 @@ static void draw(void)
     }
     on_grid = 0;
     cv_begin(240, HEADER_H, C_BLACK);
+    char kit[10];                                /* the kit's name, and a star when it is edited away from the bank's */
+    char *end = kit;
+    kit_name_of((const uint8_t *)(ui.kit_name[0] ? ui.kit_name : "INIT KIT"), kit);
+    while (*end)
+        end++;
+    text_put(end, ui.kit_edit ? "*" : "");
     if (tack_has_target() && !ui.msg_until && !key_word()) {   /* a crossfader between the two kits */
         char to[9];
-        const char *from = ui.kit_name[0] ? ui.kit_name : "INIT KIT";
+        const char *from = kit;
         morph_name(to);
         cv_text(EDGE, TOP_LINE - 3, &FONT_XS, from, tack_morph() < 64 ? C_WHITE : C_GRAY);   /* their tops level with P1's */
         cv_text(110 - text_w(&FONT_XS, to), TOP_LINE - 3, &FONT_XS, to, tack_morph() >= 64 ? C_WHITE : C_GRAY);
         cv_rect(EDGE, TOP_LINE + 13, 106, 2, C_LINE);
         cv_rect(EDGE + tack_morph() * 100 / 127, TOP_LINE + 11, 6, 6, C_HI);
     } else {
-        cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : ui.kit_name[0] ? ui.kit_name : "INIT KIT", C_WHITE);
+        cv_text(EDGE, TOP_LINE - 2, &FONT_B, ui.msg_until ? ui.msg : key_word() ? key_word() : kit, C_WHITE);
     }
     t[0] = 'P';
     int_text(tack_pattern() + 1, t + 1);
@@ -631,6 +645,10 @@ void app_frame(void)
     if (tack_kit_now() != ui.kit_seen) {
         ui.kit_seen = tack_kit_now();
         ui.kit = ui.kit_seen ? ui.kit_seen - 1 : 0;
+        ui.redraw = 1;
+    }
+    if (!tack_kit_busy() && kit_edited() != ui.kit_edit) {
+        ui.kit_edit = (uint8_t)!ui.kit_edit;
         ui.redraw = 1;
     }
     if (memcmp(ui.kit_name, tack_kit_name(), 8u)) {   /* the pattern's own, which need be in no slot */

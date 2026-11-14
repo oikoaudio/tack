@@ -96,6 +96,11 @@ expect param0 53
 turn PRESET -1
 wait 60
 turn PRESET 1
+wait 1200
+expect param0 53
+turn PRESET -1
+wait 60
+turn PRESET 1
 wait 60
 expect param0 50
 

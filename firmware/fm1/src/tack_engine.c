@@ -696,6 +696,17 @@ int tack_post_init_kit(void)
     lxr_host_initKit(init);
     return tack_post_kit(init, 0, TACK_KIT_INIT);
 }
+int tack_kit_differs(const uint8_t *values)
+{
+    static uint8_t init[LXR_HOST_NUM_PARAMS], ref[LXR_HOST_NUM_PARAMS];
+    if (!values) {
+        lxr_host_initKit(init);
+        values = init;
+    }
+    lxr_host_kitAsLoaded(values, ref);
+    return memcmp(shadow, ref, sizeof shadow) != 0;
+}
+
 void tack_view_sync(void)
 {
     if (kit_seen != kit_applied) {             /* the kit is in: the main loop's view follows */
@@ -1955,8 +1966,8 @@ static void kit_load_now(uint8_t slot)
         kit_keep(seq_activePattern);
         commit_active();
     } else if (slot != TACK_KIT_NO_SLOT) {
-        const int init = slot == TACK_KIT_INIT;      /* no name and no slot, as on a first start */
-        if (init)
+        const int init = slot == TACK_KIT_INIT;      /* no name and no slot, as on a first start, unless one came with it */
+        if (init && !kit_pending_name)
             memset(kit_name_now, 0, sizeof kit_name_now);
         else if (kit_pending_name)
             memcpy(kit_name_now, kit_pending_name, sizeof kit_name_now);
