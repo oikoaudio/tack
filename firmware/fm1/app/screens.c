@@ -684,6 +684,92 @@ static uint32_t meter_level(uint32_t peak)      /* 0 to 128 over the top 48 dB, 
     return level > 128u ? 128u : level;
 }
 
+/* The output meter, by the tempo: the mix after MASTER in eight segments, from -36, -24, -18 and -12 dB, then in 3 dB steps to
+ * full scale, where a drum mix lives. The last is red for a second once the mix reaches full scale before MASTER, which a low
+ * MASTER would hide. Over it a triangle at MASTER's position. HOME has it under the tempo, a page beside it where its top bar
+ * has room. It falls by time, not by frame, and a header drawn paints it in, so a redraw never blanks it */
+#define OUT_SEG 3                        /* a segment's width, and a pixel between them */
+#define OUT_W (8 * (OUT_SEG + 1) - 1)
+#define OUT_CLIP_MS 1000u
+#define OUT_FALL 53u                     /* meter_level's units a second: 20 dB */
+static int out_meter_at(int32_t *x, int32_t *y)
+{
+    char t[8];
+    if (ui.msg_until || key_word() || tempo_shown() || (ui.touched_until && ui.touched))
+        return 0;
+    if (on_home()) {
+        *x = 240 - EDGE - OUT_W - 1;
+        *y = 19;
+        return 1;
+    }
+    if (!full_page() || arp_page() || seq_detail() || held_shown())
+        return 0;
+    int_text(tack_bpm(), t);
+    *x = 240 - EDGE - text_w(&FONT_B, t) - 8 - OUT_W - 2;
+    *y = 5;
+    return 1;
+}
+
+static int32_t out_tri(void) { return (int32_t)(plat_master() * (OUT_W - 1u) / 4096u); }
+
+static uint32_t out_key(int32_t x, int32_t y)
+{
+    return rk(rk(rk(rk(29u, ui.out_meter / 16u), (uint32_t)out_tri()), ui.out_clip != 0), (uint32_t)(x * 256 + y)) | 1u;
+}
+
+/* once a frame, before anything is drawn */
+static void out_meter_update(void)
+{
+    static uint32_t at;
+    int clipped;
+    const uint32_t level = meter_level(tack_out_peak(&clipped)) * 16u, now = plat_ms(), fall = (now - at) * OUT_FALL * 16u / 1000u;
+    at = now;
+    ui.out_meter = (uint16_t)(level > ui.out_meter ? level : ui.out_meter > fall ? ui.out_meter - fall : 0u);
+    if (clipped)
+        ui.out_clip = (now + OUT_CLIP_MS) | 1u;
+    else if (ui.out_clip && now - ui.out_clip < 0x80000000u)
+        ui.out_clip = 0;
+}
+
+static void out_meter_paint(int32_t x, int32_t y)
+{
+    static const uint8_t FROM[8] = {32, 64, 80, 96, 104, 112, 120, 126};   /* meter_level's: 16 to 6 dB, 127 the most */
+    const int32_t tri = out_tri();
+    cv_rect(x, y, OUT_W + 2, 6, C_BLACK);
+    cv_rect(x + tri, y, 3, 1, C_WHITE);
+    cv_rect(x + tri + 1, y + 1, 1, 1, C_WHITE);
+    for (uint32_t k = 0; k < 8u; k++) {
+        const int lit = ui.out_meter / 16u >= FROM[k], top = k == 7u;
+        cv_rect(x + 1 + (int32_t)k * (OUT_SEG + 1), y + 3, OUT_SEG, 3, top && ui.out_clip ? REC_RED : !lit ? C_LINE : k >= 5u ? C_HI : PG_TEXT);
+    }
+}
+
+/* a header's canvas, at the screen's top left, before it is blitted */
+static void out_meter_in_header(void)
+{
+    int32_t x, y;
+    if (out_meter_at(&x, &y)) {
+        out_meter_paint(x, y);
+        ui.out_drawn = out_key(x, y);
+    }
+}
+
+/* after the frame's drawing: on its own, when it has changed and no header took it in */
+static void out_meter_frame(void)
+{
+    int32_t x, y;
+    if (!out_meter_at(&x, &y)) {
+        ui.out_drawn = 0;
+        return;
+    }
+    if (out_key(x, y) == ui.out_drawn)
+        return;
+    ui.out_drawn = out_key(x, y);
+    cv_begin(OUT_W + 2, 6, C_BLACK);
+    out_meter_paint(0, 0);
+    cv_blit(x, y);
+}
+
 static void pg_mix_strips(uint32_t *last)
 {
     static const char *const LANE[TACK_VOICES] = {"D1", "D2", "D3", "SN", "CY", "CH", "OH"};

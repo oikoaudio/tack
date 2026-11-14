@@ -151,6 +151,8 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
 
 #define PG_TAB_GAP 3
 
+static void out_meter_in_header(void);
+
 static void pg_top(void)
 {
     static const char *const RETRIG_NAME[6] = {"DRUM 1", "DRUM 2", "DRUM 3", "SNARE", "CYMBAL", "HI-HAT"};
@@ -226,5 +228,6 @@ static void pg_top(void)
                 cv_rect(i * (w + PG_TAB_GAP), 18, w, 2, i == at ? C_HI : C_GRAY);
         }
     }
+    out_meter_in_header();
     cv_blit(0, 0);
 }

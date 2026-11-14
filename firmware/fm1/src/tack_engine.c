@@ -2425,12 +2425,24 @@ static int32_t bits_round(int32_t s)
     return r > 32767 ? 32767 : r < -32768 ? -32768 : r;
 }
 
+static volatile uint16_t out_peak;
+static volatile uint8_t out_clip;
+uint32_t tack_out_peak(int *clipped)
+{
+    const uint32_t p = out_peak;
+    *clipped = out_clip;
+    out_peak = 0;
+    out_clip = 0;
+    return p;
+}
+
 void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
 {
     int16_t dac1[TACK_BLOCK * 2], dac2[TACK_BLOCK * 2], mix[TACK_BLOCK * 2];
     uint32_t *ul = app_ul_out;
     while (n >= TACK_BLOCK) {
         int i;
+        int32_t pk = 0;
         drain();
         stress_tick();
         /* as the LXR's audio interrupt: the sequencer, then the block it just triggered */
@@ -2448,11 +2460,17 @@ void tack_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
              * headroom. BITS comes after the FX and before MASTER, whose level then changes nothing. 16 bits to 24 */
             int32_t s = (int32_t)dac1[i] + dac2[i];
             s = s > 32767 ? 32767 : s < -32768 ? -32768 : s;
+            pk = s > pk ? s : -s > pk ? -s : pk;
             if (bits_now)
                 s = bits_round(s);
             mix[i] = (int16_t)s;
             lr[i] = (int32_t)(((int32_t)s * (int32_t)gain_q12) >> 4);
         }
+        if (pk >= 32767)
+            out_clip = 1;
+        pk = (int32_t)((uint32_t)(pk > 32767 ? 32767 : pk) * gain_q12 >> 12);
+        if (pk > out_peak)
+            out_peak = (uint16_t)(pk > 32767 ? 32767 : pk);
         if (app_ul_want) {
             for (i = 0; i < TACK_BLOCK; i++, ul += UL_WORDS) {
                 ul[0] = pair(mix[2 * i], mix[2 * i + 1]);

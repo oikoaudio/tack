@@ -62,6 +62,16 @@ expect meter0 >40
 expect meter1 0
 expect meter3 0
 shot mixer.png
+# and the header's meter, the whole mix after MASTER: a quarter of the way up is 24 dB down
+master 4096
+wait 300
+expect outmeter >40
+master 1024
+wait 1500
+expect outmeter <80
+master 4096
+wait 300
+expect outmeter >40
 
 # SEL and a black key solo a lane, a second time lift it; the mutes stay under a solo
 press ARP
@@ -106,7 +116,8 @@ release ARP
 wait 40
 expect audible 127
 tap PLAY
-wait 60
+wait 6000
+expect outmeter 0
 
 # a step held and a dial turned locks it there
 key w4 down

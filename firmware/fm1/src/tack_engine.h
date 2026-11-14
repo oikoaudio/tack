@@ -60,6 +60,8 @@ int tack_post_kit(const uint8_t *values, const uint8_t *name, uint8_t slot);
 /* the init kit into the pattern, as a bank kit goes in: 0 when a kit is still on its way */
 int tack_post_init_kit(void);
 int tack_kit_busy(void);
+/* the mix's peak after MASTER since the last call, 0 to 32767, and whether before MASTER it reached full scale. The main loop only */
+uint32_t tack_out_peak(int *clipped);
 /* the kit playing has been edited away from values, a bank kit's, or from the init kit with 0. The main loop only */
 int tack_kit_differs(const uint8_t *values);
 void tack_view_sync(void);             /* once a frame: tack_get_param follows a kit that went in */
