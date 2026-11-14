@@ -11,7 +11,7 @@ cmake_minimum_required(VERSION 3.21)
 #   build/host/lxr_render kit.wav
 
 # VERSION is Tack's version: the plugins report it, and release tags (v0.1.0) must match it
-project(LXR_Host VERSION 0.14.1 LANGUAGES C CXX)
+project(LXR_Host VERSION 0.15.0 LANGUAGES C CXX)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug or Release)" FORCE)
