@@ -174,6 +174,7 @@ static struct {
     int8_t touched_row;                  /* the row it was on: an OCT since shows another */
     uint8_t last_row[4];                 /* each group's middle row when it was left */
     int8_t row_seen;                     /* the row a held step's knobs started from */
+    uint8_t slot_key, slot_used;         /* a held step's slot key down first, + 1, and whether a second set the length */
     int8_t row_move;                     /* SELECT's row, from the middle: -1 above, 1 below */
     uint32_t row_page;                   /* the page it was picked on */
     uint8_t sel_used;                    /* so was SEL */

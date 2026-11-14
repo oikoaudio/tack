@@ -22,12 +22,28 @@ static void input_keys(uint32_t keys, uint32_t btn)
         ui.note_held |= down;
         down = 0;
     }
-    if (ui.held >= 0) {          /* a step held: the black keys are its slots */
-        for (k = 0; k < TACK_RECUR_MAX; k++)
+    if (ui.held < 0)
+        ui.slot_key = 0;
+    if (ui.held >= 0) {          /* a step held: the black keys are its slots, a tap on release, as one held may be a length */
+        for (k = 0; k < TACK_RECUR_MAX; k++) {
             if (down >> BK[k] & 1u) {
-                recur_key(k);
+                ui.held_used = 1;
+                if (ui.slot_key) {
+                    recur_length((int)k + 1);
+                    ui.slot_used = 1;
+                } else {
+                    ui.slot_key = (uint8_t)(k + 1u);
+                    ui.slot_used = 0;
+                }
                 ui.redraw = 1;
             }
+            if ((up >> BK[k] & 1u) && ui.slot_key == k + 1u) {
+                if (!ui.slot_used)
+                    recur_key(k);
+                ui.slot_key = 0;
+                ui.redraw = 1;
+            }
+        }
         for (k = 0; k < TACK_RECUR_MAX; k++)
             down &= ~(1u << BK[k]);
     }
@@ -335,7 +351,7 @@ static void input_dials(uint32_t btn)
         else if (row_choices())
             row_step(e);
         else if (ui.held >= 0)
-            recur_turn(e);
+            ;                                    /* not the tempo, by accident with a step in hand */
         else if (seq_detail() && (btn >> B_SEL & 1u))
             vv_bar_jump(e);
         else if (seq_detail())

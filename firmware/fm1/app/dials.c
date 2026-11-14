@@ -831,8 +831,8 @@ static void step_turn(uint32_t slot, int popup, int32_t e)
     }
 }
 
-/* a step held: the first eight black keys are the slots of its recurrence, which they take out and put back, and SELECT how many
- * there are, as a lane's end */
+/* a step held: the first eight black keys are the slots of its recurrence, which a tap takes out and puts back. One held and
+ * another pressed sets how many there are, as a lane's end (recur_length) */
 static void recur_key(uint32_t k)
 {
     const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
@@ -842,7 +842,7 @@ static void recur_key(uint32_t k)
     if (!tack_step_on(v, s)) {
         app_say("NO STEP", "");
     } else if ((int)k >= len) {
-        app_say("SELECT", "ADDS SLOTS");
+        app_say("LENGTH", "HOLD 1+KEY");
     } else if ((mask ^= 1 << k) == 0) {
         app_say("ONE SLOT", "AT LEAST");
     } else {
@@ -852,16 +852,19 @@ static void recur_key(uint32_t k)
     }
 }
 
-/* fewer slots keep what still fits, and more come in playing, as a new step plays every pass */
-static void recur_turn(int32_t e)
+/* n slots: fewer keep what still fits, and more come in playing, as a new step plays every pass. One is every pass */
+static void recur_length(int n)
 {
     const uint8_t s = ui.held_step, v = (uint8_t)ui.voice;
-    const int len = recur_len(v, s), n = (int)clamp(len + e, 2, TACK_RECUR_MAX);
+    const int len = recur_len(v, s), all = (1 << TACK_RECUR_MAX) - 1;
     const int grown = ((1 << n) - 1) & ~((1 << len) - 1);    /* the slots it gains, playing */
     const int mask = (recur_mask(v, s) | grown) & ((1 << n) - 1);
     ui.held_used = 1;
     if (!tack_step_on(v, s)) {
         app_say("NO STEP", "");
+    } else if (n == 1) {
+        recur_set(v, s, TACK_RECUR_MAX, all);
+        app_say("EVERY PASS", "");
     } else if (!tack_recur_room(v, s)) {
         app_say("PATTERN", "FULL");   /* as STEP FULL: no room for another lock */
     } else {

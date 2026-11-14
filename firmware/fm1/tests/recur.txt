@@ -7,15 +7,22 @@ expect step0 1
 expect recurlen0 1
 expect recurmask0 1
 
-# held: a new step plays on every pass, its eight slots all playing as a new lane's steps would be. SELECT shortens the
-# cycle, keeping the slots that still fit
+# held: a new step plays on every pass, its eight slots all playing as a new lane's steps would be. A slot key held and
+# another pressed shortens the cycle, keeping the slots that still fit, and the one held stays as it was. SELECT does nothing
 key 0 down
 wait 40
 turn SELECT -4
 wait 40
+expect recurlen0 1
+expect bpm 120
+key 1 down
+wait 20
+tapkey 8
+wait 20
+key 1 up
+wait 40
 expect recurlen0 4
 expect recurmask0 15
-expect bpm 120
 shot recur.png
 # the keys take slots out and put them back, a key past the end does nothing, and nor does the last one going
 tapkey 3
@@ -68,15 +75,27 @@ wait 60
 # fewer slots keep what still fits, and more come in playing. All eight playing is every pass again
 key 0 down
 wait 40
-turn SELECT -2
+key 1 down
+wait 20
+tapkey 3
+wait 20
+key 1 up
 wait 40
 expect recurlen0 2
 expect recurmask0 1
-turn SELECT 1
+key 1 down
+wait 20
+tapkey 5
+wait 20
+key 1 up
 wait 40
 expect recurlen0 3
 expect recurmask0 5
-turn SELECT 9
+key 1 down
+wait 20
+tapkey 17
+wait 20
+key 1 up
 wait 40
 expect recurlen0 8
 expect recurmask0 253
@@ -95,7 +114,11 @@ wait 60
 # a step off: nothing to set
 key 2 down
 wait 40
-turn SELECT 2
+key 1 down
+wait 20
+tapkey 8
+wait 20
+key 1 up
 wait 40
 expect recurlen1 1
 key 2 up
@@ -112,7 +135,11 @@ wait 40
 expect len0 8
 key 0 down
 wait 40
-turn SELECT -9
+key 1 down
+wait 20
+tapkey 3
+wait 20
+key 1 up
 wait 40
 expect recurlen0 2
 expect recurmask0 3
@@ -185,8 +212,8 @@ expect fires0 11
 tap PLAY
 wait 60
 
-# a held step's popups: ALGORITHM nudges, PRESET sets the chance, and each goes when the step is let go. SELECT and the
-# slot keys set its recurrence with none: the step's view says it, and the popup there was goes
+# a held step's popups: ALGORITHM nudges, PRESET sets the chance, and each goes when the step is let go. The slot keys set
+# its recurrence with none: the step's view says it, and the popup there was goes
 tapkey 4
 wait 60
 expect step2 1
@@ -198,7 +225,11 @@ wait 40
 expect popup 1
 expect bpm 120
 shot pop_nudge.png
-turn SELECT -4
+key 1 down
+wait 20
+tapkey 8
+wait 20
+key 1 up
 wait 40
 expect popup 0
 expect recurlen2 4
@@ -245,6 +276,41 @@ expect skips0 0
 tap PLAY
 wait 60
 expect skips0 0
+
+# slot 1 pressed second is every pass again, a key past the end changes nothing, and a step let go first takes no slot
+tapkey 7
+wait 60
+expect step4 1
+key 7 down
+wait 40
+key 3 down
+wait 20
+tapkey 8
+wait 20
+key 3 up
+wait 40
+expect recurlen4 4
+expect recurmask4 15
+tapkey 13
+wait 40
+expect recurlen4 4
+expect recurmask4 15
+key 8 down
+wait 20
+tapkey 1
+wait 20
+key 8 up
+wait 40
+expect recurlen4 1
+key 3 down
+wait 20
+key 7 up
+wait 40
+key 3 up
+wait 40
+expect recurlen4 1
+expect step4 1
+expect voice 0
 
 # it is saved with the pattern
 press SEL
