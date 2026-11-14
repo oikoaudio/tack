@@ -93,6 +93,7 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
     RKEY(ui.tempo_shuffle);
     RKEY(tack_lfo_sync(voice));                /* the picture on the row above it */
     RKEY(tack_lfo_once(voice));
+    RKEY(ui.touched_until && ui.touched_row == page ? ui.touched_at + 1u : 0u);
     for (uint32_t i = 0; page != NO_PAGE && i < TACK_NP; i++) {
         RKEY(pulse_idle(page, i));
         const TackSlot *sl = page_slot(page, i);
@@ -108,11 +109,14 @@ static void pg_row(uint32_t r, int page, uint32_t *last)
         return;
     *last = key;
     cv_begin(240, PG_RH, C_BLACK);
-    if (on) {
-        uint32_t dials = 0;
+    if (on) {                                    /* the dial turning at full strength, the rest dimmer */
+        uint32_t dials = 0, turned = 0;
         for (uint32_t i = 0; i < TACK_NP; i++)
             dials |= (uint32_t)(page_slot(page, i) != 0 && !pulse_idle(page, i)) << i;
-        row_lines(dials, VOICE_COLOUR[voice]);
+        if (ui.touched_until && ui.touched_row == page)
+            turned = dials & 1u << ui.touched_at;
+        row_lines(dials & ~turned, dimmer(VOICE_COLOUR[voice]));
+        row_lines(turned, VOICE_COLOUR[voice]);
     }
     if (picture)
         pg_draw_picture(page, picture, first, span, on ? VOICE_COLOUR[voice] : C_GRAY);
