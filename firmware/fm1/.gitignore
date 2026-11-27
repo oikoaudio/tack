@@ -1,3 +1,4 @@
 /build/
-/web/
+/web/*
+!/web/words/
 /.venv/

@@ -12,6 +12,7 @@ bank page is Tack's own, from site/kits_body.html, kits_core.js and kits_app.js:
     WEB_DIR/public/tack/fm1/firmware/                the package, and the licences that go with it
     WEB_DIR/public/tack/fm1/try/                     the firmware in the browser, with site/demo_pattern.bin in pattern 1
     WEB_DIR/app/tack/fm1/tool-pages.ts               the pages' markup, and the release's version and checksum
+    WEB_DIR/public/tack/words/                       the screen reader's words files (fm1-reader), the old ones too
 
 Writes nothing to an FM-1 and publishes nothing. m-bootloader stays out of it: it is the one thing the installer can
 write below 0x4000, and Tack has not been run on it. make_site.py is not used because it needs Emscripten's build.
@@ -21,6 +22,7 @@ import hashlib
 import json
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -192,6 +194,14 @@ def main(version, web):
     (firmware / "SOURCE.txt").write_text(            # GPL section 6 and the original LXR licence: where the source is
         f"The complete source of {package}, including fm1-base and felucca-bsp, is the release's source archive:\n"
         f"{conf['repo']}/releases/tag/v{version}\n", encoding="utf-8")
+
+    # a unit asks for the words file of the build it runs, so every one stays on the site
+    words = web / "public" / "tack" / "words"
+    words.mkdir(parents=True, exist_ok=True)
+    for f in sorted((APP / "web" / "words").glob("*.json")):
+        if subprocess.run(["git", "-C", str(ROOT), "ls-files", "--error-unmatch", str(f)], capture_output=True).returncode:
+            raise SystemExit(f"make_web: {f} is not committed")
+        shutil.copy(f, words / f.name)
 
     install_body, install_js = installer(conf, version, product, package)
     backup_body, backup_js = backup(conf)
